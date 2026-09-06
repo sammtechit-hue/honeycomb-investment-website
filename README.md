@@ -34,11 +34,11 @@ packages/
 
 ## Getting started
 
-1. **Clone and install dependencies** (run from the repo root):
+1. **Clone and install dependencies.** The GitHub repo root *is* the monorepo root — `apps/`, `packages/`, `package.json`, etc. live directly at the top level, there's no nested `investment-platform/` folder inside it:
 
    ```sh
-   git clone https://github.com/sammtechit-hue/honeycomb-investment-website.git investment-platform
-   cd investment-platform
+   git clone https://github.com/sammtechit-hue/honeycomb-investment-website.git
+   cd honeycomb-investment-website
    pnpm install
    ```
 
