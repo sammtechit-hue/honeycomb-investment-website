@@ -1,159 +1,110 @@
-# Turborepo starter
+# Investment Platform
 
-This Turborepo starter is maintained by the Turborepo core team.
+Monorepo for the Honeycomb investment platform, managed with [Turborepo](https://turborepo.dev/) and [pnpm workspaces](https://pnpm.io/workspaces).
 
-## Using this example
+## Project structure
 
-Run the following command:
-
-```sh
-npx create-turbo@latest
+```
+apps/
+  api/           NestJS backend API
+  public-web/    Next.js app — public-facing site
+  secure-web/    Next.js app — authenticated/investor-facing site
+packages/
+  db/            Shared Prisma schema + client (@investment-platform/db)
 ```
 
-## What's inside?
+| Package | Stack | Notes |
+| --- | --- | --- |
+| `apps/api` | NestJS | REST API, consumes `@investment-platform/db` |
+| `apps/public-web` | Next.js 16 (App Router) + Tailwind v4 | Public marketing/investor-facing pages |
+| `apps/secure-web` | Next.js 16 (App Router) + Tailwind v4 | Authenticated investor dashboard |
+| `packages/db` | Prisma 5 + PostgreSQL | Shared schema/migrations/generated client used by other packages |
 
-This Turborepo includes the following packages/apps:
+## Prerequisites
 
-### Apps and Packages
+- **Node.js 24+** (`node -v` should print `v24.x`). If you use `nvm`/`nvm-windows`: `nvm install 24 && nvm use 24`.
+- **pnpm 12.3.4** — this repo pins its package manager version in `package.json` (`packageManager` field). Enable Corepack so the pinned version is used automatically:
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `@next/eslint-plugin-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
+  ```sh
+  corepack enable
+  ```
 
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
+  If you don't use Corepack, install pnpm globally to match: `npm install -g pnpm@12.3.4`.
+- **PostgreSQL** — a running instance (local install, Docker, or a hosted database) for `packages/db`.
 
-### Utilities
+## Getting started
 
-This Turborepo has some additional tools already setup for you:
+1. **Clone and install dependencies** (run from the repo root):
 
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
+   ```sh
+   git clone https://github.com/sammtechit-hue/honeycomb-investment-website.git investment-platform
+   cd investment-platform
+   pnpm install
+   ```
 
-### Build
+2. **Approve native build scripts.** pnpm blocks postinstall scripts for dependencies (like Prisma's engines) until you approve them. The first `pnpm install` will print `ERR_PNPM_IGNORED_BUILDS` — run:
 
-To build all apps and packages, run the following command:
+   ```sh
+   pnpm approve-builds
+   ```
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
+   Select all listed packages (`@parcel/watcher`, `@prisma/client`, `@prisma/engines`, `prisma`, `unrs-resolver`) and approve. This choice is saved to `pnpm-workspace.yaml` (`allowBuilds`) and committed, so you should only need to do this once per machine unless new packages with install scripts are added.
 
-```sh
-cd my-turborepo
-turbo build
-```
+3. **Configure the database.** Copy the example env file and fill in your connection string:
 
-Without global `turbo`, use your package manager:
+   ```sh
+   cp packages/db/.env.example packages/db/.env
+   ```
 
-```sh
-cd my-turborepo
-npx turbo build
-pnpm exec turbo build
-pnpm exec turbo build
-```
+   Edit `packages/db/.env` and set `DATABASE_URL` to point at your Postgres instance. This file is git-ignored — never commit real credentials.
 
-You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+4. **Generate the Prisma client and apply migrations:**
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
+   ```sh
+   pnpm --filter @investment-platform/db generate
+   pnpm --filter @investment-platform/db migrate
+   ```
 
-```sh
-turbo build --filter=docs
-```
+5. **Run the apps:**
 
-Without global `turbo`:
+   ```sh
+   pnpm dev            # runs `dev` in every app via Turborepo
+   pnpm dev --filter=api           # just the API
+   pnpm dev --filter=public-web    # just the public site
+   pnpm dev --filter=secure-web    # just the secure site
+   ```
 
-```sh
-npx turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-```
+## Common commands
 
-### Develop
+Run from the repo root unless noted otherwise.
 
-To develop all apps and packages, run the following command:
+| Command | Description |
+| --- | --- |
+| `pnpm install` | Install all workspace dependencies |
+| `pnpm dev` | Run all apps in dev mode (Turborepo) |
+| `pnpm build` | Build all apps and packages |
+| `pnpm lint` | Lint all apps and packages |
+| `pnpm check-types` | Type-check all apps and packages |
+| `pnpm format` | Format the repo with Prettier |
+| `pnpm --filter <name> <script>` | Run a script in one workspace package only (e.g. `pnpm --filter api start:dev`) |
+| `pnpm --filter @investment-platform/db studio` | Open Prisma Studio against your local database |
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
+## Working with the database package (`packages/db`)
 
-```sh
-cd my-turborepo
-turbo dev
-```
+- Schema lives at `packages/db/prisma/schema.prisma`.
+- After editing the schema, run `pnpm --filter @investment-platform/db migrate` to create a migration and regenerate the client.
+- Other packages/apps depend on it via `"@investment-platform/db": "workspace:*"` and import the generated Prisma client from it — do not duplicate schema or client setup elsewhere.
 
-Without global `turbo`, use your package manager:
+## Windows notes
 
-```sh
-cd my-turborepo
-npx turbo dev
-pnpm exec turbo dev
-pnpm exec turbo dev
-```
+This project is developed on Windows in addition to macOS/Linux. A few gotchas:
 
-You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+- Use PowerShell or Git Bash; native `cmd.exe` batch commands (`del`, `rmdir`) work but aren't required for anything documented here.
+- If `pnpm install` fails with a `JSON_PARSE` error, make sure every `package.json` in the workspace is valid (non-empty) JSON — an empty file from a half-finished `mkdir`/scaffold step is a common cause.
+- Corepack may warn about npm's `install-scripts` policy when installing pnpm globally; that's about npm's own global installs and is unrelated to the `pnpm approve-builds` step above.
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
+## Contributing
 
-```sh
-turbo dev --filter=web
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-```
-
-### Remote Caching
-
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo login
-```
-
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo login
-pnpm exec turbo login
-pnpm exec turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo link
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo link
-pnpm exec turbo link
-pnpm exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
+- Create a feature branch off `main`, open a PR, and keep changes scoped per app/package where possible.
+- Run `pnpm lint` and `pnpm check-types` before pushing.
+- Do not commit `.env` files or any real database/API credentials — use the `.env.example` files as the template for what needs to be set locally.
