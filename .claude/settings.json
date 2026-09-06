@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -la \"C:\\\\Users\\\\USER\\\\.claude\\\\projects\\\\e--Sammtech-investor-website-investment-platform\\\\memory\\\\\" 2>/dev/null)",
+      "Read(//c/Users/USER/.claude/projects/e--Sammtech-investor-website-investment-platform/memory\" 2>/dev/**)",
+      "Read(//c/Users/USER/.claude/projects/e--Sammtech-investor-website-investment-platform/memory/**)"
+    ]
+  }
+}
