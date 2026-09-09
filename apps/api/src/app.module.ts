@@ -3,11 +3,15 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AdminModule } from './admin/admin.module';
 import { InvestorModule } from './investor/investor.module';
+import { InvestmentModule } from './investment/investment.module';
+import { AuditLogModule } from './audit-log/audit-log.module';
 
 @Module({
   imports: [
     AdminModule,
-    InvestorModule
+    InvestorModule,
+    InvestmentModule,
+    AuditLogModule
   ],
   controllers: [AppController],
   providers: [AppService],

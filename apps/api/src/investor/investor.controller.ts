@@ -24,7 +24,4 @@ export class InvestorController {
 
       return this.investorService.update(id, updateInvestorDto);
     }
-
-
-
 }
