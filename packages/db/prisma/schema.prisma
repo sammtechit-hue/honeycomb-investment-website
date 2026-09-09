@@ -1,8 +1,729 @@
+// ============================================================================
+// Investment Platform — Prisma Schema (v2)
+//
+// Covers: investor onboarding & KYC, company compliance documents, projects,
+// multi-deposit investments (top-up support), Fixed/Unfixed profit engine
+// with rate history, monthly profit ledger, bank-file disbursement
+// (CBL/BEFTN), 4-slot disbursement scheduling, withdrawal requests
+// (manual/auto), referral codes + referral bonuses, nominees, investment
+// deliverables (deed/certificate/cheque/souvenir), admin notifications,
+// and audit trail.
+//
+// Naming note: models use `Investor` internally for brevity; UI/labels will
+// display "Project Shareholder" per the confirmed terminology decision.
+//
+// CHANGELOG (this revision):
+// - KycDocType: removed trade_license for investor KYC (company-level
+//   trade license still tracked separately via CompanyDocType)
+// - Investor: address now optional; fixed default status value bug
+// - Nominee: nomineeNid now optional; added nomineePhoto, nomineePhone
+// - Investment: receivedBy/authorizedBy relations fixed to match nullable
+//   FK columns; added disbursement-slot fields; added investmentDocuments
+// - New: ReferralCode model (investor-generated, 7-day expiry, 1 active
+//   code per investor)
+// - Referral: reworked around ReferralCode; added referredInvestorId,
+//   bonusPercent (1%, confirmed), and a payout link to DisbursementItem
+// - New: DisbursementSlot enum (4 fixed windows) + slot field on
+//   DisbursementBatch and Investment
+// - WithdrawalRequest: added withdrawalMethod (manual/auto),
+//   noticePeriodDays, disbursementDate
+// - New: InvestmentDocument model (online deed, certificate, cheque, cash
+//   voucher, membership card, souvenir, proof photo, clearance video link)
+// - Confirmed: NO payment receipt is issued (see InvestmentDocument note)
+// ============================================================================
+
 generator client {
-  provider = "prisma-client-js"
+    provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+// ----------------------------------------------------------------------------
+// Enums
+// ----------------------------------------------------------------------------
+
+enum InvestorCategory {
+    bronze
+    silver
+    gold
+    diamond
+    platinum
+    titanium
+}
+
+enum InvestorStatus {
+    pending // just registered, hasn't uploaded KYC yet
+    uploaded_kyc // KYC docs submitted, awaiting admin review
+    active // admin approved — profile is now LOCKED, no further self-service edits (confirmed)
+    suspended // admin rejected, or later suspended
+}
+
+enum KycDocType {
+    nid
+    photo
+    // trade_license removed (confirmed) — not collected for individual
+    // investor KYC. Still tracked separately for the company itself via
+    // CompanyDocType.trade_license below.
+    other
+}
+
+enum VerificationStatus {
+    pending
+    verified
+    rejected
+}
+
+enum BankAccountType {
+    savings
+    current
+}
+
+enum ProjectStatus {
+    DRAFT
+    OPEN
+    FULL
+    PAUSED
+    COMPLETED
+    CANCELLED
+}
+
+enum CompanyDocType {
+    trade_license
+    nid
+    bank_account
+    deed
+}
+
+enum InvestmentType {
+    fixed
+    unfixed
+}
+
+enum DisbursementPeriod {
+    monthly
+    quarterly
+    half_yearly
+    yearly
+}
+
+enum DeedType {
+    official
+    government
+    none
+}
+
+enum InvestmentStatus {
+    active // running, earning profit
+    withdrawn // a withdrawal is in progress / partially withdrawn
+    completed // confirmed: reached once a withdrawal is fully paid out (or the term ends and principal is returned)
+}
+
+enum PayoutStatus {
+    accrued
+    disbursed
+}
+
+enum DisbursementExportType {
+    cbl
+    beftn
+    other
+}
+
+enum DisbursementBatchStatus {
+    draft
+    exported
+    confirmed
+}
+
+enum ExportFormat {
+    cbl
+    beftn
+}
+
+// Confirmed: CBL and BEFTN are always generated as two separate files, even
+// when a single batch/slot contains investors of both bank types.
+
+enum WithdrawalStatus {
+    pending
+    notice_period
+    ready
+    paid
+    cancelled
+}
+
+enum WithdrawalMethod {
+    manual // admin-driven, requires notice period (see WithdrawalRequest)
+    auto // system-scheduled, follows the normal disbursement slot cycle
+}
+
+enum IncomingPaymentMethod {
+    bkash
+    bank_transfer
+}
+
+enum IncomingPaymentStatus {
+    pending
+    confirmed
+    overdue
+}
+
+enum BonusStatus {
+    pending
+    paid
+}
+
+enum Role {
+    SUPER_ADMIN
+    ADMIN
+    MODERATOR
+    INVESTOR
+}
+
+enum AdminNotificationType {
+    upcoming_payout
+    slot_reminder
+    new_investment_request
+    disbursement_sent
+}
+
+enum PayoutSchedule {
+    MONTHLY
+    QUARTERLY
+    YEARLY
+}
+
+// Confirmed: disbursement counting starts 10 days after the investment date.
+// That date is then bucketed into one of 4 fixed monthly windows. Admin can
+// manually move an investment to a different slot; slotAdjustmentDays on
+// Investment records how many days that manual move added/removed.
+enum DisbursementSlot {
+    slot_1 // 1st–8th
+    slot_2 // 9th–18th
+    slot_3 // 19th–25th
+    slot_4 // 26th–end of month
+}
+
+// New investment deliverables/documents (separate from KYC and legal deed
+// classification). Confirmed: NO payment receipt is issued — "certificate"
+// below is the investor certificate, not a receipt.
+enum InvestmentDocumentType {
+    online_deed // signed deed PDF, uploaded to the portal
+    certificate // investor certificate
+    cheque // security cheque given as part of the agreement
+    cash_voucher
+    membership_card // "royalty membership card"
+    souvenir // keyring, pad, etc.
+    proof_photo // single photo uploaded as proof of physical handover
+    clearance_video // cheque/deed clearance video — external drive link, not a direct upload
+}
+
+// ----------------------------------------------------------------------------
+// 1. Investor
+// ----------------------------------------------------------------------------
+
+model Investor {
+    id           String           @id @default(uuid()) @db.Uuid
+    fullName     String           @map("full_name") @db.VarChar(150)
+    address      String? // now optional (confirmed)
+    phoneNumber  String           @unique @map("phone_number") @db.VarChar(20)
+    email        String?          @db.VarChar(150) // required for BEFTN/CBL export
+    profession   String?          @db.VarChar(150) // optional (confirmed)
+    workplace    String?          @db.VarChar(150) // optional (confirmed)
+    category     InvestorCategory @default(bronze)
+    passwordHash String           @map("password_hash") @db.VarChar(255)
+    status       InvestorStatus   @default(pending)
+    createdAt    DateTime         @default(now()) @map("created_at")
+    updatedAt    DateTime         @updatedAt @map("updated_at")
+
+    // One to One Relation for creating application user
+    adminId String    @unique @map("admin_id") @db.Uuid // Discuss
+    admin   AdminUser @relation(fields: [adminId], references: [id]) // Discuss
+
+    kycDocuments      InvestorKycDocument[]
+    bankAccount       InvestorBankAccount? // Enforces a single bank account relation
+    nominees          Nominee[]
+    investments       Investment[]
+    // withdrawalRequests WithdrawalRequest[]   
+    disbursementItems DisbursementItem[]
+
+    referralCodesId String? // codes this investor has generated
+    referral        ReferralCode  @relation(fields: [referralCodesId], references: [id])
+
+    referralsMade     Referral[] @relation("ReferrerInvestor") // referrals earned by this investor's code(s)
+    referralsReceived Referral[] @relation("ReferredInvestor") // referral record where THIS investor was the new signup
+
+    @@map("investors")
+}
+
+// ----------------------------------------------------------------------------
+// 2. Investor KYC Documents
+// ----------------------------------------------------------------------------
+
+model InvestorKycDocument {
+    id                 String             @id @default(uuid()) @db.Uuid
+    investorId         String             @map("investor_id") @db.Uuid
+    docType            KycDocType         @map("doc_type")
+    fileUrl            String             @map("file_url") // encrypted storage on secure server, not a public Drive link
+    verificationStatus VerificationStatus @default(pending) @map("verification_status")
+    verifiedById       String?            @map("verified_by") @db.Uuid
+    uploadedAt         DateTime           @default(now()) @map("uploaded_at")
+
+    investor Investor   @relation(fields: [investorId], references: [id])
+    verifier AdminUser? @relation("KycDocVerifiedBy", fields: [verifiedById], references: [id])
+
+    @@map("investor_kyc_documents")
+}
+
+// ----------------------------------------------------------------------------
+// 3. Investor Bank Accounts
+// ----------------------------------------------------------------------------
+
+model InvestorBankAccount {
+    id            String           @id @default(uuid()) @db.Uuid
+    investorId    String           @unique @map("investor_id") @db.Uuid // @unique enforces max 1 account per investor
+    bankName      String           @map("bank_name") @db.VarChar(100)
+    accountName   String           @map("account_name") @db.VarChar(150) // must match bank records — used as Receiver Name
+    accountNumber String           @map("account_number") @db.VarChar(50) // Beneficiary Bank Account No
+    routingNumber String?          @map("routing_number") @db.VarChar(20) // Receiving Bank Routing No — Not required for CBL 
+    accountType   BankAccountType? @map("account_type")
+    branchName    String?
+
+    investor          Investor           @relation(fields: [investorId], references: [id])
+    disbursementItems DisbursementItem[]
+
+    @@map("investor_bank_accounts")
+}
+
+// ----------------------------------------------------------------------------
+// 4. Nominees
+// ----------------------------------------------------------------------------
+
+model Nominee {
+    id           String  @id @default(uuid()) @db.Uuid
+    investorId   String  @map("investor_id") @db.Uuid
+    nomineeName  String  @map("nominee_name") @db.VarChar(150)
+    nomineeNid   String? @map("nominee_nid") @db.VarChar(30) // NID Photo Location url
+    nomineePhoto String? @map("nominee_photo") // uploaded photo, file URL
+    nomineePhone String? @map("nominee_phone") @db.VarChar(20)
+    relation     String  @db.VarChar(50)
+
+    investor Investor @relation(fields: [investorId], references: [id])
+
+    @@map("nominees")
+}
+
+// ----------------------------------------------------------------------------
+// 5. Projects
+// ----------------------------------------------------------------------------
+
+model Project {
+    id          String  @id @default(uuid()) @db.Uuid
+    name        String  @db.VarChar(150)
+    description String? // shown on public project listing
+
+    // Project lifecycle
+    status ProjectStatus @default(DRAFT)
+
+    // Investment configuration
+    minimumInvestment Decimal  @db.Decimal(18, 2)
+    maximumInvestment Decimal? @db.Decimal(18, 2)
+
+    targetAmount        Decimal? @db.Decimal(18, 2)
+    totalInvestedAmount Decimal  @default(0) @db.Decimal(18, 2) // cant be show to customer
+
+    // Return configuration
+    investmentType InvestmentType
+    payoutSchedule PayoutSchedule
+
+    // Project duration
+    startDate DateTime
+    endDate   DateTime?
+
+    // Visibility
+    isActive  Boolean @default(true) // admin can deactive, only previous investor can see
+    isVisible Boolean @default(true) // control the visibility to Customer 
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    investments Investment[]
+
+    @@map("projects")
+}
+
+// ----------------------------------------------------------------------------
+// 6. Company Documents
+// ----------------------------------------------------------------------------
+
+model CompanyDocument {
+    id         String         @id @default(uuid()) @db.Uuid
+    docType    CompanyDocType @map("doc_type")
+    fileUrl    String         @map("file_url") // encrypted, secure server
+    isCurrent  Boolean        @default(true) @map("is_current") // old versions kept for audit history, not overwritten
+    uploadedAt DateTime       @default(now()) @map("uploaded_at")
+
+    uploadedById String    @map("uploaded_by") @db.Uuid
+    uploadedBy   AdminUser @relation("CompanyDocUploadedBy", fields: [uploadedById], references: [id])
+
+    @@map("company_documents")
+}
+
+// ----------------------------------------------------------------------------
+// 7. Investments (one row per deposit — enables top-ups)
+// ----------------------------------------------------------------------------
+
+model Investment {
+    id             String         @id @default(uuid()) @db.Uuid
+    investorId     String         @map("investor_id") @db.Uuid
+    projectId      String         @map("project_id") @db.Uuid
+    investmentDate DateTime?      @map("investment_date") //admin panel theke manually dewa hobe
+    amount         Decimal        @db.Decimal(14, 2) // principal — always the base for profit calc (non-compounding)
+    investmentType InvestmentType @map("investment_type")
+    fixedRate      Decimal?       @map("fixed_rate") @db.Decimal(5, 2) // only set if type = fixed; editable going forward, not retroactive
+
+    // Confirmed: if the customer specifies an investment period, it must be
+    // 3+ months (enforce in application/service layer — no DB check
+    // constraint here). If left unspecified: withdrawal notice is 40 days
+    // for amounts under 2,00,000, and case-by-case calculated
+    // notice/disclaimer for 2,00,000+ (see WithdrawalRequest.noticePeriodDays).
+    investmentPeriodMonths Int? @default(3) @map("investment_period_months")
+
+    disbursementPeriod      DisbursementPeriod @map("disbursement_period")
+    agreementPlace          String?            @map("agreement_place") @db.VarChar(150)
+    agreementEndDate        DateTime?          @map("agreement_end_date") @db.Date // "days left" is computed as agreementEndDate - CURRENT_DATE, never stored
+    deedType                DeedType           @default(none) @map("deed_type")
+    chequeGiven             Boolean            @default(false) @map("cheque_given")
+    cashVoucharGiven        Boolean            @default(false)
+    specialInstruction      String?            @map("special_instruction")
+    souvenirGiven           Boolean            @default(false)
+    isSouvenirApplicable    Boolean            @default(true)
+    certificateGiven        Boolean            @default(false)
+    isCertificateApplicable Boolean            @default(true)
+    // referralId              String?            @unique @map("referral_id") @db.Uuid
+    receivedById            String?            @map("received_by") @db.Uuid
+    authorizedById          String?            @map("authorized_by") @db.Uuid
+    status                  InvestmentStatus   @default(active)
+
+    // Disbursement slot scheduling (confirmed): counting starts 10 days after
+    // investmentDate, which then lands in one of the 4 DisbursementSlot
+    // windows. Admin can manually move it — slotAdjustmentDays records the
+    // resulting +/- day shift versus the auto-computed slot, for audit.
+    disbursementSlot    DisbursementSlot? @map("disbursement_slot")
+    slotManuallyChanged Boolean           @default(false) @map("slot_manually_changed")
+    slotAdjustmentDays  Int?              @map("slot_adjustment_days")
+
+    createdAt DateTime @default(now()) @map("created_at")
+
+    investor            Investor              @relation(fields: [investorId], references: [id])
+    project             Project               @relation(fields: [projectId], references: [id])
+    // referral            Referral?             @relation(fields: [referralId], references: [id])
+    // fixed: receivedBy/authorizedBy made optional to match nullable *_by columns
+    receivedBy          AdminUser?            @relation("InvestmentReceivedBy", fields: [receivedById], references: [id])
+    authorizedBy        AdminUser?            @relation("InvestmentAuthorizedBy", fields: [authorizedById], references: [id])
+    monthlyProfitLedger MonthlyProfitLedger[]
+    incomingPayments    IncomingPayment[]
+    withdrawalRequests  WithdrawalRequest[]
+    investmentDocuments InvestmentDocument[] // deed PDF, certificate, cheque, souvenir, proof photo, clearance video link, etc.
+
+    @@map("investments")
+}
+
+// ----------------------------------------------------------------------------
+// 8. Monthly Rate Settings (Unfixed/Variable rate, platform-wide per month)
+// ----------------------------------------------------------------------------
+
+model MonthlyRateSetting {
+    id          String   @id @default(uuid()) @db.Uuid
+    periodMonth DateTime @unique @map("period_month") @db.Date // stored as first-of-month, e.g. 2026-09-01
+    ratePercent Decimal  @map("rate_percent") @db.Decimal(5, 2) // e.g. 2.00–2.50
+    setById     String   @map("set_by") @db.Uuid
+    setAt       DateTime @default(now()) @map("set_at")
+
+    setBy AdminUser @relation("RateSetBy", fields: [setById], references: [id])
+
+    // Note: not referenced by a hard FK from monthly_profit_ledger — it's a
+    // lookup at calculation time. If per-project variable rates are ever
+    // needed, add a projectId column and change uniqueness to
+    // (projectId, periodMonth).
+    @@map("monthly_rate_settings")
+}
+
+// ----------------------------------------------------------------------------
+// 9. Monthly Profit Ledger (one row per investment per month, immutable)
+// ----------------------------------------------------------------------------
+
+model MonthlyProfitLedger {
+    id                 String       @id @default(uuid()) @db.Uuid
+    investmentId       String       @map("investment_id") @db.Uuid
+    periodMonth        DateTime     @map("period_month") @db.Date
+    rateApplied        Decimal      @map("rate_applied") @db.Decimal(5, 2) // copied from fixedRate or monthly_rate_settings at calc time
+    profitAmount       Decimal      @map("profit_amount") @db.Decimal(14, 2) // investments.amount × rateApplied
+    payoutStatus       PayoutStatus @default(accrued) @map("payout_status") // flips to disbursed once paid in a batch 
+    disbursementItemId String?      @map("disbursement_item_id") @db.Uuid
+
+    investment       Investment        @relation(fields: [investmentId], references: [id])
+    disbursementItem DisbursementItem? @relation(fields: [disbursementItemId], references: [id])
+
+    // Quarterly/annual payouts sum the relevant rows here for the period
+    // rather than averaging, per the confirmed decision.
+    @@map("monthly_profit_ledger")
+}
+
+// ----------------------------------------------------------------------------
+// 10. Disbursement Batches (one per admin-run payout batch, per slot)
+// ----------------------------------------------------------------------------
+
+model DisbursementBatch {
+    id          String                  @id @default(uuid()) @db.Uuid
+    slot        DisbursementSlot        @map("slot") // one of the 4 fixed windows (see DisbursementSlot enum)
+    slotLabel   String                  @map("slot_label") @db.VarChar(50) // human-readable display label, e.g. "1st–8th"
+    batchDate   DateTime                @map("batch_date") @db.Date
+    exportType  DisbursementExportType  @map("export_type") // cbl and beftn are always separate files (confirmed), even inside one batch
+    fileUrl     String?                 @map("file_url") // generated Excel file, stored for record-keeping
+    status      DisbursementBatchStatus @default(draft)
+    createdById String                  @map("created_by") @db.Uuid
+    createdAt   DateTime                @default(now()) @map("created_at")
+
+    createdBy AdminUser          @relation("BatchCreatedBy", fields: [createdById], references: [id])
+    items     DisbursementItem[]
+
+    @@map("disbursement_batches")
+}
+
+// ----------------------------------------------------------------------------
+// 11. Disbursement Items (line items — maps to CBL/BEFTN export columns)
+// ----------------------------------------------------------------------------
+
+model DisbursementItem {
+    id           String       @id @default(uuid()) @db.Uuid
+    batchId      String       @map("batch_id") @db.Uuid
+    investorId   String       @map("investor_id") @db.Uuid
+    reason       String       @db.VarChar(150) // e.g. "ROI Disbursement — Sept 2026"
+    amount       Decimal      @db.Decimal(14, 2) // sum of relevant monthly_profit_ledger rows
+    exportFormat ExportFormat @map("export_format") // determined by investor's bank at export time — cbl/beftn always split into separate files
+    remarks      String?      @db.VarChar(255) // optional special comment
+
+    batch               DisbursementBatch     @relation(fields: [batchId], references: [id])
+    investor            Investor              @relation(fields: [investorId], references: [id])
+    monthlyProfitLedger MonthlyProfitLedger[]
+    withdrawalRequests  WithdrawalRequest[]
+    referralsPaid       Referral[] // referral bonuses settled through this same disbursement item
+
+    // Export query joins this table with investors and investor_bank_accounts
+    // to produce the exact 11-column CBL/BEFTN file (Reason, Sender Account
+    // No, Receiving Bank Routing No, Beneficiary Bank Account No, Account
+    // Type, Amount, Receiver ID, Receiver Name, Remarks, Receiver Mobile
+    // Number, Receiver Email Address).
+    @@map("disbursement_items")
+}
+
+// ----------------------------------------------------------------------------
+// 12. Withdrawal Requests (principal withdrawal, manual or auto)
+// ----------------------------------------------------------------------------
+
+model WithdrawalRequest {
+    id               String           @id @default(uuid()) @db.Uuid
+    investmentId     String           @map("investment_id") @db.Uuid
+    investorId       String           @map("investor_id") @db.Uuid
+    requestedAmount  Decimal          @map("requested_amount") @db.Decimal(14, 2) // capped at 200,000 per request — confirm per-request vs per-period with client
+    withdrawalMethod WithdrawalMethod @default(auto) @map("withdrawal_method")
+
+    requestDate DateTime @map("request_date") @db.Date
+
+    // Confirmed rules (computed in application logic, stored here once
+    // decided): manual withdraw = 7 days notice by default. If the
+    // investment's period was left unspecified, the notice instead follows
+    // the amount-based rule on Investment (40 days if < 2,00,000; calculated
+    // case-by-case, given as a notice/disclaimer, if >= 2,00,000).
+    noticePeriodDays Int?      @map("notice_period_days")
+    noticePeriodEnd  DateTime? @map("notice_period_end") @db.Date // requestDate + noticePeriodDays; null for auto withdrawals // discuss
+
+    disbursementDate DateTime? @map("disbursement_date") @db.Date // actual payout date, assigned by admin
+
+    status                 WithdrawalStatus @default(pending)
+    paidDisbursementItemId String?          @map("paid_disbursement_item_id") @db.Uuid
+
+    investment           Investment        @relation(fields: [investmentId], references: [id])
+    investor             Investor          @relation(fields: [investorId], references: [id])
+    paidDisbursementItem DisbursementItem? @relation(fields: [paidDisbursementItemId], references: [id])
+
+    @@map("withdrawal_requests")
+}
+
+// ----------------------------------------------------------------------------
+// 13. Incoming Payments (investor → company deposits/installments)
+// ----------------------------------------------------------------------------
+// Confirmed: NO receipt is issued for these payments (see
+// InvestmentDocument.certificate, which is a certificate, not a receipt).
+
+model IncomingPayment {
+    id                String                @id @default(uuid()) @db.Uuid
+    investmentId      String                @map("investment_id") @db.Uuid
+    amount            Decimal               @db.Decimal(14, 2)
+    paymentMethod     IncomingPaymentMethod @map("payment_method")
+    senderAccountInfo String?               @map("sender_account_info") @db.VarChar(150) // bKash number or bank account
+    installmentNumber Int?                  @map("installment_number")
+    dueDate           DateTime?             @map("due_date") @db.Date // for installment reminders (5–7 day rule)
+    confirmedById     String?               @map("confirmed_by") @db.Uuid
+    confirmedAt       DateTime?             @map("confirmed_at")
+    status            IncomingPaymentStatus @default(pending)
+
+    investment  Investment @relation(fields: [investmentId], references: [id])
+    confirmedBy AdminUser? @relation("PaymentConfirmedBy", fields: [confirmedById], references: [id])
+
+    @@map("incoming_payments")
+}
+
+// ----------------------------------------------------------------------------
+// 14. Referral Codes (NEW — generated by an existing investor, 7-day expiry)
+// ----------------------------------------------------------------------------
+
+model ReferralCode {
+    id          String   @id @default(uuid()) @db.Uuid
+    referrerId  String   @map("investor_id") @db.Uuid // owner — existing investor who generated this code
+    code        String   @unique @db.VarChar(20)
+    isActive    Boolean  @default(true) @map("is_active") // confirmed: only one active code per investor at a time — enforce on generation in app logic
+
+    referrer  Investor   @relation(fields: [referrerId], references: [id])
+
+    @@map("referral_codes")
+}
+
+// ----------------------------------------------------------------------------
+// 15. Referrals
+// ----------------------------------------------------------------------------
+
+model Referral {
+    id             String @id @default(uuid()) @db.Uuid
+    // referralCodeId String @map("referral_code_id") @db.Uuid // which code was used
+    referrerId     String @db.Uuid // owner of the code (denormalized for quick lookup)
+    newInvestorId  String @unique @db.Uuid // the NEW investor who signed up using the code
+
+    // Confirmed: referral bonus is 1% of the new investor's investment amount.
+    bonusPercent Decimal     @default(1.00) @map("bonus_percent") @db.Decimal(5, 2)
+    bonusAmount  Decimal?    @map("bonus_amount") @db.Decimal(14, 2) // = referred investment's amount × bonusPercent, filled once that investment exists
+    bonusStatus  BonusStatus @default(pending) @map("bonus_status")
+
+    paidDisbursementItemId String? @map("paid_disbursement_item_id") @db.Uuid // bonus payout follows the normal disbursement slot pipeline, same as profit
+
+    // referralCode         ReferralCode      @relation(fields: [referralCodeId], references: [id])
+    referrer             Investor          @relation("ReferrerInvestor", fields: [referrerId], references: [id])
+    newInvestor          Investor          @relation("ReferredInvestor", fields: [newInvestorId], references: [id])
+    paidDisbursementItem DisbursementItem? @relation(fields: [paidDisbursementItemId], references: [id])
+    // investment           Investment?
+
+    // Confirmed: one referrer can only be credited once for the same new
+    // investor — stops duplicate/retry signups from creating two payable
+    // referral bonuses for the same relationship.
+    @@unique([referrerId, newInvestorId])
+    @@map("referrals")
+}
+
+// ----------------------------------------------------------------------------
+// 16. ROI Calculator Leads (public calculator usage)
+// ----------------------------------------------------------------------------
+
+model RoiCalculatorLead {
+    id                   String   @id @default(uuid()) @db.Uuid
+    name                 String   @db.VarChar(150)
+    phoneNumber          String   @map("phone_number") @db.VarChar(20)
+    email                String?  @db.VarChar(150)
+    enteredAmount        Decimal  @map("entered_amount") @db.Decimal(14, 2)
+    calculatedProjection Json?    @map("calculated_projection") // snapshot of what was shown to them
+    createdAt            DateTime @default(now()) @map("created_at")
+    followedUp           Boolean  @default(false) @map("followed_up")
+
+    @@map("roi_calculator_leads")
+}
+
+// ----------------------------------------------------------------------------
+// 17. Investment Documents (NEW — deed, certificate, cheque, souvenir, etc.)
+// ----------------------------------------------------------------------------
+// Confirmed: NO receipt is issued to investors. "certificate" here is the
+// investor certificate, distinct from a payment receipt.
+
+model InvestmentDocument {
+    id           String                 @id @default(uuid()) @db.Uuid
+    investmentId String                 @map("investment_id") @db.Uuid
+    docType      InvestmentDocumentType @map("doc_type")
+    fileUrl      String?                @map("file_url") // direct upload — used for online_deed, certificate, proof_photo
+    driveLink    String?                @map("drive_link") // external drive link — used for clearance_video
+
+    // For souvenir/membership_card items with a printed serial/code and an
+    // approximate value. Example tiers mentioned (50k / 20k-15k = 5k / 15k)
+    // still need to be confirmed with the client before hardcoding any
+    // amount-based tiering logic.
+    serialNumber String?  @map("serial_number") @db.VarChar(50)
+    priceTag     Decimal? @map("price_tag") @db.Decimal(10, 2)
+
+    uploadedById String?  @map("uploaded_by") @db.Uuid
+    uploadedAt   DateTime @default(now()) @map("uploaded_at")
+
+    investment Investment @relation(fields: [investmentId], references: [id])
+    uploadedBy AdminUser? @relation("InvestmentDocUploadedBy", fields: [uploadedById], references: [id])
+
+    @@map("investment_documents")
+}
+
+// ----------------------------------------------------------------------------
+// 18. Admin Users
+// ----------------------------------------------------------------------------
+
+model AdminUser {
+    id             String  @id @default(uuid()) @db.Uuid
+    name           String  @db.VarChar(150)
+    email          String  @unique @db.VarChar(150)
+    passwordHash   String  @map("password_hash") @db.VarChar(255)
+    role           Role
+    allowedIpRange String? @map("allowed_ip_range") @db.VarChar(100) // for IP-restricted admin access
+
+    kycDocumentsVerified        InvestorKycDocument[] @relation("KycDocVerifiedBy")
+    companyDocumentsUploaded    CompanyDocument[]     @relation("CompanyDocUploadedBy")
+    investmentsReceived         Investment[]          @relation("InvestmentReceivedBy")
+    investmentsAuthorized       Investment[]          @relation("InvestmentAuthorizedBy")
+    monthlyRatesSet             MonthlyRateSetting[]  @relation("RateSetBy")
+    disbursementBatchesCreated  DisbursementBatch[]   @relation("BatchCreatedBy")
+    incomingPaymentsConfirmed   IncomingPayment[]     @relation("PaymentConfirmedBy")
+    investmentDocumentsUploaded InvestmentDocument[]  @relation("InvestmentDocUploadedBy")
+    auditLogEntries             AuditLog[]
+
+    investorProfile Investor?
+
+    @@map("admin_users")
+}
+
+// ----------------------------------------------------------------------------
+// 19. Admin Notifications (backs the admin notification bar)
+// ----------------------------------------------------------------------------
+
+model AdminNotification {
+    id          String                @id @default(uuid()) @db.Uuid
+    type        AdminNotificationType
+    referenceId String?               @map("reference_id") @db.Uuid // points to investments.id, disbursement_batches.id, or incoming_payments.id depending on type
+    message     String                @db.VarChar(255)
+    isRead      Boolean               @default(false) @map("is_read")
+    createdAt   DateTime              @default(now()) @map("created_at")
+
+    @@map("admin_notifications")
+}
+
+// ----------------------------------------------------------------------------
+// 20. Audit Log (general-purpose action trail)
+// ----------------------------------------------------------------------------
+
+model AuditLog {
+    id          String   @id @default(uuid()) @db.Uuid
+    action      String   @db.VarChar(100) // e.g. "verified_kyc", "exported_batch", "set_monthly_rate"
+    targetTable String   @map("target_table") @db.VarChar(50)
+    targetId    String   @map("target_id") @db.Uuid
+    details     Json?
+    createdAt   DateTime @default(now()) @map("created_at")
+
+    adminId String    @map("admin_id") @db.Uuid
+    admin   AdminUser @relation(fields: [adminId], references: [id])
+
+    @@map("audit_log")
 }
