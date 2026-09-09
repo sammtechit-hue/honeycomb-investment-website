@@ -18,7 +18,7 @@ export class AdminService {
     //For Creating Admin
     async create(createAdminDto: CreateAdminDto) {
 
-        const { phone, email, phoneNumber } = createAdminDto;
+        const { email } = createAdminDto;
 
         return {
             message: "User Created Successfully"
