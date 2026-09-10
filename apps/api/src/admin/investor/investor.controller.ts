@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Param, Post, Patch, Delete } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Patch, Delete, Query } from '@nestjs/common';
 import { InvestorService } from './investor.service';
 import { CreateInvestorDto } from './dto/create-investor.dto';
 import { UpdateInvestorDto } from './dto/update-investor.dto';
+// import { QueryInvestorDto } from './dto/query-investor.dto';
 
 @Controller('admin/investor')
 export class InvestorController {
@@ -10,9 +11,31 @@ export class InvestorController {
   ) { }
 
   @Get()
-  findAll() {
-    // Returns all investors from the database.
-    return this.investorService.findAll();
+  findAll(
+    @Query('search') search?: string,
+    @Query('status') status?: string,
+    @Query('category') category?: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('verified_kyc') verified_kyc?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: 'asc' | 'desc',
+    @Query('min') min?: number,
+    @Query('max') max?: number,
+  ) {
+    // GET /admin/investor?search=john&status=active&category=gold&page=1&limit=10&sortBy=createdAt&sortOrder=desc
+    return this.investorService.findAll({
+      search,
+      status,
+      verified_kyc,
+      category,
+      page: page ? Number(page) : 1,
+      limit: limit ? Number(limit) : 10,
+      sortBy: sortBy ?? 'createdAt',
+      sortOrder: sortOrder ?? 'desc',
+      min: min ? Number(min) : undefined,
+      max: max ? Number(max) : undefined,
+    });
   }
 
   @Get(':id')
@@ -37,7 +60,7 @@ export class InvestorController {
   //   return this.investorService.update(id, updateInvestorDto);
   // }
 
-  
+
   // @Patch(':id/status')
   // update(@Param('id') id:string, @Body()updateInvestorDto: UpdateInvestorDto,){
   //   this.investorService.updateStatus(id, updateInvestorDto);
@@ -48,6 +71,6 @@ export class InvestorController {
   //   return this.investorService.remove(id);
   // }
 
-  
+
 }
 

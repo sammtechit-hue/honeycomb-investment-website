@@ -9,6 +9,8 @@ export class InvestmentController {
         private readonly investmentService: InvestmentService,
     ) { }
 
+    @Get('')
+
     @Get(':id')
     findOne(@Param('id') id: string) {
         return this.investmentService.findOne(id);

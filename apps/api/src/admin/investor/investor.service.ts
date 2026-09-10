@@ -9,9 +9,35 @@ export class InvestorService {
         // private readonly prisma: PrismaService,
     ) { }
 
-    //For Getting All Investor's Data
-    async findAll() {
-        return "HelloWorld Return all Investor's data";
+    // For Getting All Investor's Data with filtering, searching, sorting & pagination
+    // Example: GET /admin/investor?search=john&status=active&category=gold&page=1&limit=10
+    async findAll({
+        search,
+        status,
+        verified_kyc,
+        category,
+        page = 1,
+        limit = 10,
+        sortBy = 'createdAt',
+        sortOrder = 'desc',
+        min,
+        max,
+    }: {
+        search?: string;
+        status?: string;
+        verified_kyc?: string;
+        category?: string;
+        page?: number;
+        limit?: number;
+        sortBy?: string;
+        sortOrder?: 'asc' | 'desc';
+        min?: number;
+        max?: number;
+    }) {
+
+        return {
+            message: "HelloWorld Return all Investor's data",
+        };
     }
 
     //For Getting One Investor's Data

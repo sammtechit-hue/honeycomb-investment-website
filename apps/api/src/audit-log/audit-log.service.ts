@@ -9,8 +9,29 @@ export class AuditLogService {
         // private readonly prisma: PrismaService,
     ) { }
 
-    async findAllLog(){
-        return ["das", "dsad", "asd"];
+    // For Getting All AuditLog's Data with filtering, searching, sorting & pagination
+    // Example: GET /api/audit-log?search=verified_kyc&status=verified_kyc&category=audit_log&page=1&limit=10
+    async findAllLog({
+        search,
+        status,
+        category,
+        page = 1,
+        limit = 10,
+        sortBy = 'createdAt',
+        sortOrder = 'desc',
+    }: {
+        search?: string;
+        status?: string;
+        category?: string;
+        page?: number;
+        limit?: number;
+        sortBy?: string;
+        sortOrder?: 'asc' | 'desc';
+    }) {
+
+        return {
+            message: "HelloWorld Return all AuditLog's data",
+        };
     }
 
     // For Getting One AuditLog's Data

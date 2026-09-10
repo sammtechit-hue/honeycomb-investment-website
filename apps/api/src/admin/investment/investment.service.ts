@@ -10,6 +10,32 @@ export class InvestmentService {
         // private readonly prisma: PrismaService,
     ) { }
 
+    async findAll({
+        search,
+        status,
+        verified_kyc,
+        category,
+        page = 1,
+        limit = 10,
+        sortBy = 'createdAt',
+        sortOrder = 'desc',
+        min,
+        max,
+    }: {
+        search?: string;
+        status?: string;
+        verified_kyc?: string;
+        category?: string;
+        page?: number;
+        limit?: number;
+        sortBy?: string;
+        sortOrder?: 'asc' | 'desc';
+        min?: number;
+        max?: number;
+    }) {
+        return search + "Return all investment List"
+    }
+
     // For Getting One Investment's Data
     async findOne(id: string) {
         return id + "This route is for Investment who will see their necessary data and partially modify data";
@@ -26,7 +52,7 @@ export class InvestmentService {
     }
 
     // For updating Investment Information
-    async update(id: string, updateInvestmentDto: UpdateInvestmentDto){
+    async update(id: string, updateInvestmentDto: UpdateInvestmentDto) {
         return {
             message: 'Investment Updated Successfully'
         }

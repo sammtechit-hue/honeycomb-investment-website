@@ -9,8 +9,30 @@ export class NotificationService {
         // private readonly prisma: PrismaService,
     ) {}
 
-    async findAll(id: string) {
-        return "All Notification for a specific investor";
+    // For Getting All Notification's Data with filtering, searching, sorting & pagination
+    // Example: GET /notification/:id?search=john&status=active&category=gold&page=1&limit=10
+    async findAll({
+        id,
+        search,
+        status,
+        category,
+        page = 1,
+        limit = 10,
+        sortBy = 'createdAt',
+        sortOrder = 'desc',
+    }: {
+        id: string;
+        search?: string;
+        status?: string;
+        category?: string;
+        page?: number;
+        limit?: number;
+        sortBy?: string;
+        sortOrder?: 'asc' | 'desc';
+    }) {
+        return {
+            message: search +  "HelloWorld Return all Notification's data",
+        };
     }
 
     //For Creating Notification
