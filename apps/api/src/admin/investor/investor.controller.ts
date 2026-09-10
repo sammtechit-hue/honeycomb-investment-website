@@ -17,7 +17,7 @@ export class InvestorController {
     @Query('category') category?: string,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
-    // verified_kyc
+    @Query('verified_kyc') verified_kyc?: string,
     @Query('sortBy') sortBy?: string,
     @Query('sortOrder') sortOrder?: 'asc' | 'desc',
     @Query('min') min?: number,
@@ -27,6 +27,7 @@ export class InvestorController {
     return this.investorService.findAll({
       search,
       status,
+      verified_kyc,
       category,
       page: page ? Number(page) : 1,
       limit: limit ? Number(limit) : 10,

@@ -14,6 +14,7 @@ export class InvestorService {
     async findAll({
         search,
         status,
+        verified_kyc,
         category,
         page = 1,
         limit = 10,
@@ -24,6 +25,7 @@ export class InvestorService {
     }: {
         search?: string;
         status?: string;
+        verified_kyc?: string;
         category?: string;
         page?: number;
         limit?: number;
