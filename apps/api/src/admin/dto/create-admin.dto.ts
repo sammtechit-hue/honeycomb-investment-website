@@ -1,5 +1,5 @@
 import { IsEmail, IsOptional, MaxLength, Matches } from 'class-validator';
-import { BD_PHONE_MESSAGE, BD_PHONE_REGEX } from '../../common/bdPhoneNumberVaildation';
+import { BD_PHONE_MESSAGE, BD_PHONE_REGEX } from '../../utils/validators/bdPhoneNumberVaildation';
 
 export class CreateAdminDto {
     // Email is optional
