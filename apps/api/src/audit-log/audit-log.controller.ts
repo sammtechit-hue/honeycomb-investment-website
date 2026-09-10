@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Patch, Delete } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Patch, Delete, Query } from '@nestjs/common';
 import { CreateAuditLogDto } from './dto/create-audit-log.dto';
 import { UpdateAuditLogDto } from './dto/update-audit-log.dto';
 import { AuditLogService } from './audit-log.service';
@@ -10,8 +10,25 @@ export class AuditLogController {
     ) { }
 
     @Get()
-    findAllLog(){
-      return this.auditLogService.findAllLog();
+    findAllLog(
+      @Query('search') search?: string,
+      @Query('status') status?: string,
+      @Query('category') category?: string,
+      @Query('page') page?: number,
+      @Query('limit') limit?: number,
+      @Query('sortBy') sortBy?: string,
+      @Query('sortOrder') sortOrder?: 'asc' | 'desc',
+    ){
+      // GET /api/audit-log?search=verified_kyc&status=verified_kyc&category=audit_log&page=1&limit=10&sortBy=createdAt&sortOrder=desc
+      return this.auditLogService.findAllLog({
+        search,
+        status,
+        category,
+        page: page ? Number(page) : 1,
+        limit: limit ? Number(limit) : 10,
+        sortBy: sortBy ?? 'createdAt',
+        sortOrder: sortOrder ?? 'desc',
+      });
     }
 
     @Get(':id')
