@@ -228,15 +228,14 @@ model Investor {
     id           String           @id @default(uuid()) @db.Uuid
     fullName     String           @map("full_name") @db.VarChar(150)
     address      String? // now optional (confirmed)
-    phoneNumber  String           @unique @map("phone_number") @db.VarChar(20)
     email        String?          @db.VarChar(150) // required for BEFTN/CBL export
     profession   String?          @db.VarChar(150) // optional (confirmed)
     workplace    String?          @db.VarChar(150) // optional (confirmed)
     category     InvestorCategory @default(bronze)
-    passwordHash String           @map("password_hash") @db.VarChar(255)
     status       InvestorStatus   @default(pending)
     createdAt    DateTime         @default(now()) @map("created_at")
     updatedAt    DateTime         @updatedAt @map("updated_at")
+    approvedById String // Which admin approved this Investor
 
     // One to One Relation for creating application user
     adminId String    @unique @map("admin_id") @db.Uuid // Discuss
@@ -250,10 +249,11 @@ model Investor {
     disbursementItems DisbursementItem[]
 
     referralCodesId String? // codes this investor has generated
-    referral        ReferralCode  @relation(fields: [referralCodesId], references: [id])
+    referral        ReferralCode @relation(fields: [referralCodesId], references: [id])
 
-    referralsMade     Referral[] @relation("ReferrerInvestor") // referrals earned by this investor's code(s)
-    referralsReceived Referral[] @relation("ReferredInvestor") // referral record where THIS investor was the new signup
+    referralsMade     Referral[]     @relation("ReferrerInvestor") // referrals earned by this investor's code(s)
+    referralsReceived Referral[]     @relation("ReferredInvestor") // referral record where THIS investor was the new signup
+    referralCodes     ReferralCode[]
 
     @@map("investors")
 }
@@ -506,11 +506,13 @@ model DisbursementItem {
     exportFormat ExportFormat @map("export_format") // determined by investor's bank at export time — cbl/beftn always split into separate files
     remarks      String?      @db.VarChar(255) // optional special comment
 
-    batch               DisbursementBatch     @relation(fields: [batchId], references: [id])
-    investor            Investor              @relation(fields: [investorId], references: [id])
-    monthlyProfitLedger MonthlyProfitLedger[]
-    withdrawalRequests  WithdrawalRequest[]
-    referralsPaid       Referral[] // referral bonuses settled through this same disbursement item
+    batch                 DisbursementBatch     @relation(fields: [batchId], references: [id])
+    investor              Investor              @relation(fields: [investorId], references: [id])
+    monthlyProfitLedger   MonthlyProfitLedger[]
+    withdrawalRequests    WithdrawalRequest[]
+    referralsPaid         Referral[] // referral bonuses settled through this same disbursement item
+    investorBankAccount   InvestorBankAccount?  @relation(fields: [investorBankAccountId], references: [id])
+    investorBankAccountId String?               @db.Uuid
 
     // Export query joins this table with investors and investor_bank_accounts
     // to produce the exact 11-column CBL/BEFTN file (Reason, Sender Account
@@ -526,8 +528,6 @@ model DisbursementItem {
 
 model WithdrawalRequest {
     id               String           @id @default(uuid()) @db.Uuid
-    investmentId     String           @map("investment_id") @db.Uuid
-    investorId       String           @map("investor_id") @db.Uuid
     requestedAmount  Decimal          @map("requested_amount") @db.Decimal(14, 2) // capped at 200,000 per request — confirm per-request vs per-period with client
     withdrawalMethod WithdrawalMethod @default(auto) @map("withdrawal_method")
 
@@ -543,12 +543,13 @@ model WithdrawalRequest {
 
     disbursementDate DateTime? @map("disbursement_date") @db.Date // actual payout date, assigned by admin
 
-    status                 WithdrawalStatus @default(pending)
-    paidDisbursementItemId String?          @map("paid_disbursement_item_id") @db.Uuid
+    status WithdrawalStatus @default(pending)
 
-    investment           Investment        @relation(fields: [investmentId], references: [id])
-    investor             Investor          @relation(fields: [investorId], references: [id])
-    paidDisbursementItem DisbursementItem? @relation(fields: [paidDisbursementItemId], references: [id])
+    investmentId String     @map("investment_id") @db.Uuid
+    investment   Investment @relation(fields: [investmentId], references: [id])
+
+    paidDisbursementItemId String?           @map("paid_disbursement_item_id") @db.Uuid
+    paidDisbursementItem   DisbursementItem? @relation(fields: [paidDisbursementItemId], references: [id])
 
     @@map("withdrawal_requests")
 }
@@ -582,12 +583,13 @@ model IncomingPayment {
 // ----------------------------------------------------------------------------
 
 model ReferralCode {
-    id          String   @id @default(uuid()) @db.Uuid
-    referrerId  String   @map("investor_id") @db.Uuid // owner — existing investor who generated this code
-    code        String   @unique @db.VarChar(20)
-    isActive    Boolean  @default(true) @map("is_active") // confirmed: only one active code per investor at a time — enforce on generation in app logic
+    id       String  @id @default(uuid()) @db.Uuid
+    code     String  @unique @db.VarChar(20)
+    isActive Boolean @default(true) @map("is_active") // confirmed: only one active code per investor at a time — enforce on generation in app logic
 
-    referrer  Investor   @relation(fields: [referrerId], references: [id])
+    referrerId String     @map("investor_id") @db.Uuid // owner — existing investor who generated this code
+    referrer   Investor   @relation("ReferrerInvestor", fields: [referrerId], references: [id])
+    investors  Investor[]
 
     @@map("referral_codes")
 }
@@ -597,10 +599,10 @@ model ReferralCode {
 // ----------------------------------------------------------------------------
 
 model Referral {
-    id             String @id @default(uuid()) @db.Uuid
+    id            String @id @default(uuid()) @db.Uuid
     // referralCodeId String @map("referral_code_id") @db.Uuid // which code was used
-    referrerId     String @db.Uuid // owner of the code (denormalized for quick lookup)
-    newInvestorId  String @unique @db.Uuid // the NEW investor who signed up using the code
+    referrerId    String @db.Uuid // owner of the code (denormalized for quick lookup)
+    newInvestorId String @unique @db.Uuid // the NEW investor who signed up using the code
 
     // Confirmed: referral bonus is 1% of the new investor's investment amount.
     bonusPercent Decimal     @default(1.00) @map("bonus_percent") @db.Decimal(5, 2)
@@ -675,7 +677,7 @@ model InvestmentDocument {
 model AdminUser {
     id             String  @id @default(uuid()) @db.Uuid
     name           String  @db.VarChar(150)
-    email          String  @unique @db.VarChar(150)
+    email          String? @unique @db.VarChar(150)
     passwordHash   String  @map("password_hash") @db.VarChar(255)
     role           Role
     allowedIpRange String? @map("allowed_ip_range") @db.VarChar(100) // for IP-restricted admin access

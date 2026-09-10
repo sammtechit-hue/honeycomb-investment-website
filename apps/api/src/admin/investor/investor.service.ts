@@ -11,7 +11,7 @@ export class InvestorService {
 
     //For Getting All Investor's Data
     async findAll() {
-        return "HelloWorld Return all Investor's data"
+        return "HelloWorld Return all Investor's data";
     }
 
     //For Getting One Investor's Data
