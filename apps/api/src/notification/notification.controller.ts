@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UsePipes, ValidationPipe } from '@nestjs/common';
 import { NotificationService } from './notification.service';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 // import { QueryNotificationDto } from './dto/query-notification.dto';
 
 @Controller('notification')
+@UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
 export class NotificationController {
     constructor(private readonly notificationService: NotificationService) {}
 

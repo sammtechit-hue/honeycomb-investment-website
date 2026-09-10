@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Param, Post, Patch, Delete } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Patch, Delete, UsePipes, ValidationPipe } from '@nestjs/common';
 import { CreateAdminDto } from './dto/create-admin.dto';
 import { UpdateAdminDto } from './dto/update-admin.dto';
 import { AdminService } from './admin.service';
 
 @Controller('admin')
+@UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
 export class AdminController {
   constructor(
     private readonly adminService: AdminService,
