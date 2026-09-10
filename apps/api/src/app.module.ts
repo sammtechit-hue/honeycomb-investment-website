@@ -5,7 +5,6 @@ import { AdminModule } from './admin/admin.module';
 import { InvestorModule } from './investor/investor.module';
 import { InvestmentModule } from './investment/investment.module';
 import { AuditLogModule } from './audit-log/audit-log.module';
-import { AdminNotificationModule } from './admin-notification/admin-notification.module';
 import { NotificationModule } from './notification/notification.module';
 
 @Module({
@@ -14,7 +13,6 @@ import { NotificationModule } from './notification/notification.module';
     InvestorModule,
     InvestmentModule,
     AuditLogModule,
-    AdminNotificationModule,
     NotificationModule
   ],
   controllers: [AppController],

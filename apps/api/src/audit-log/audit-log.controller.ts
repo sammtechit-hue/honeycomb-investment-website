@@ -9,6 +9,11 @@ export class AuditLogController {
         private readonly auditLogService: AuditLogService,
     ) { }
 
+    @Get()
+    findAllLog(){
+      return this.auditLogService.findAllLog();
+    }
+
     @Get(':id')
     findOne(@Param('id') id: string) {
         return this.auditLogService.findOne(id);
