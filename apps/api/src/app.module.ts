@@ -9,6 +9,7 @@ import { NotificationModule } from './notification/notification.module';
 import { ProjectModule } from './project/project.module';
 import { NomineeModule } from './nominee/nominee.module';
 import { InvestorBankAccountModule } from './investor-bank-account/investor-bank-account.module';
+import { InvestorKycDocumentModule } from './investor-kyc-document/investor-kyc-document.module';
 
 @Module({
   imports: [
@@ -19,7 +20,8 @@ import { InvestorBankAccountModule } from './investor-bank-account/investor-bank
     NotificationModule,
     ProjectModule,
     NomineeModule,
-    InvestorBankAccountModule
+    InvestorBankAccountModule,
+    InvestorKycDocumentModule
   ],
   controllers: [AppController],
   providers: [AppService],
