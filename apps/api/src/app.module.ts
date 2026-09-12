@@ -7,6 +7,8 @@ import { InvestmentModule } from './investment/investment.module';
 import { AuditLogModule } from './audit-log/audit-log.module';
 import { NotificationModule } from './notification/notification.module';
 import { ProjectModule } from './project/project.module';
+import { NomineeModule } from './nominee/nominee.module';
+import { InvestorBankAccountModule } from './investor-bank-account/investor-bank-account.module';
 
 @Module({
   imports: [
@@ -15,7 +17,9 @@ import { ProjectModule } from './project/project.module';
     InvestmentModule,
     AuditLogModule,
     NotificationModule,
-    ProjectModule
+    ProjectModule,
+    NomineeModule,
+    InvestorBankAccountModule
   ],
   controllers: [AppController],
   providers: [AppService],
