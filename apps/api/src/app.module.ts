@@ -10,6 +10,7 @@ import { ProjectModule } from './project/project.module';
 import { NomineeModule } from './nominee/nominee.module';
 import { InvestorBankAccountModule } from './investor-bank-account/investor-bank-account.module';
 import { InvestorKycDocumentModule } from './investor-kyc-document/investor-kyc-document.module';
+import { DisbursementBatchModule } from './disbursement-batch/disbursement-batch.module';
 
 @Module({
   imports: [
@@ -21,7 +22,8 @@ import { InvestorKycDocumentModule } from './investor-kyc-document/investor-kyc-
     ProjectModule,
     NomineeModule,
     InvestorBankAccountModule,
-    InvestorKycDocumentModule
+    InvestorKycDocumentModule,
+    DisbursementBatchModule
   ],
   controllers: [AppController],
   providers: [AppService],
