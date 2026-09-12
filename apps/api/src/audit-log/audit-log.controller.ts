@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Param, Post, Patch, Delete, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Patch, Delete, Query, UsePipes, ValidationPipe } from '@nestjs/common';
 import { CreateAuditLogDto } from './dto/create-audit-log.dto';
 import { UpdateAuditLogDto } from './dto/update-audit-log.dto';
 import { AuditLogService } from './audit-log.service';
 
 @Controller('audit-log')
+@UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
 export class AuditLogController {
     constructor(
         private readonly auditLogService: AuditLogService,

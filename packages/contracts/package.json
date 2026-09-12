@@ -1,0 +1,13 @@
+{
+  "name": "@investment-platform/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./investor": "./src/investor.ts",
+    "./investment": "./src/investment.ts"
+  },
+  "dependencies": {
+    "zod": "^3.24.1"
+  }
+}

@@ -1,9 +1,6 @@
-import { IsEmail, IsOptional, MaxLength } from 'class-validator';
+import { createZodDto } from 'nestjs-zod';
+import { investmentCreateInputSchema } from '@investment-platform/contracts/investment';
 
-export class CreateInvestmentDto {
-    // Email is optional
-    @IsEmail()
-    @IsOptional()
-    @MaxLength(150)
-    email?: string;
-}
+// Validated against the same schema secure-web uses for the investment form.
+// See packages/contracts/src/investment.ts for the shared source of truth.
+export class CreateInvestmentDto extends createZodDto(investmentCreateInputSchema) {}

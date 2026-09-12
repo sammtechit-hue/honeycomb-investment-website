@@ -248,12 +248,12 @@ model Investor {
     // withdrawalRequests WithdrawalRequest[]   
     disbursementItems DisbursementItem[]
 
-    referralCodesId String? // codes this investor has generated
-    referral        ReferralCode @relation(fields: [referralCodesId], references: [id])
+    referralCodesId String? // the referral code THIS investor used at signup (if any)
+    referral        ReferralCode? @relation("ReferralCodeUser", fields: [referralCodesId], references: [id])
 
     referralsMade     Referral[]     @relation("ReferrerInvestor") // referrals earned by this investor's code(s)
     referralsReceived Referral[]     @relation("ReferredInvestor") // referral record where THIS investor was the new signup
-    referralCodes     ReferralCode[]
+    referralCodes     ReferralCode[] @relation("ReferralCodeGenerator") // codes this investor has generated
 
     @@map("investors")
 }
@@ -588,8 +588,8 @@ model ReferralCode {
     isActive Boolean @default(true) @map("is_active") // confirmed: only one active code per investor at a time — enforce on generation in app logic
 
     referrerId String     @map("investor_id") @db.Uuid // owner — existing investor who generated this code
-    referrer   Investor   @relation("ReferrerInvestor", fields: [referrerId], references: [id])
-    investors  Investor[]
+    referrer   Investor   @relation("ReferralCodeGenerator", fields: [referrerId], references: [id])
+    investors  Investor[] @relation("ReferralCodeUser")
 
     @@map("referral_codes")
 }

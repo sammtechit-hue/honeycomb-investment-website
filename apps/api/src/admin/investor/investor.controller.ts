@@ -1,10 +1,11 @@
-import { Body, Controller, Get, Param, Post, Patch, Delete, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Patch, Delete, Query, UsePipes, ValidationPipe } from '@nestjs/common';
 import { InvestorService } from './investor.service';
 import { CreateInvestorDto } from './dto/create-investor.dto';
 import { UpdateInvestorDto } from './dto/update-investor.dto';
 // import { QueryInvestorDto } from './dto/query-investor.dto';
 
 @Controller('admin/investor')
+@UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
 export class InvestorController {
   constructor(
     private readonly investorService: InvestorService,

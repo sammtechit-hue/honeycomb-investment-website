@@ -1,16 +1,6 @@
-import { PartialType } from '@nestjs/mapped-types';
+import { createZodDto } from 'nestjs-zod';
+import { investorUpdateInputSchema } from '@investment-platform/contracts/investor';
 
-import { CreateInvestorDto } from './create-investor.dto';
-
-// All properties from CreateInvestorDto become optional.
-//
-// Example:
-// PATCH /api/admin/investor/:id
-//
-// {
-//   "fullName": "Updated Name"
-// }
-//
-// You don't need to send phoneNumber, email, etc.
-
-export class UpdateInvestorDto extends PartialType(CreateInvestorDto) {}
+// PATCH /api/investor/:id — all fields from investorCreateInputSchema
+// become optional (see packages/contracts/src/investor.ts).
+export class UpdateInvestorDto extends createZodDto(investorUpdateInputSchema) {}
