@@ -4,9 +4,10 @@ import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
 import { InvestmentModule } from './investment/investment.module';
 import { MonthlyRateSettingModule } from './monthly-rate-setting/monthly-rate-setting.module';
+import { AuditLogModule } from './audit-log/audit-log.module';
 
 @Module({
-  imports: [InvestorModule, InvestmentModule, MonthlyRateSettingModule],
+  imports: [InvestorModule, InvestmentModule, MonthlyRateSettingModule, AuditLogModule],
   controllers: [AdminController],
   providers: [AdminService]
 })
