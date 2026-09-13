@@ -14,6 +14,7 @@ import { InvestorKycDocumentModule } from './investor-kyc-document/investor-kyc-
 import { DisbursementBatchModule } from './disbursement-batch/disbursement-batch.module';
 import { DisbursementItemModule } from './disbursement-item/disbursement-item.module';
 import { WithdrawalRequestModule } from './withdrawal-request/withdrawal-request.module';
+import { IncomingPaymentModule } from './incoming-payment/incoming-payment.module';
 
 @Module({
   imports: [
@@ -29,7 +30,8 @@ import { WithdrawalRequestModule } from './withdrawal-request/withdrawal-request
     InvestorKycDocumentModule,
     DisbursementBatchModule,
     DisbursementItemModule,
-    WithdrawalRequestModule
+    WithdrawalRequestModule,
+    IncomingPaymentModule
   ],
   controllers: [AppController],
   providers: [AppService],
