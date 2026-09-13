@@ -8,9 +8,10 @@ import { AuditLogModule } from './audit-log/audit-log.module';
 import { DisbursementBatchModule } from './disbursement-batch/disbursement-batch.module';
 import { DisbursementItemModule } from './disbursement-item/disbursement-item.module';
 import { IncomingPaymentModule } from './incoming-payment/incoming-payment.module';
+import { InvestmentDocumentModule } from './investment-document/investment-document.module';
 
 @Module({
-  imports: [InvestorModule, InvestmentModule, MonthlyRateSettingModule, AuditLogModule, DisbursementBatchModule, DisbursementItemModule, IncomingPaymentModule],
+  imports: [InvestorModule, InvestmentModule, MonthlyRateSettingModule, AuditLogModule, DisbursementBatchModule, DisbursementItemModule, IncomingPaymentModule, InvestmentDocumentModule],
   controllers: [AdminController],
   providers: [AdminService]
 })
