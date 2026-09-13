@@ -15,6 +15,8 @@ import { DisbursementBatchModule } from './disbursement-batch/disbursement-batch
 import { DisbursementItemModule } from './disbursement-item/disbursement-item.module';
 import { WithdrawalRequestModule } from './withdrawal-request/withdrawal-request.module';
 import { IncomingPaymentModule } from './incoming-payment/incoming-payment.module';
+import { ReferralModule } from './referral/referral.module';
+import { RefferalModule } from './refferal/refferal.module';
 
 @Module({
   imports: [
@@ -31,7 +33,9 @@ import { IncomingPaymentModule } from './incoming-payment/incoming-payment.modul
     DisbursementBatchModule,
     DisbursementItemModule,
     WithdrawalRequestModule,
-    IncomingPaymentModule
+    IncomingPaymentModule,
+    ReferralModule,
+    RefferalModule
   ],
   controllers: [AppController],
   providers: [AppService],
