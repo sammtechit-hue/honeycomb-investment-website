@@ -17,6 +17,7 @@ import { WithdrawalRequestModule } from './withdrawal-request/withdrawal-request
 import { IncomingPaymentModule } from './incoming-payment/incoming-payment.module';
 import { ReferralModule } from './referral/referral.module';
 import { RefferalModule } from './refferal/refferal.module';
+import { RoiCalculatorLeadModule } from './roi-calculator-lead/roi-calculator-lead.module';
 
 @Module({
   imports: [
@@ -35,7 +36,8 @@ import { RefferalModule } from './refferal/refferal.module';
     WithdrawalRequestModule,
     IncomingPaymentModule,
     ReferralModule,
-    RefferalModule
+    RefferalModule,
+    RoiCalculatorLeadModule
   ],
   controllers: [AppController],
   providers: [AppService],
