@@ -5,9 +5,10 @@ import { AdminService } from './admin.service';
 import { InvestmentModule } from './investment/investment.module';
 import { MonthlyRateSettingModule } from './monthly-rate-setting/monthly-rate-setting.module';
 import { AuditLogModule } from './audit-log/audit-log.module';
+import { DisbursementBatchModule } from './disbursement-batch/disbursement-batch.module';
 
 @Module({
-  imports: [InvestorModule, InvestmentModule, MonthlyRateSettingModule, AuditLogModule],
+  imports: [InvestorModule, InvestmentModule, MonthlyRateSettingModule, AuditLogModule, DisbursementBatchModule],
   controllers: [AdminController],
   providers: [AdminService]
 })
