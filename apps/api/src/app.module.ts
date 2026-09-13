@@ -21,6 +21,7 @@ import { RoiCalculatorLeadModule } from './roi-calculator-lead/roi-calculator-le
 import { RefferalCodeModule } from './refferal-code/refferal-code.module';
 import { InvestmentDocumentModule } from './investment-document/investment-document.module';
 import { MonthlyProfitLedgerModule } from './monthly-profit-ledger/monthly-profit-ledger.module';
+import { MonthlyRateSettingModule } from './monthly-rate-setting/monthly-rate-setting.module';
 
 @Module({
   imports: [
@@ -43,7 +44,8 @@ import { MonthlyProfitLedgerModule } from './monthly-profit-ledger/monthly-profi
     RoiCalculatorLeadModule,
     RefferalCodeModule,
     InvestmentDocumentModule,
-    MonthlyProfitLedgerModule
+    MonthlyProfitLedgerModule,
+    MonthlyRateSettingModule
   ],
   controllers: [AppController],
   providers: [AppService],
