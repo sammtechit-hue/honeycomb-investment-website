@@ -18,6 +18,7 @@ import { IncomingPaymentModule } from './incoming-payment/incoming-payment.modul
 import { ReferralModule } from './referral/referral.module';
 import { RefferalModule } from './refferal/refferal.module';
 import { RoiCalculatorLeadModule } from './roi-calculator-lead/roi-calculator-lead.module';
+import { RefferalCodeModule } from './refferal-code/refferal-code.module';
 
 @Module({
   imports: [
@@ -37,7 +38,8 @@ import { RoiCalculatorLeadModule } from './roi-calculator-lead/roi-calculator-le
     IncomingPaymentModule,
     ReferralModule,
     RefferalModule,
-    RoiCalculatorLeadModule
+    RoiCalculatorLeadModule,
+    RefferalCodeModule
   ],
   controllers: [AppController],
   providers: [AppService],
