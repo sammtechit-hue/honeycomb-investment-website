@@ -9,9 +9,10 @@ import { DisbursementBatchModule } from './disbursement-batch/disbursement-batch
 import { DisbursementItemModule } from './disbursement-item/disbursement-item.module';
 import { IncomingPaymentModule } from './incoming-payment/incoming-payment.module';
 import { InvestmentDocumentModule } from './investment-document/investment-document.module';
+import { ProjectModule } from './project/project.module';
 
 @Module({
-  imports: [InvestorModule, InvestmentModule, MonthlyRateSettingModule, AuditLogModule, DisbursementBatchModule, DisbursementItemModule, IncomingPaymentModule, InvestmentDocumentModule],
+  imports: [InvestorModule, InvestmentModule, MonthlyRateSettingModule, AuditLogModule, DisbursementBatchModule, DisbursementItemModule, IncomingPaymentModule, InvestmentDocumentModule, ProjectModule],
   controllers: [AdminController],
   providers: [AdminService]
 })
