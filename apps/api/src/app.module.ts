@@ -19,6 +19,7 @@ import { ReferralModule } from './referral/referral.module';
 import { RefferalModule } from './refferal/refferal.module';
 import { RoiCalculatorLeadModule } from './roi-calculator-lead/roi-calculator-lead.module';
 import { RefferalCodeModule } from './refferal-code/refferal-code.module';
+import { InvestmentDocumentModule } from './investment-document/investment-document.module';
 
 @Module({
   imports: [
@@ -39,7 +40,8 @@ import { RefferalCodeModule } from './refferal-code/refferal-code.module';
     ReferralModule,
     RefferalModule,
     RoiCalculatorLeadModule,
-    RefferalCodeModule
+    RefferalCodeModule,
+    InvestmentDocumentModule
   ],
   controllers: [AppController],
   providers: [AppService],
