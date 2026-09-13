@@ -6,9 +6,11 @@ import { InvestmentModule } from './investment/investment.module';
 import { MonthlyRateSettingModule } from './monthly-rate-setting/monthly-rate-setting.module';
 import { AuditLogModule } from './audit-log/audit-log.module';
 import { DisbursementBatchModule } from './disbursement-batch/disbursement-batch.module';
+import { DisbursementItemModule } from './disbursement-item/disbursement-item.module';
+import { IncomingPaymentModule } from './incoming-payment/incoming-payment.module';
 
 @Module({
-  imports: [InvestorModule, InvestmentModule, MonthlyRateSettingModule, AuditLogModule, DisbursementBatchModule],
+  imports: [InvestorModule, InvestmentModule, MonthlyRateSettingModule, AuditLogModule, DisbursementBatchModule, DisbursementItemModule, IncomingPaymentModule],
   controllers: [AdminController],
   providers: [AdminService]
 })
