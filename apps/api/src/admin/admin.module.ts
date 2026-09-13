@@ -11,9 +11,10 @@ import { IncomingPaymentModule } from './incoming-payment/incoming-payment.modul
 import { InvestmentDocumentModule } from './investment-document/investment-document.module';
 import { ProjectModule } from './project/project.module';
 import { WithdrawalRequestModule } from './withdrawal-request/withdrawal-request.module';
+import { InvestorKycDocumentModule } from './investor-kyc-document/investor-kyc-document.module';
 
 @Module({
-  imports: [InvestorModule, InvestmentModule, MonthlyRateSettingModule, AuditLogModule, DisbursementBatchModule, DisbursementItemModule, IncomingPaymentModule, InvestmentDocumentModule, ProjectModule, WithdrawalRequestModule],
+  imports: [InvestorModule, InvestmentModule, MonthlyRateSettingModule, AuditLogModule, DisbursementBatchModule, DisbursementItemModule, IncomingPaymentModule, InvestmentDocumentModule, ProjectModule, WithdrawalRequestModule, InvestorKycDocumentModule],
   controllers: [AdminController],
   providers: [AdminService]
 })
