@@ -13,6 +13,7 @@ import { InvestorBankAccountModule } from './investor-bank-account/investor-bank
 import { InvestorKycDocumentModule } from './investor-kyc-document/investor-kyc-document.module';
 import { DisbursementBatchModule } from './disbursement-batch/disbursement-batch.module';
 import { DisbursementItemModule } from './disbursement-item/disbursement-item.module';
+import { WithdrawalRequestModule } from './withdrawal-request/withdrawal-request.module';
 
 @Module({
   imports: [
@@ -27,7 +28,8 @@ import { DisbursementItemModule } from './disbursement-item/disbursement-item.mo
     InvestorBankAccountModule,
     InvestorKycDocumentModule,
     DisbursementBatchModule,
-    DisbursementItemModule
+    DisbursementItemModule,
+    WithdrawalRequestModule
   ],
   controllers: [AppController],
   providers: [AppService],
