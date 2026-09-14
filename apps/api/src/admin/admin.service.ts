@@ -15,6 +15,30 @@ export class AdminService {
         return id + "This route is for Admin who will see their necessary data and partially modify data";
     }
 
+    async findAll({
+        search,
+        status,
+        verified_kyc,
+        category,
+        page = 1,
+        limit = 10,
+        sortBy = 'createdAt',
+        sortOrder = 'desc',
+    }: {
+        search?: string;
+        status?: string;
+        verified_kyc?: string;
+        category?: string;
+        page?: number;
+        limit?: number;
+        sortBy?: string;
+        sortOrder?: 'asc' | 'desc';
+    }) {
+        return {
+            message: "Return All Users"
+        }
+    }
+
     //For Creating Admin
     async create(createAdminDto: CreateAdminDto) {
 

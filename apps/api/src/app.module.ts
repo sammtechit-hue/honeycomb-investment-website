@@ -13,6 +13,15 @@ import { InvestorBankAccountModule } from './investor-bank-account/investor-bank
 import { InvestorKycDocumentModule } from './investor-kyc-document/investor-kyc-document.module';
 import { DisbursementBatchModule } from './disbursement-batch/disbursement-batch.module';
 import { DisbursementItemModule } from './disbursement-item/disbursement-item.module';
+import { WithdrawalRequestModule } from './withdrawal-request/withdrawal-request.module';
+import { IncomingPaymentModule } from './incoming-payment/incoming-payment.module';
+import { ReferralModule } from './referral/referral.module';
+import { RefferalModule } from './refferal/refferal.module';
+import { RoiCalculatorLeadModule } from './roi-calculator-lead/roi-calculator-lead.module';
+import { RefferalCodeModule } from './refferal-code/refferal-code.module';
+import { InvestmentDocumentModule } from './investment-document/investment-document.module';
+import { MonthlyProfitLedgerModule } from './monthly-profit-ledger/monthly-profit-ledger.module';
+import { MonthlyRateSettingModule } from './monthly-rate-setting/monthly-rate-setting.module';
 
 @Module({
   imports: [
@@ -27,7 +36,16 @@ import { DisbursementItemModule } from './disbursement-item/disbursement-item.mo
     InvestorBankAccountModule,
     InvestorKycDocumentModule,
     DisbursementBatchModule,
-    DisbursementItemModule
+    DisbursementItemModule,
+    WithdrawalRequestModule,
+    IncomingPaymentModule,
+    ReferralModule,
+    RefferalModule,
+    RoiCalculatorLeadModule,
+    RefferalCodeModule,
+    InvestmentDocumentModule,
+    MonthlyProfitLedgerModule,
+    MonthlyRateSettingModule
   ],
   controllers: [AppController],
   providers: [AppService],
