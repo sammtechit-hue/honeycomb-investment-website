@@ -1,77 +1,60 @@
-import { Body, Controller, Get, Param, Post, Patch, Delete, Query, UsePipes, ValidationPipe } from '@nestjs/common';
-import { InvestorService } from './investor.service';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+  UsePipes,
+} from '@nestjs/common';
+import { ZodValidationPipe } from 'nestjs-zod';
 import { CreateInvestorDto } from './dto/create-investor.dto';
 import { UpdateInvestorDto } from './dto/update-investor.dto';
-// import { QueryInvestorDto } from './dto/query-investor.dto';
+import { InvestorQueryDto } from './dto/query-investor.dto';
+import { InvestorService } from './investor.service';
 
+// Scoped to this controller only — the app-wide ValidationPipe in main.ts
+// still runs class-validator for every other resource until they migrate.
 @Controller('admin/investor')
-@UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
+@UsePipes(ZodValidationPipe)
 export class InvestorController {
-  constructor(
-    private readonly investorService: InvestorService,
-  ) { }
+  constructor(private readonly investorService: InvestorService) {}
 
+  // GET /api/admin/investor?search=john&status=active&category=gold&page=1&limit=10&sortBy=createdAt&sortOrder=desc
   @Get()
-  findAll(
-    @Query('search') search?: string,
-    @Query('status') status?: string,
-    @Query('category') category?: string,
-    @Query('page') page?: number,
-    @Query('limit') limit?: number,
-    @Query('verified_kyc') verified_kyc?: string,
-    @Query('sortBy') sortBy?: string,
-    @Query('sortOrder') sortOrder?: 'asc' | 'desc',
-    @Query('min') min?: number,
-    @Query('max') max?: number,
-  ) {
-    // GET /admin/investor?search=john&status=active&category=gold&page=1&limit=10&sortBy=createdAt&sortOrder=desc
-    return this.investorService.findAll({
-      search,
-      status,
-      verified_kyc,
-      category,
-      page: page ? Number(page) : 1,
-      limit: limit ? Number(limit) : 10,
-      sortBy: sortBy ?? 'createdAt',
-      sortOrder: sortOrder ?? 'desc',
-      min: min ? Number(min) : undefined,
-      max: max ? Number(max) : undefined,
-    });
+  findAll(@Query() query: InvestorQueryDto) {
+    return this.investorService.findAll(query);
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    // Return a single investor data
+  // GET /api/admin/investor/:id   
+  @Get(':id')                                               
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.investorService.findOne(id);
   }
 
-  // @Post()
-  // create(@Body() createInvestorDto: CreateInvestorDto){
-  //   return this.investorService.create(createInvestorDto);
-  // }
+  // POST /api/admin/investor
+  @Post()
+  create(@Body() createInvestorDto: CreateInvestorDto) {
+    return this.investorService.create(createInvestorDto);
+  }
 
-  // @Patch(':id')
-  // update(
-  //   @Param('id') id: string,
-  //   @Body() updateInvestorDto: UpdateInvestorDto,
-  // ) {
-  //   // Only the fields provided in the request
-  //   // will be updated.
+  // PATCH /api/admin/investor/:id
+  @Patch(':id')
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() updateInvestorDto: UpdateInvestorDto,
+  ) {
+    return this.investorService.update(id, updateInvestorDto);
+  }
 
-  //   return this.investorService.update(id, updateInvestorDto);
-  // }
-
-
-  // @Patch(':id/status')
-  // update(@Param('id') id:string, @Body()updateInvestorDto: UpdateInvestorDto,){
-  //   this.investorService.updateStatus(id, updateInvestorDto);
-  // }
-
-  // @Delete(':id')
-  // remove(@Param('id') id: string) {
-  //   return this.investorService.remove(id);
-  // }
-
-
+  // DELETE /api/admin/investor/:id  (soft delete — sets status to 'suspended')
+  @Delete(':id')
+  remove(@Param('id', ParseUUIDPipe) id: string) {
+    return this.investorService.remove(id);
+  }
 }
+
 

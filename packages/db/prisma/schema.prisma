@@ -264,14 +264,14 @@ model Investor {
 
 model InvestorKycDocument {
     id                 String             @id @default(uuid()) @db.Uuid
-    investorId         String             @map("investor_id") @db.Uuid
     docType            KycDocType         @map("doc_type")
     fileUrl            String             @map("file_url") // encrypted storage on secure server, not a public Drive link
     verificationStatus VerificationStatus @default(pending) @map("verification_status")
-    verifiedById       String?            @map("verified_by") @db.Uuid
     uploadedAt         DateTime           @default(now()) @map("uploaded_at")
 
+    investorId         String             @map("investor_id") @db.Uuid
     investor Investor   @relation(fields: [investorId], references: [id])
+    verifiedById       String?            @map("verified_by") @db.Uuid
     verifier AdminUser? @relation("KycDocVerifiedBy", fields: [verifiedById], references: [id])
 
     @@map("investor_kyc_documents")

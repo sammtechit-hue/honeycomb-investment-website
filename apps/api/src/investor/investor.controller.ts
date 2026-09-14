@@ -1,4 +1,15 @@
-import { Body, Controller, Get, Param, Post, Patch, Delete, UsePipes } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+  UsePipes,
+} from '@nestjs/common';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { CreateInvestorDto } from './dto/create-investor.dto';
 import { UpdateInvestorDto } from './dto/update-investor.dto';
@@ -9,23 +20,26 @@ import { InvestorService } from './investor.service';
 @Controller('investor')
 @UsePipes(ZodValidationPipe)
 export class InvestorController {
-    constructor(
-        private readonly investorService: InvestorService,
-    ) { }
+  constructor(private readonly investorService: InvestorService) {}
 
-    @Get(':id')
-    findOne(@Param('id') id: string) {
-        return this.investorService.findOne(id);
-    }
+  // GET /api/investor/:id
+  @Get(':id')
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
+    return this.investorService.findOne(id);
+  }
 
-    @Patch(':id')
-    update(
-      @Param('id') id: string,
-      @Body() updateInvestorDto: UpdateInvestorDto,
-    ) {
-      // Only the fields provided in the request
-      // will be updated.
+  // POST /api/investor
+  @Post()
+  create(@Body() createInvestorDto: CreateInvestorDto) {
+    return this.investorService.create(createInvestorDto);
+  }
 
-      return this.investorService.update(id, updateInvestorDto);
-    }
+  // PATCH /api/investor/:id
+  @Patch(':id')
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() updateInvestorDto: UpdateInvestorDto,
+  ) {
+    return this.investorService.update(id, updateInvestorDto);
+  }
 }
