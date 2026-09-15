@@ -15,7 +15,7 @@ export class InvestorService {
   // findAll — paginated list with search, filter and sort
   // -----------------------------------------------------------------------
   async findAll(query: InvestorQueryDto) {
-    const { search, status, category, page, limit, sortBy, sortOrder } = query;
+    const { search, status, category, page, limit, sortBy, sortOrder, minTotalInvestment, maxTotalInvestment } = query;
 
     const where: Prisma.InvestorWhereInput = {};
 
@@ -34,8 +34,6 @@ export class InvestorService {
     if (category) {
       where.category = category;
     }
-
-
 
     return "Investor Data";
   }
