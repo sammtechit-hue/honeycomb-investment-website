@@ -40,3 +40,6 @@ yarn-error.log*
 
 # claude
 .claude
+
+# TypeScript incremental build cache
+*.tsbuildinfo

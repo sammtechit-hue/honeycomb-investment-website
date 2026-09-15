@@ -219,6 +219,8 @@ model Investor {
     nominee      Nominee?
     investments  Investment[]
 
+    disbursementItems DisbursementItem[]
+
     // =========================================================================
     // REFERRAL RELATIONS
     // =========================================================================
@@ -329,7 +331,7 @@ model Nominee {
     nomineeNidFront String? @db.VarChar(30)
     nomineeNidBack  String? @db.VarChar(30)
     nomineePhoto    String? @map("nominee_photo")
-    nomineePhone    String @map("nominee_phone") @db.VarChar(20)
+    nomineePhone    String  @map("nominee_phone") @db.VarChar(20)
     relation        String  @db.VarChar(50)
 
     investorId String   @unique @map("investor_id") @db.Uuid
@@ -422,22 +424,20 @@ model Investment {
     investorId String   @map("investor_id") @db.Uuid
     investor   Investor @relation(fields: [investorId], references: [id])
 
-    projectId           String                @map("project_id") @db.Uuid
-    project             Project               @relation(fields: [projectId], references: [id])
+    projectId String  @map("project_id") @db.Uuid
+    project   Project @relation(fields: [projectId], references: [id])
 
     monthlyProfitLedger MonthlyProfitLedger[]
     incomingPayments    IncomingPayment[]
     withdrawalRequests  WithdrawalRequest[]
     investmentDocuments InvestmentDocument?
+    disbursementItems   DisbursementItem[]
 
     @@index([investorId])
     @@index([projectId])
     @@index([status])
     @@map("investments")
 }
-
-
-
 
 model InvestmentDocument {
     id String @id @default(uuid()) @db.Uuid
@@ -480,17 +480,17 @@ model MonthlyRateSetting {
 // ----------------------------------------------------------------------------
 //Not clear
 model MonthlyProfitLedger {
-    id                 String       @id @default(uuid()) @db.Uuid
-    periodMonth        DateTime     @map("period_month") @db.Date
-    rateApplied        Decimal      @map("rate_applied") @db.Decimal(5, 2)
-    profitAmount       Decimal      @map("profit_amount") @db.Decimal(14, 2)
-    payoutStatus       PayoutStatus @default(accrued) @map("payout_status")
+    id           String       @id @default(uuid()) @db.Uuid
+    periodMonth  DateTime     @map("period_month") @db.Date
+    rateApplied  Decimal      @map("rate_applied") @db.Decimal(5, 2)
+    profitAmount Decimal      @map("profit_amount") @db.Decimal(14, 2)
+    payoutStatus PayoutStatus @default(accrued) @map("payout_status")
 
-    investmentId       String       @map("investment_id") @db.Uuid
-    investment       Investment        @relation(fields: [investmentId], references: [id])
+    investmentId String     @map("investment_id") @db.Uuid
+    investment   Investment @relation(fields: [investmentId], references: [id])
 
-    disbursementItemId String?      @map("disbursement_item_id") @db.Uuid
-    disbursementItem DisbursementItem? @relation(fields: [disbursementItemId], references: [id])
+    disbursementItemId String?           @map("disbursement_item_id") @db.Uuid
+    disbursementItem   DisbursementItem? @relation(fields: [disbursementItemId], references: [id])
 
     @@unique([investmentId, periodMonth])
     @@index([periodMonth])
@@ -534,10 +534,22 @@ model DisbursementItem {
     reason       String       @db.VarChar(150)
     amount       Decimal      @db.Decimal(14, 2)
     exportFormat ExportFormat @map("export_format")
-    remarks      String?      @db.VarChar(255)  //Not clear
+    remarks      String?      @db.VarChar(255) //Not clear
+
+    investmentId String     @map("investment_id") @db.Uuid
+    investment   Investment @relation(fields: [investmentId], references: [id])
+
+    investorId String   @map("investor_id") @db.Uuid
+    investor   Investor @relation(fields: [investorId], references: [id])
 
     batchId String            @map("batch_id") @db.Uuid
     batch   DisbursementBatch @relation(fields: [batchId], references: [id])
+
+    snapshotBankName      String
+    snapshotAccountName   String
+    snapshotAccountNumber String
+    snapshotRoutingNumber String?
+    snapshotAccountType   String?
 
     monthlyProfitLedger MonthlyProfitLedger[]
     withdrawalRequest   WithdrawalRequest?
@@ -591,7 +603,7 @@ model IncomingPayment {
     confirmedAt       DateTime?             @map("confirmed_at")
     status            IncomingPaymentStatus @default(pending)
 
-    investmentId String     @unique @map("investment_id") @db.Uuid
+    investmentId String     @map("investment_id") @db.Uuid
     investment   Investment @relation(fields: [investmentId], references: [id])
 
     @@index([investmentId])
@@ -693,8 +705,6 @@ model RoiCalculatorLead {
 // 17. Investment Documents
 // ----------------------------------------------------------------------------
 
-
-
 // ----------------------------------------------------------------------------
 // 19. Admin Notifications
 // ----------------------------------------------------------------------------
@@ -708,9 +718,9 @@ model AdminNotification {
     referenceType String?               @map("reference_type") @db.VarChar(50)
 
     //have added new field after watching whole payment system.
-    message       String                @db.VarChar(255)
-    isRead        Boolean               @default(false) @map("is_read")
-    createdAt     DateTime              @default(now()) @map("created_at")
+    message   String   @db.VarChar(255)
+    isRead    Boolean  @default(false) @map("is_read")
+    createdAt DateTime @default(now()) @map("created_at")
 
     @@index([isRead, createdAt])
     @@index([type])
