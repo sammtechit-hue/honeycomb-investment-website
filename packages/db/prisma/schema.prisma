@@ -311,7 +311,7 @@ model InvestorBankAccount {
     bankName      String           @map("bank_name") @db.VarChar(100)
     accountName   String           @map("account_name") @db.VarChar(150)
     accountNumber String           @map("account_number") @db.VarChar(50)
-    routingNumber String?          @map("routing_number") @db.VarChar(20)
+    routingNumber String?          @map("routing_number") @db.VarChar(9)
     accountType   BankAccountType? @map("account_type")
     branchName    String?
 

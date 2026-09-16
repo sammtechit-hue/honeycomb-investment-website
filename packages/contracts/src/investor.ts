@@ -21,6 +21,14 @@ export const investorCategorySchema = z.enum([
   'titanium',
 ]);
 
+
+// Mirrors Prisma `VerificationStatus` enum (used for KYC checking)
+export const verificationStatusSchema = z.enum([
+  'pending',
+  'verified',
+  'rejected',
+]);
+
 // Mirrors Prisma `BankSelected` enum
 export const bankSelectedSchema = z.enum(['city_bank', 'others']);
 
@@ -39,7 +47,7 @@ const fileUrlSchema = z
 // Bank Account Schema
 export const bankAccountSchema = z
   .object({
-    selectedBank: bankSelectedSchema, 
+    selectedBank: bankSelectedSchema,
     bankName: z
       .string()
       .trim()
@@ -90,11 +98,7 @@ export const nomineeSchema = z.object({
     .string()
     .trim()
     .min(2, 'Nominee name must be at least 2 characters')
-    .max(150, 'Nominee name cannot exceed 150 characters')
-    .regex(
-      /^[a-zA-Z\s.\-']+$/,
-      "Nominee name can only contain letters, spaces, hyphens, periods, and apostrophes",
-    ),
+    .max(150, 'Nominee name cannot exceed 150 characters'),
   // Phone Number
   nomineePhone: z
     .string({ required_error: 'Phone number is required' })
@@ -109,7 +113,7 @@ export const nomineeSchema = z.object({
     // Normalize to a single canonical format: +8801XXXXXXXXX
     .transform((val) => {
       const digits = val.replace(/^\+?880/, '').replace(/^0/, '');
-      return `+880${digits}`;
+      return `0${digits}`;
     }),
 
   relation: z
@@ -145,12 +149,8 @@ export const investorCreateInputSchema = z.object({
   fullName: z
     .string()
     .trim()
-    .min(5, 'Full name must be at least 5 characters')
-    .max(150, 'Full name cannot exceed 150 characters')
-    .regex(
-      /^[a-zA-Z\s.\-']+$/,
-      "Full name can only contain letters, spaces, hyphens, periods, and apostrophes",
-    ),
+    .min(3, 'Full name must be at least 5 characters')
+    .max(150, 'Full name cannot exceed 150 characters'),
   address: z
     .string()
     .trim()
@@ -207,7 +207,15 @@ export const investorQuerySchema = z.object({
   search: z.string().trim().optional(),
   status: investorStatusSchema.optional(),
   category: investorCategorySchema.optional(),
+
+  // NEW: Filters for administrative bank profiling & matching
+  selectedBank: bankSelectedSchema.optional(),
+  accountType: bankAccountTypeSchema.optional(),
+
+  // NEW: Verification state filter for KYC submissions
+  kycVerificationStatus: verificationStatusSchema.optional(),
   page: z.coerce.number().int().min(1).default(1),
+  
   // Safer — prevents garbage strings reaching Prisma
   approvedBy: z.string().uuid().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(10),
