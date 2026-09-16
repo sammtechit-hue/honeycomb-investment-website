@@ -307,7 +307,7 @@ model InvestorKycDocument {
 
 model InvestorBankAccount {
     id            String           @id @default(uuid()) @db.Uuid
-    selectedBank  BankSelected?    @map("selected_bank")
+    selectedBank  BankSelected     @map("selected_bank")
     bankName      String           @map("bank_name") @db.VarChar(100)
     accountName   String           @map("account_name") @db.VarChar(150)
     accountNumber String           @map("account_number") @db.VarChar(50)

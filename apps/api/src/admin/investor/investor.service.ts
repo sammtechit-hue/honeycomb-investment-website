@@ -22,8 +22,7 @@ export class InvestorService {
     // Full-text search across fullName and email
     if (search) {
       where.OR = [
-        { fullName: { contains: search, mode: 'insensitive' } },
-        { email: { contains: search, mode: 'insensitive' } },
+        { fullname: { contains: search, mode: 'insensitive' } },
       ];
     }
 
