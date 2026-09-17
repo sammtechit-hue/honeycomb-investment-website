@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
+import { CreateInvestmentDto } from './dto/create-investment.dto';
 import { UpdateInvestmentDto } from './dto/update-investment.dto';
+import { InvestmentQueryDto } from './dto/query-investment.dto';
 
 @Injectable()
 export class InvestmentService {
@@ -9,9 +11,24 @@ export class InvestmentService {
         // private readonly prisma: PrismaService,
     ) { }
 
+    // For Getting All Investment's Data with filtering, searching, sorting & pagination
+    // Example: GET /admin/investment?search=&status=active&investmentType=fixed&page=1&limit=10
+    async findAll(query: InvestmentQueryDto) {
+        return 'Return all investment List';
+    }
+
     // For Getting One Investment's Data
     async findOne(id: string) {
         return id + "This route is for Investment who will see their necessary data and partially modify data";
+    }
+
+    // For Creating Investment
+    async create(createInvestmentDto: CreateInvestmentDto) {
+        const { projectId, amount } = createInvestmentDto;
+
+        return {
+            message: 'Investment Created Successfully',
+        };
     }
 
     // For updating Investment Information
@@ -22,4 +39,3 @@ export class InvestmentService {
     }
 
 }
-
