@@ -134,10 +134,10 @@ enum IncomingPaymentStatus {
     overdue
 }
 
-enum BonusStatus {
-    pending
-    paid
-}
+// enum BonusStatus {
+//     pending
+//     paid
+// }
 
 enum Role {
     SUPER_ADMIN
@@ -554,7 +554,6 @@ model DisbursementItem {
 
     monthlyProfitLedger MonthlyProfitLedger[]
     withdrawalRequest   WithdrawalRequest?
-    referralsPaid       Referral?
 
     @@map("disbursement_items")
 }
@@ -664,13 +663,9 @@ model Referral {
     referralCode   ReferralCode @relation(fields: [referralCodeId], references: [id])
 
     // Referral bonus
-    bonusPercent Decimal     @default(1.00) @map("bonus_percent") @db.Decimal(5, 2)
+    bonusPercent Decimal?     @default(1.00) @map("bonus_percent") @db.Decimal(5, 2)
     bonusAmount  Decimal?    @map("bonus_amount") @db.Decimal(14, 2)
-    bonusStatus  BonusStatus @default(pending) @map("bonus_status")
-
-    // Disbursement record for the referral bonus
-    disbursementItemId String?           @unique @map("disbursement_item_id") @db.Uuid
-    disbursementItem   DisbursementItem? @relation(fields: [disbursementItemId], references: [id])
+    // bonusStatus  BonusStatus @default(pending) @map("bonus_status")
 
     // Creation timestamp
     createdAt DateTime @default(now()) @map("created_at")
@@ -680,7 +675,6 @@ model Referral {
     // Find referrals made by a specific investor
     @@index([referrerId])
     // Find referrals by bonus status
-    @@index([bonusStatus])
     @@map("referrals")
 }
 

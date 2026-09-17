@@ -22,6 +22,7 @@ export class InvestmentService {
         return id + "This route is for Investment who will see their necessary data and partially modify data";
     }
 
+    
     // For Creating Investment
     async create(createInvestmentDto: CreateInvestmentDto) {
         const { projectId, amount } = createInvestmentDto;

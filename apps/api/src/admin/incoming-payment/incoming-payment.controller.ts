@@ -1,45 +1,40 @@
-import { Body, Controller, Get, Param, Post, Patch, Delete, Query, UsePipes, ValidationPipe } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+  UsePipes,
+} from '@nestjs/common';
+import { ZodValidationPipe } from 'nestjs-zod';
 import { CreateIncomingPaymentDto } from './dto/create-incoming-payment.dto';
 import { UpdateIncomingPaymentDto } from './dto/update-incoming-payment.dto';
+import { IncomingPaymentQueryDto } from './dto/query-incoming-payment.dto';
+import { ConfirmIncomingPaymentDto } from './dto/confirm-incoming-payment.dto';
 import { IncomingPaymentService } from './incoming-payment.service';
 
+// Admin incoming payment endpoints — list/filter, confirm or reject
+// investor-submitted payments.
 @Controller('admin/incoming-payment')
-@UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
+@UsePipes(ZodValidationPipe)
 export class IncomingPaymentController {
     constructor(
         private readonly incomingPaymentService: IncomingPaymentService,
     ) { }
 
-    // GET /admin/incoming-payment?search=bkash&status=pending&category=bkash&page=1&limit=10&sortBy=createdAt&sortOrder=desc
+    // GET /admin/incoming-payment?page=1&limit=20&sortBy=dueDate&sortOrder=desc&status=pending
     @Get()
-    findAll(
-        @Query('search') search?: string,
-        @Query('status') status?: string,
-        @Query('category') category?: string,
-        @Query('page') page?: number,
-        @Query('limit') limit?: number,
-        @Query('sortBy') sortBy?: string,
-        @Query('sortOrder') sortOrder?: 'asc' | 'desc',
-        @Query('min') min?: number,
-        @Query('max') max?: number,
-    ) {
-        // GET /admin/incoming-payment?search=bkash&status=pending&category=bkash&page=1&limit=10&sortBy=createdAt&sortOrder=desc
-        return this.incomingPaymentService.findAll({
-            search,
-            status,
-            category,
-            page: page ? Number(page) : 1,
-            limit: limit ? Number(limit) : 10,
-            sortBy: sortBy ?? 'createdAt',
-            sortOrder: sortOrder ?? 'desc',
-            min: min ? Number(min) : undefined,
-            max: max ? Number(max) : undefined,
-        });
+    findAll(@Query() query: IncomingPaymentQueryDto) {
+        return this.incomingPaymentService.findAll(query);
     }
 
     // GET /admin/incoming-payment/:id
     @Get(':id')
-    findOne(@Param('id') id: string) {
+    findOne(@Param('id', ParseUUIDPipe) id: string) {
         // Return a single incoming payment data
         return this.incomingPaymentService.findOne(id);
     }
@@ -51,22 +46,31 @@ export class IncomingPaymentController {
         return this.incomingPaymentService.create(createIncomingPaymentDto);
     }
 
-    // PATCH /admin/incoming-payment/:id
+    // PATCH /admin/incoming-payment/:id — only the fields provided in the
+    // request will be updated.
     @Patch(':id')
     update(
-        @Param('id') id: string,
+        @Param('id', ParseUUIDPipe) id: string,
         @Body() updateIncomingPaymentDto: UpdateIncomingPaymentDto,
     ) {
-        // Only the fields provided in the request
-        // will be updated.
-
         return this.incomingPaymentService.update(id, updateIncomingPaymentDto);
     }
 
     // DELETE /admin/incoming-payment/:id
     @Delete(':id')
-    remove(@Param('id') id: string) {
+    remove(@Param('id', ParseUUIDPipe) id: string) {
         // Delete an incoming payment by id
         return this.incomingPaymentService.remove(id);
+    }
+
+    // POST /admin/incoming-payment/:id/confirm — admin confirms or marks a
+    // payment overdue. Body is validated by incomingPaymentConfirmSchema;
+    // the id in the body must match the :id route param (the route param wins).
+    @Post(':id/confirm')
+    confirm(
+        @Param('id', ParseUUIDPipe) id: string,
+        @Body() confirmIncomingPaymentDto: ConfirmIncomingPaymentDto,
+    ) {
+        return this.incomingPaymentService.confirm(id, confirmIncomingPaymentDto.status);
     }
 }
