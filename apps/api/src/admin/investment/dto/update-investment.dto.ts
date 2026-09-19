@@ -1,8 +1,10 @@
 import { createZodDto } from 'nestjs-zod';
-import { investmentUpdateInputSchema } from '@investment-platform/contracts/investment';
+import { investmentAdminUpdateInputSchema } from '@investment-platform/contracts/investment';
 
 // PATCH /api/admin/investment/:id — all fields optional (see
-// packages/contracts/src/investment.ts), fixedRate still required when
-// investmentType is "fixed".
-export class UpdateInvestmentDto extends createZodDto(investmentUpdateInputSchema) {}
+// packages/contracts/src/investment.ts). Admins may additionally update
+// status, rate, agreement fields and physical-items tracking flags.
+export class UpdateInvestmentDto extends createZodDto(
+  investmentAdminUpdateInputSchema,
+) {}
 
