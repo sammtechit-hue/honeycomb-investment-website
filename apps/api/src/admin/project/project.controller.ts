@@ -1,56 +1,55 @@
-import { Body, Controller, Get, Param, Post, Patch, Delete, Query, UsePipes, ValidationPipe } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+  UsePipes,
+} from '@nestjs/common';
+import { ZodValidationPipe } from 'nestjs-zod';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
+import { ProjectQueryDto } from './dto/query-project.dto';
 import { ProjectService } from './project.service';
 
+// Scoped to this controller only — matches the zod-based admin/investor
+// controller. See main.ts for why validation pipes are opt-in per controller.
 @Controller('admin/project')
-@UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
+@UsePipes(ZodValidationPipe)
 export class ProjectController {
     constructor(
         private readonly projectService: ProjectService,
     ) { }
 
-    // GET /admin/project?search=deed&status=active&category=certificate&page=1&limit=10&sortBy=createdAt&sortOrder=desc
+    // GET /api/admin/project?search=deed&status=OPEN&page=1&limit=10&sortBy=createdAt&sortOrder=desc
     @Get()
-    findAll(
-        @Query('search') search?: string,
-        @Query('status') status?: string,
-        @Query('category') category?: string,
-        @Query('page') page?: number,
-        @Query('limit') limit?: number,
-        @Query('sortBy') sortBy?: string,
-        @Query('sortOrder') sortOrder?: 'asc' | 'desc',
-    ) {
-        // GET /admin/project?search=deed&status=active&category=certificate&page=1&limit=10&sortBy=createdAt&sortOrder=desc
-        return this.projectService.findAll({
-            search,
-            status,
-            category,
-            page: page ? Number(page) : 1,
-            limit: limit ? Number(limit) : 10,
-            sortBy: sortBy ?? 'createdAt',
-            sortOrder: sortOrder ?? 'desc',
-        });
+    findAll(@Query() query: ProjectQueryDto) {
+        // Search, filter, sort and pagination are validated by ProjectQueryDto.
+        return this.projectService.findAll(query);
     }
 
-    // GET /admin/project/:id
+    // GET /api/admin/project/:id
     @Get(':id')
-    findOne(@Param('id') id: string) {
+    findOne(@Param('id', ParseUUIDPipe) id: string) {
         // Return a single project data
         return this.projectService.findOne(id);
     }
 
-    // POST /admin/project
+    // POST /api/admin/project
     @Post()
     create(@Body() createProjectDto: CreateProjectDto) {
         // Create a new project record
         return this.projectService.create(createProjectDto);
     }
 
-    // PATCH /admin/project/:id
+    // PATCH /api/admin/project/:id
     @Patch(':id')
     update(
-        @Param('id') id: string,
+        @Param('id', ParseUUIDPipe) id: string,
         @Body() updateProjectDto: UpdateProjectDto,
     ) {
         // Only the fields provided in the request
@@ -59,9 +58,9 @@ export class ProjectController {
         return this.projectService.update(id, updateProjectDto);
     }
 
-    // DELETE /admin/project/:id
+    // DELETE /api/admin/project/:id
     @Delete(':id')
-    remove(@Param('id') id: string) {
+    remove(@Param('id', ParseUUIDPipe) id: string) {
         // Delete a project by id
         return this.projectService.remove(id);
     }
