@@ -1,5 +1,5 @@
 // ============================================================================
-// Investment Platform — Prisma Schema (v8 — ambiguity fix pass)
+// Investment Platform — Prisma Schema
 // ============================================================================
 
 generator client {
@@ -134,11 +134,6 @@ enum IncomingPaymentStatus {
     overdue
 }
 
-// enum BonusStatus {
-//     pending
-//     paid
-// }
-
 enum Role {
     SUPER_ADMIN
     ADMIN
@@ -168,13 +163,13 @@ enum DisbursementSlot {
 }
 
 // ----------------------------------------------------------------------------
-// User (auth) — unified login for investors and admins (v6 merge)
+// User (auth) — unified login for investors and admins
 // ----------------------------------------------------------------------------
 
 model User {
     id           String   @id @default(uuid()) @db.Uuid
     email        String   @unique @db.VarChar(150)
-    phone        String?  @unique @db.VarChar(20) // investor login identifier; null for admins
+    phone        String?  @unique @db.VarChar(20) // Investor login identifier; null for admins
     passwordHash String   @map("password_hash") @db.VarChar(255)
     role         Role     @default(INVESTOR)
     createdAt    DateTime @default(now()) @map("created_at")
@@ -198,8 +193,7 @@ model Investor {
     address               String?
     profession            String?          @db.VarChar(150)
     workplace             String?          @db.VarChar(150)
-    // Non-nullable: every investor always has a category/status — the default
-    // covers "not yet set", so null was never a meaningful third state.
+    // Every investor always has a category and status; defaults cover the unset case.
     category              InvestorCategory @default(bronze)
     status                InvestorStatus   @default(pending)
     approvedAt            DateTime?        @map("approved_at")
@@ -210,10 +204,6 @@ model Investor {
     userId String @unique @map("user_id") @db.Uuid
     user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    // Was: Admin? — that model didn't exist. All "which admin did this"
-    // references now consistently point at AdminProfile (see notes below).
-    // approvedBy AdminProfile? @relation(fields: [approvedById], references: [id])
-
     kycDocuments InvestorKycDocument?
     bankAccount  InvestorBankAccount?
     nominee      Nominee?
@@ -221,45 +211,17 @@ model Investor {
 
     disbursementItems DisbursementItem[]
 
-    // =========================================================================
-    // REFERRAL RELATIONS
-    // =========================================================================
-
-    // The referral code that this investor used when joining the system.
-    // An investor can use only one referral code.
-    // null means the investor was not referred by another investor.
+    // Referral relations.
+    // The referral code this investor used when joining (null when not referred).
     referralCode ReferralCode? @relation("ReferralCodeUsedBy")
 
-    // All referral codes generated/owned by this investor.
-    // One investor can generate multiple referral codes.
-    // Example:
-    // Investor A → CODE001
-    // Investor A → CODE002
-    // Investor A → CODE003
+    // All referral codes generated and owned by this investor.
     referralCodesGenerated ReferralCode[] @relation("InvestorReferralCodes")
 
-    // The Referral record where this investor is the referred investor.
-    // Optional because an investor may join without being referred.
-    //
-    // Because Referral.referredInvestorId is @unique,
-    // an investor can only be referred ONCE in the entire system.
-    //
-    // Example:
-    // Investor A → Investor B
-    // Investor C → Investor B ❌
-    //
-    // Investor B can have only one referralsReceived record.
+    // The referral record where this investor is the referred investor (at most one).
     referralsReceived Referral? @relation("ReferredInvestor")
 
-    // All Referral records where this investor is the referrer.
-    // One investor can refer many other investors.
-    //
-    // Example:
-    // Investor A → Investor B
-    // Investor A → Investor C
-    // Investor A → Investor D
-    //
-    // Therefore this is an array: Referral[]
+    // All referral records where this investor is the referrer.
     referralsMade Referral[] @relation("ReferrerInvestor")
 
     @@index([status])
@@ -267,7 +229,7 @@ model Investor {
 }
 
 // ----------------------------------------------------------------------------
-// 1b. Admin profile (1:1 with User where role in ADMIN/MODERATOR/SUPER_ADMIN)
+// 2. Admin profile (1:1 with User where role in ADMIN/MODERATOR/SUPER_ADMIN)
 // ----------------------------------------------------------------------------
 
 model AdminProfile {
@@ -283,7 +245,7 @@ model AdminProfile {
 }
 
 // ----------------------------------------------------------------------------
-// 2. Investor KYC Documents
+// 3. Investor KYC Documents
 // ----------------------------------------------------------------------------
 
 model InvestorKycDocument {
@@ -302,7 +264,7 @@ model InvestorKycDocument {
 }
 
 // ----------------------------------------------------------------------------
-// 3. Investor Bank Accounts
+// 4. Investor Bank Accounts
 // ----------------------------------------------------------------------------
 
 model InvestorBankAccount {
@@ -322,7 +284,7 @@ model InvestorBankAccount {
 }
 
 // ----------------------------------------------------------------------------
-// 4. Nominees
+// 5. Nominees
 // ----------------------------------------------------------------------------
 
 model Nominee {
@@ -341,7 +303,7 @@ model Nominee {
 }
 
 // ----------------------------------------------------------------------------
-// 5. Projects
+// 6. Projects
 // ----------------------------------------------------------------------------
 
 model Project {
@@ -374,7 +336,7 @@ model Project {
 }
 
 // ----------------------------------------------------------------------------
-// 6. Company Documents
+// 7. Company Documents
 // ----------------------------------------------------------------------------
 
 model CompanyDocument {
@@ -390,7 +352,7 @@ model CompanyDocument {
 }
 
 // ----------------------------------------------------------------------------
-// 7. Investments
+// 8. Investments
 // ----------------------------------------------------------------------------
 
 model Investment {
@@ -415,10 +377,6 @@ model Investment {
     isCertificateApplicable Boolean            @default(true) @map("is_certificate_applicable")
     status                  InvestmentStatus   @default(pending)
 
-    // disbursementSlot    DisbursementSlot? @map("disbursement_slot")
-    // slotManuallyChanged Boolean           @default(false) @map("slot_manually_changed")
-    // slotAdjustmentDays  Int?              @map("slot_adjustment_days")
-
     createdAt DateTime @default(now()) @map("created_at")
     updatedAt DateTime @updatedAt
 
@@ -440,6 +398,10 @@ model Investment {
     @@map("investments")
 }
 
+// ----------------------------------------------------------------------------
+// 9. Investment Documents
+// ----------------------------------------------------------------------------
+
 model InvestmentDocument {
     id String @id @default(uuid()) @db.Uuid
 
@@ -456,17 +418,15 @@ model InvestmentDocument {
 
     investmentId String     @unique @map("investment_id") @db.Uuid
     investment   Investment @relation(fields: [investmentId], references: [id])
-    // adminProfileId String?       @db.Uuid
-    // adminProfile   AdminProfile? @relation(fields: [adminProfileId], references: [id])
 
     @@index([investmentId])
     @@map("investment_documents")
 }
 
 // ----------------------------------------------------------------------------
-// 8. Monthly Rate Settings
+// 10. Monthly Rate Settings
 // ----------------------------------------------------------------------------
-//Not clear
+
 model MonthlyRateSetting {
     id          String   @id @default(uuid()) @db.Uuid
     periodMonth DateTime @unique @map("period_month") @db.Date
@@ -477,9 +437,9 @@ model MonthlyRateSetting {
 }
 
 // ----------------------------------------------------------------------------
-// 9. Monthly Profit Ledger
+// 11. Monthly Profit Ledger
 // ----------------------------------------------------------------------------
-//Not clear
+
 model MonthlyProfitLedger {
     id           String       @id @default(uuid()) @db.Uuid
     periodMonth  DateTime     @map("period_month") @db.Date
@@ -500,9 +460,9 @@ model MonthlyProfitLedger {
 }
 
 // ----------------------------------------------------------------------------
-// 10. Disbursement Batches
+// 12. Disbursement Batches
 // ----------------------------------------------------------------------------
-//Not clear
+
 model DisbursementBatch {
     id         String                  @id @default(uuid()) @db.Uuid
     slot       DisbursementSlot        @map("slot")
@@ -511,14 +471,8 @@ model DisbursementBatch {
     exportType DisbursementExportType  @map("export_type")
     fileUrl    String?                 @map("file_url")
     status     DisbursementBatchStatus @default(draft)
-
-    // Was: BOTH createdById (User) and adminProfileId (AdminProfile) —
-    // two competing answers to "who created this batch". Kept only the
-    // AdminProfile reference, consistent with every other admin-action FK.
-    // adminProfileId String?  @map("admin_profile_id") @db.Uuid
     createdAt DateTime @default(now()) @map("created_at")
 
-    // adminProfile AdminProfile?      @relation(fields: [adminProfileId], references: [id])
     items DisbursementItem[]
 
     @@index([slot, batchDate])
@@ -527,7 +481,7 @@ model DisbursementBatch {
 }
 
 // ----------------------------------------------------------------------------
-// 11. Disbursement Items
+// 13. Disbursement Items
 // ----------------------------------------------------------------------------
 
 model DisbursementItem {
@@ -535,7 +489,7 @@ model DisbursementItem {
     reason       String       @db.VarChar(150)
     amount       Decimal      @db.Decimal(14, 2)
     exportFormat ExportFormat @map("export_format")
-    remarks      String?      @db.VarChar(255) //Not clear
+    remarks      String?      @db.VarChar(255)
 
     investmentId String     @map("investment_id") @db.Uuid
     investment   Investment @relation(fields: [investmentId], references: [id])
@@ -559,7 +513,7 @@ model DisbursementItem {
 }
 
 // ----------------------------------------------------------------------------
-// 12. Withdrawal Requests
+// 14. Withdrawal Requests
 // ----------------------------------------------------------------------------
 
 model WithdrawalRequest {
@@ -588,7 +542,7 @@ model WithdrawalRequest {
 }
 
 // ----------------------------------------------------------------------------
-// 13. Incoming Payments
+// 15. Incoming Payments
 // ----------------------------------------------------------------------------
 
 model IncomingPayment {
@@ -599,7 +553,6 @@ model IncomingPayment {
     senderAccountInfo String?               @map("sender_account_info") @db.VarChar(150)
     installmentNumber Int?                  @map("installment_number")
     dueDate           DateTime?             @map("due_date") @db.Date
-    // confirmedById     String?               @map("confirmed_by_id") @db.Uuid
     confirmedAt       DateTime?             @map("confirmed_at")
     status            IncomingPaymentStatus @default(pending)
 
@@ -611,75 +564,70 @@ model IncomingPayment {
     @@map("incoming_payments")
 }
 
+// ----------------------------------------------------------------------------
+// 16. Referral Codes
+// ----------------------------------------------------------------------------
+
 model ReferralCode {
     id     String  @id @default(uuid()) @db.Uuid
     code   String  @unique @db.VarChar(20)
     isUsed Boolean @default(false) @map("is_used")
 
-    // Investor who owns/created this referral code
+    // Investor who owns and created this referral code.
     referrerId String   @map("referrer_id") @db.Uuid
     referrer   Investor @relation("InvestorReferralCodes", fields: [referrerId], references: [id])
 
-    // Investor who used this referral code
-    // null means the code has not been used yet
+    // Investor who used this referral code (null when unused).
     referredId String?   @unique @map("referred_id") @db.Uuid
     referred   Investor? @relation("ReferralCodeUsedBy", fields: [referredId], references: [id])
 
-    // Referral code timestamps
+    // Referral code timestamps.
     createdAt DateTime  @default(now()) @map("created_at")
     expiresAt DateTime? @map("expires_at")
     usedAt    DateTime? @map("used_at")
 
-    // Referrals created using this referral code
+    // Referrals created using this referral code.
     referrals Referral[]
 
-    // Find referral codes by referrer
     @@index([referrerId])
-    // Find unused/used codes belonging to a referrer
     @@index([referrerId, isUsed])
-    // Find expired/expiring referral codes
     @@index([expiresAt])
     @@map("referral_codes")
 }
 
 // ----------------------------------------------------------------------------
-// Referrals
+// 17. Referrals
 // ----------------------------------------------------------------------------
 
 model Referral {
     id String @id @default(uuid()) @db.Uuid
 
-    // Investor who referred another investor
+    // Investor who referred another investor.
     referrerId String   @map("referrer_id") @db.Uuid
     referrer   Investor @relation("ReferrerInvestor", fields: [referrerId], references: [id])
 
-    // Investor who was referred
-    // @unique means an investor can only be referred once in the entire system
+    // Investor who was referred (unique: an investor can only be referred once).
     referredInvestorId String   @unique @map("referred_investor_id") @db.Uuid
     referredInvestor   Investor @relation("ReferredInvestor", fields: [referredInvestorId], references: [id])
 
-    // Referral code used for this referral
+    // Referral code used for this referral.
     referralCodeId String       @map("referral_code_id") @db.Uuid
     referralCode   ReferralCode @relation(fields: [referralCodeId], references: [id])
 
-    // Referral bonus
-    bonusPercent Decimal?     @default(1.00) @map("bonus_percent") @db.Decimal(5, 2)
-    bonusAmount  Decimal?    @map("bonus_amount") @db.Decimal(14, 2)
-    // bonusStatus  BonusStatus @default(pending) @map("bonus_status")
+    // Referral bonus.
+    bonusPercent Decimal? @default(1.00) @map("bonus_percent") @db.Decimal(5, 2)
+    bonusAmount  Decimal? @map("bonus_amount") @db.Decimal(14, 2)
 
-    // Creation timestamp
+    // Creation timestamp.
     createdAt DateTime @default(now()) @map("created_at")
 
-    // Prevent duplicate referrer + referred investor combinations
     @@unique([referrerId, referredInvestorId])
-    // Find referrals made by a specific investor
     @@index([referrerId])
-    // Find referrals by bonus status
     @@map("referrals")
 }
 
 // ----------------------------------------------------------------------------
-// 16. ROI Calculator Leads
+// 18. ROI Calculator Leads
 // ----------------------------------------------------------------------------
 
 model RoiCalculatorLead {
@@ -697,10 +645,6 @@ model RoiCalculatorLead {
 }
 
 // ----------------------------------------------------------------------------
-// 17. Investment Documents
-// ----------------------------------------------------------------------------
-
-// ----------------------------------------------------------------------------
 // 19. Admin Notifications
 // ----------------------------------------------------------------------------
 
@@ -708,11 +652,9 @@ model AdminNotification {
     id            String                @id @default(uuid()) @db.Uuid
     type          AdminNotificationType
     referenceId   String?               @map("reference_id") @db.Uuid
-    // Added: referenceId alone doesn't say what table/entity it points to.
-    // AuditLog already solves this with targetTable — mirroring that here.
+    // Polymorphic reference to the related entity.
     referenceType String?               @map("reference_type") @db.VarChar(50)
 
-    //have added new field after watching whole payment system.
     message   String   @db.VarChar(255)
     isRead    Boolean  @default(false) @map("is_read")
     createdAt DateTime @default(now()) @map("created_at")

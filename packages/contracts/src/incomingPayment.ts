@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { moneySchema } from './investment.js';
 
 export const IncomingPaymentMethodEnum = z.enum([
   "bkash",
@@ -21,17 +22,17 @@ const fileUrlSchema = z
   .max(500, 'File URL cannot exceed 500 characters');
 
 
-const moneySchema = z
-  .coerce
-  .number()
-  .positive('Amount must be greater than zero')
-  .max(999_999_999_999.99, 'Amount exceeds maximum allowed value')
-  // Round to 2 decimal places to match Decimal(14,2)
-  // Step	Calculation	Result
-  // 1. Multiply by 100	3.14159 * 100	314.159
-  // 2. Math.round()	Math.round(314.159)	314
-  // 3. Divide by 100	314 / 100	3.14 ✅
-  .transform((val) => Math.round(val * 100) / 100);
+// const moneySchema = z
+//   .coerce
+//   .number()
+//   .positive('Amount must be greater than zero')
+//   .max(999_999_999_999.99, 'Amount exceeds maximum allowed value')
+//   // Round to 2 decimal places to match Decimal(14,2)
+//   // Step	Calculation	Result
+//   // 1. Multiply by 100	3.14159 * 100	314.159
+//   // 2. Math.round()	Math.round(314.159)	314
+//   // 3. Divide by 100	314 / 100	3.14 ✅
+//   .transform((val) => Math.round(val * 100) / 100);
 
 export const incomingPaymentCreateSchema = z.object({
   investmentId: z.string().uuid({ message: "Invalid ID format" }),

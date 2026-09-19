@@ -35,11 +35,11 @@ export const incomingPaymentStatusSchema = z.enum([
 
 const uuidSchema = z.string().uuid('Must be a valid UUID');
 
-const moneySchema = z
+export const moneySchema = z
   .coerce
   .number()
   .positive('Amount must be greater than zero')
-  .max(999_999_999_999.99, 'Amount exceeds maximum allowed value')
+  .max(999_999_999.99, 'Amount exceeds maximum allowed value')
   // Round to 2 decimal places to match Decimal(14,2)
   // Step	Calculation	Result
   // 1. Multiply by 100	3.14159 * 100	314.159
@@ -47,11 +47,11 @@ const moneySchema = z
   // 3. Divide by 100	314 / 100	3.14 ✅
   .transform((val) => Math.round(val * 100) / 100);
 
-const fileUrlSchema = z
-  .string()
-  .trim()
-  .url('Must be a valid URL')
-  .max(500, 'URL cannot exceed 500 characters');
+// const fileUrlSchema = z
+//   .string()
+//   .trim()
+//   .url('Must be a valid URL')
+//   .max(500, 'URL cannot exceed 500 characters');
 
 
 // InvestmentCreateInputSchema
@@ -123,6 +123,7 @@ export const investmentUpdateInputSchema = investmentCreateInputSchema
   .pick({
     investmentPeriodMonths: true,
     disbursementPeriod: true,
+    amount: true,
   })
   .partial();
 
@@ -167,3 +168,5 @@ export const investmentQuerySchema = z.object({
     .default('createdAt'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
 })
+
+export type InvestmentQuerySchema = z.infer<typeof investmentQuerySchema>;
