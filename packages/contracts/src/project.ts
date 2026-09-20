@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { moneySchema } from './investment.js';
+import { moneySchema } from './common.js';
 
 // ============================================================================
 // Project Status

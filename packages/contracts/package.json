@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./common": "./src/common.ts",
     "./investor": "./src/investor.ts",
     "./investment": "./src/investment.ts",
     "./incomingPayment": "./src/incomingPayment.ts",

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { fileUrlSchema } from './common.js';
 
 // Mirrors Prisma `DisbursementSlot` — the 4 fixed payout windows.
 export const disbursementSlotSchema = z.enum(
@@ -23,14 +24,6 @@ export const disbursementBatchStatusSchema = z.enum(
     message: 'Status must be one of: draft, exported, confirmed',
   },
 );
-
-// URL validator for the generated export file reference (S3/CDN link).
-// `fileUrl` is nullable in Prisma, so it stays optional here.
-const fileUrlSchema = z
-  .string()
-  .trim()
-  .url('File URL must be a valid URL')
-  .max(500, 'File URL cannot exceed 500 characters');
 
 // ============================================================================
 // Base Disbursement Batch Schema

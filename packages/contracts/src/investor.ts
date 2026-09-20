@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { fileUrlSchema, phoneNumberSchema } from './common.js';
 
 // ---------------------------------------------------------------------------
 // Enum mirrors (kept in sync with prisma schema — avoids a runtime dep on
@@ -34,15 +35,6 @@ export const bankSelectedSchema = z.enum(['city_bank', 'others']);
 
 // Mirrors Prisma `BankAccountType` enum
 export const bankAccountTypeSchema = z.enum(['savings', 'current']);
-
-// URL validator for uploaded file references (S3/CDN links)
-const fileUrlSchema = z
-  .string()
-  .trim()
-  .url('File URL must be a valid URL')
-  .max(500, 'File URL cannot exceed 500 characters');
-
-
 
 // Bank Account Schema
 export const bankAccountSchema = z
@@ -99,22 +91,7 @@ export const nomineeSchema = z.object({
     .trim()
     .min(2, 'Nominee name must be at least 2 characters')
     .max(150, 'Nominee name cannot exceed 150 characters'),
-  // Phone Number
-  nomineePhone: z
-    .string({ required_error: 'Phone number is required' })
-    .trim()
-    // Remove spaces, dashes, parentheses (common user input)
-    .transform((val) => val.replace(/[\s\-()]/g, ''))
-    // Now enforce the BD mobile format
-    .refine(
-      (val) => /^(?:\+?880|0)1[3-9]\d{8}$/.test(val),
-      { message: 'Phone number must be a valid Bangladeshi mobile number' }
-    )
-    // Normalize to a single canonical format: +8801XXXXXXXXX
-    .transform((val) => {
-      const digits = val.replace(/^\+?880/, '').replace(/^0/, '');
-      return `0${digits}`;
-    }),
+  nomineePhone: phoneNumberSchema,
 
   relation: z
     .string()
