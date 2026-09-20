@@ -509,9 +509,12 @@ model DisbursementItem {
     snapshotAccountNumber String
     snapshotRoutingNumber String?
     snapshotAccountType   String?
+    snapshotBranchName    String?
 
     monthlyProfitLedger MonthlyProfitLedger[]
     withdrawalRequest   WithdrawalRequest?
+
+    createdAt DateTime @default(now()) @map("created_at")
 
     @@map("disbursement_items")
 }

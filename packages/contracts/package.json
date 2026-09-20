@@ -9,6 +9,7 @@
     "./investment": "./src/investment.ts",
     "./incomingPayment": "./src/incomingPayment.ts",
     "./disbursementBatch": "./src/disbursementBatch.ts",
+    "./disbursementItem": "./src/disbursementItem.ts",
     "./project": "./src/project.ts",
     "./roi-calculator-lead": "./src/roi-calculator-lead.ts"
   },

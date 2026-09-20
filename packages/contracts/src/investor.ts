@@ -1,5 +1,18 @@
 import { z } from 'zod';
-import { fileUrlSchema, phoneNumberSchema } from './common.js';
+import {
+  bankAccountSchema,
+  bankAccountTypeSchema,
+  bankSelectedSchema,
+  fileUrlSchema,
+  phoneNumberSchema,
+} from './common.js';
+
+export {
+  bankAccountSchema,
+  bankAccountTypeSchema,
+  bankSelectedSchema,
+  type BankAccountInput,
+} from './common.js';
 
 // ---------------------------------------------------------------------------
 // Enum mirrors (kept in sync with prisma schema — avoids a runtime dep on
@@ -29,60 +42,6 @@ export const verificationStatusSchema = z.enum([
   'verified',
   'rejected',
 ]);
-
-// Mirrors Prisma `BankSelected` enum
-export const bankSelectedSchema = z.enum(['city_bank', 'others']);
-
-// Mirrors Prisma `BankAccountType` enum
-export const bankAccountTypeSchema = z.enum(['savings', 'current']);
-
-// Bank Account Schema
-export const bankAccountSchema = z
-  .object({
-    selectedBank: bankSelectedSchema,
-    bankName: z
-      .string()
-      .trim()
-      .min(2, 'Bank name must be at least 2 characters')
-      .max(100, 'Bank name cannot exceed 100 characters'),
-    accountName: z
-      .string()
-      .trim()
-      .min(2, 'Account name must be at least 2 characters')
-      .max(150, 'Account name cannot exceed 150 characters')
-      .regex(
-        /^[a-zA-Z\s.\-']+$/,
-        "Account name can only contain letters, spaces, hyphens, periods, and apostrophes",
-      ),
-    accountNumber: z
-      .string()
-      .trim()
-      .min(6, 'Account number must be at least 6 digits')
-      .max(50, 'Account number cannot exceed 50 characters')
-      .regex(/^[0-9\-]+$/, 'Account number can only contain digits and hyphens'),
-    routingNumber: z
-      .string()
-      .trim()
-      .length(9, 'Routing number must be exactly 9 digits')  //Discuss
-      .regex(/^\d+$/, 'Routing number must contain only digits')
-      .optional(),
-    accountType: bankAccountTypeSchema.optional(),
-    branchName: z
-      .string()
-      .trim()
-      .max(150, 'Branch name cannot exceed 150 characters')
-      .optional(),
-  })
-  // Cross-field rule: non-city-bank accounts require a routing number for BEFTN
-  .refine(
-    (data) => data.selectedBank === 'city_bank' || !!data.routingNumber,
-    {
-      message: 'Routing number is required for banks other than City Bank',
-      path: ['routingNumber'],
-    },
-  );
-
-export type BankAccountInput = z.infer<typeof bankAccountSchema>;
 
 // NomineeSchema
 export const nomineeSchema = z.object({

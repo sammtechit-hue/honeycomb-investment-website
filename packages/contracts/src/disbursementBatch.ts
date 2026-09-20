@@ -27,10 +27,6 @@ export const disbursementBatchStatusSchema = z.enum(
 
 // ============================================================================
 // Base Disbursement Batch Schema
-// ============================================================================
-// Keep this as a ZodObject so the update schema can call `.partial()`.
-// Cross-field rules live on the create/update schemas below.
-// ============================================================================
 
 const disbursementBatchBaseSchema = z.object({
   // One of the 4 fixed windows — required in Prisma.
@@ -80,7 +76,18 @@ export type DisbursementBatchCreateInput = z.infer<
 
 
 export const disbursementBatchUpdateInputSchema =
-  disbursementBatchBaseSchema.partial();
+  disbursementBatchBaseSchema
+  .partial()
+  .superRefine((data, ctx) => {
+      // fileUrl must also be provided.
+      if (data.status !== undefined && data.status !== 'draft' && data.fileUrl == null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'fileUrl is required once status is exported or confirmed',
+          path: ['fileUrl'],
+        });
+      }
+    });
 
 export type DisbursementBatchUpdateInput = z.infer<
   typeof disbursementBatchUpdateInputSchema
