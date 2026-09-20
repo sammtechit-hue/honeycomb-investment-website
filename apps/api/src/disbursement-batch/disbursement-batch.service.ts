@@ -15,14 +15,12 @@ export class DisbursementBatchService {
   // Example: GET /disbursement-batch?search=1st&slot=slot_1&exportType=cbl&status=draft&page=1&limit=10
   async findAll(query: DisbursementBatchQueryDto) {
     // Available filters: search, slot, exportType, status,
-    // batchDateFrom, batchDateTo, page, limit, sortBy, sortOrder
+    // page, limit, sortBy, sortOrder
     const {
       search,
       slot,
       exportType,
       status,
-      batchDateFrom,
-      batchDateTo,
       page,
       limit,
       sortBy,
