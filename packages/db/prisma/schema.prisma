@@ -94,7 +94,6 @@ enum PayoutStatus {
 enum DisbursementExportType {
     cbl
     beftn
-    other
 }
 
 enum DisbursementBatchStatus {
@@ -390,7 +389,12 @@ model Investment {
     incomingPayments    IncomingPayment[]
     withdrawalRequests  WithdrawalRequest[]
     investmentDocuments InvestmentDocument?
-    disbursementItems   DisbursementItem[]
+
+    // An investment's slot is determined automatically... Admin can manually move an investment to a different slot if needed
+    disbursementItems  DisbursementItem[]
+    disbursementSlot   DisbursementSlot?  @map("disbursement_slot") // investmentDate + 10 din calculate kore
+    slotManuallyMoved  Boolean            @default(false) @map("slot_manually_moved")
+    slotAdjustmentDays Int?               @map("slot_adjustment_days") // koto din berlo/komlo, audit-er jonno
 
     @@index([investorId])
     @@index([projectId])
@@ -471,7 +475,7 @@ model DisbursementBatch {
     exportType DisbursementExportType  @map("export_type")
     fileUrl    String?                 @map("file_url")
     status     DisbursementBatchStatus @default(draft)
-    createdAt DateTime @default(now()) @map("created_at")
+    createdAt  DateTime                @default(now()) @map("created_at")
 
     items DisbursementItem[]
 
