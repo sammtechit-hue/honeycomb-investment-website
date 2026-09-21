@@ -12,6 +12,11 @@
     "./disbursementItem": "./src/disbursementItem.ts",
     "./referral": "./src/referral.ts",
     "./referralCode": "./src/referralCode.ts",
+    "./withdrawal-request": "./src/withdrawal-request.ts",
+    "./monthlyProfitLedger": "./src/monthlyProfitLedger.ts",
+    "./nominee": "./src/nominee.ts",
+    "./auditLog": "./src/auditLog.ts",
+    "./notification": "./src/notification.ts",
     "./project": "./src/project.ts",
     "./roi-calculator-lead": "./src/roi-calculator-lead.ts"
   },

@@ -42,6 +42,12 @@ export const phoneNumberSchema = z
     return `0${digits}`;
   });
 
+// Query strings arrive as text, so "true"/"false" is mapped to a real boolean.
+// (z.coerce.boolean() is not used on purpose — Boolean('false') is true.)
+export const queryBooleanSchema = z
+  .enum(['true', 'false'], { message: 'Value must be "true" or "false"' })
+  .transform((val) => val === 'true');
+
 // Mirrors Prisma `BankSelected` enum
 export const bankSelectedSchema = z.enum(['city_bank', 'others']);
 

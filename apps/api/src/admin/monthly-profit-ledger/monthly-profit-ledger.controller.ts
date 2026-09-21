@@ -1,50 +1,53 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UsePipes, ValidationPipe } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+  UsePipes,
+} from '@nestjs/common';
+import { ZodValidationPipe } from 'nestjs-zod';
 import { CreateMonthlyProfitLedgerDto } from './dto/create-monthly-profit-ledger.dto';
 import { UpdateMonthlyProfitLedgerDto } from './dto/update-monthly-profit-ledger.dto';
+import { MonthlyProfitLedgerQueryDto } from './dto/query-monthly-profit-ledger.dto';
 import { MonthlyProfitLedgerService } from './monthly-profit-ledger.service';
 
+// Admin endpoints for the monthly profit ledger — one row per investment per
+// profit month, tracking the applied rate, computed profit and payout status.
+// Validation is scoped to this controller (@UsePipes) instead of globally —
+// see main.ts for why.
 @Controller('admin/monthly-profit-ledger')
-@UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
+@UsePipes(ZodValidationPipe)
 export class MonthlyProfitLedgerController {
     constructor(
         private readonly monthlyProfitLedgerService: MonthlyProfitLedgerService,
-    ) { }
+    ) {}
 
-    // GET /admin/monthly-profit-ledger?search=investment_id&status=accrued&category=accrued&page=1&limit=10&sortBy=periodMonth&sortOrder=desc
+    // For getting all monthly profit ledger rows with filtering, searching,
+    // sorting & pagination.
+    // GET /api/admin/monthly-profit-ledger?search=&investmentId=&investorId=
+    //   &payoutStatus=accrued&min=&max=&periodFrom=&periodTo=
+    //   &page=1&limit=10&sortBy=periodMonth&sortOrder=desc
     @Get()
-    findAll(
-        @Query('search') search?: string,
-        @Query('status') status?: string,
-        @Query('category') category?: string,
-        @Query('page') page?: number,
-        @Query('limit') limit?: number,
-        @Query('sortBy') sortBy?: string,
-        @Query('sortOrder') sortOrder?: 'asc' | 'desc',
-        @Query('min') min?: number,
-        @Query('max') max?: number,
-    ) {
-        // GET /admin/monthly-profit-ledger?search=investment_id&status=accrued&category=accrued&page=1&limit=10&sortBy=periodMonth&sortOrder=desc
-        return this.monthlyProfitLedgerService.findAll({
-            search,
-            status,
-            category,
-            page: page ? Number(page) : 1,
-            limit: limit ? Number(limit) : 10,
-            sortBy: sortBy ?? 'createdAt',
-            sortOrder: sortOrder ?? 'desc',
-            min: min ? Number(min) : undefined,
-            max: max ? Number(max) : undefined,
-        });
+    findAll(@Query() query: MonthlyProfitLedgerQueryDto) {
+        // Search, filters, amount/period ranges, sort and pagination are
+        // validated by MonthlyProfitLedgerQueryDto.
+        return this.monthlyProfitLedgerService.findAll(query);
     }
 
     // GET /admin/monthly-profit-ledger/:id
     @Get(':id')
-    findOne(@Param('id') id: string) {
+    findOne(@Param('id', ParseUUIDPipe) id: string) {
         // Return a single monthly profit ledger data
         return this.monthlyProfitLedgerService.findOne(id);
     }
 
     // POST /admin/monthly-profit-ledger
+    // payoutStatus defaults to "accrued".
     @Post()
     create(@Body() createMonthlyProfitLedgerDto: CreateMonthlyProfitLedgerDto) {
         // Create a new monthly profit ledger record
@@ -54,7 +57,7 @@ export class MonthlyProfitLedgerController {
     // PATCH /admin/monthly-profit-ledger/:id
     @Patch(':id')
     update(
-        @Param('id') id: string,
+        @Param('id', ParseUUIDPipe) id: string,
         @Body() updateMonthlyProfitLedgerDto: UpdateMonthlyProfitLedgerDto,
     ) {
         // Only the fields provided in the request
@@ -65,7 +68,7 @@ export class MonthlyProfitLedgerController {
 
     // DELETE /admin/monthly-profit-ledger/:id
     @Delete(':id')
-    remove(@Param('id') id: string) {
+    remove(@Param('id', ParseUUIDPipe) id: string) {
         // Delete a monthly profit ledger by id
         return this.monthlyProfitLedgerService.remove(id);
     }
