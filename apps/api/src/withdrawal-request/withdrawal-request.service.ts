@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { CreateWithdrawalRequestDto } from './dto/create-withdrawal-request.dto';
-import { UpdateWithdrawalRequestDto } from './dto/update-withdrawal-request.dto';
+import type {
+  WithdrawalRequestCreateInput,
+  WithdrawalRequestQuery,
+  WithdrawalRequestUpdateInput,
+} from '@investment-platform/contracts/withdrawal-request';
 
 @Injectable()
 export class WithdrawalRequestService {
@@ -8,33 +11,15 @@ export class WithdrawalRequestService {
     // PrismaService gives us access to PostgreSQL
     // through Prisma ORM.
     // private readonly prisma: PrismaService,
-  ) { }
+  ) {}
 
   // For Getting All WithdrawalRequest's Data with filtering, searching, sorting & pagination
-  // Example: GET /withdrawal-request?search=pending&status=pending&category=manual&page=1&limit=10
-  async findAll({
-    search,
-    status,
-    category,
-    page = 1,
-    limit = 10,
-    sortBy = 'createdAt',
-    sortOrder = 'desc',
-    min,
-    max,
-  }: {
-    search?: string;
-    status?: string;
-    category?: string;
-    page?: number;
-    limit?: number;
-    sortBy?: string;
-    sortOrder?: 'asc' | 'desc';
-    min?: number;
-    max?: number;
-  }) {
+  // Example: GET /withdrawal-request?status=pending&withdrawalMethod=manual&page=1&limit=10
+  // Validated/normalized by WithdrawalRequestQueryDto — all fields are typed.
+  async findAll(query: WithdrawalRequestQuery) {
     return {
       message: "HelloWorld Return all WithdrawalRequest's data",
+      query,
     };
   }
 
@@ -44,16 +29,21 @@ export class WithdrawalRequestService {
   }
 
   // For Creating WithdrawalRequest
-  async create(createWithdrawalRequestDto: CreateWithdrawalRequestDto) {
+  // Validated by CreateWithdrawalRequestDto — see
+  // packages/contracts/src/withdrawal-request.ts.
+  async create(createWithdrawalRequestDto: WithdrawalRequestCreateInput) {
     return {
       message: 'WithdrawalRequest Created Successfully',
+      data: createWithdrawalRequestDto,
     };
   }
 
   // For updating WithdrawalRequest Information
-  async update(id: string, updateWithdrawalRequestDto: UpdateWithdrawalRequestDto) {
+  // Only the fields provided in the request will be updated.
+  async update(id: string, updateWithdrawalRequestDto: WithdrawalRequestUpdateInput) {
     return {
       message: 'WithdrawalRequest Updated Successfully',
+      data: updateWithdrawalRequestDto,
     };
   }
 
