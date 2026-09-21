@@ -15,6 +15,23 @@ datasource db {
 // Enums
 // ----------------------------------------------------------------------------
 
+enum AuditAction {
+    investor_registered
+    investor_kyc_uploaded
+    investor_kyc_status_changed // e.g. Kamal changed KYC doc status to verified
+    investor_status_changed // e.g. investor approved/suspended
+    investor_verified // shortcut for status -> active, if you want it separate from the generic one above
+    investment_created
+    investment_status_changed
+    monthly_rate_set
+    disbursement_batch_created
+    disbursement_batch_exported
+    disbursement_batch_confirmed
+    withdrawal_status_changed
+    referral_code_generated
+    company_document_uploaded
+}
+
 enum InvestorCategory {
     bronze
     silver
@@ -239,6 +256,8 @@ model AdminProfile {
 
     userId String @unique @map("user_id") @db.Uuid
     user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    auditLogEntries AuditLog[] // NEW
 
     @@map("admin_profiles")
 }
@@ -676,14 +695,16 @@ model AdminNotification {
 // ----------------------------------------------------------------------------
 
 model AuditLog {
-    id             String   @id @default(uuid()) @db.Uuid
-    action         String   @db.VarChar(100)
-    targetTable    String   @map("target_table") @db.VarChar(50)
-    targetId       String   @map("target_id") @db.Uuid
+    id             String        @id @default(uuid()) @db.Uuid
+    action         AuditAction // was: String @db.VarChar(100)
+    targetTable    String        @map("target_table") @db.VarChar(50)
+    targetId       String        @map("target_id") @db.Uuid
     details        Json?
-    createdAt      DateTime @default(now()) @map("created_at")
-    adminProfileId String?  @db.Uuid
+    createdAt      DateTime      @default(now()) @map("created_at")
     adminName      String?
+    
+    adminProfileId String?       @db.Uuid
+    adminProfile   AdminProfile? @relation(fields: [adminProfileId], references: [id])
 
     @@index([targetTable, targetId])
     @@index([createdAt])

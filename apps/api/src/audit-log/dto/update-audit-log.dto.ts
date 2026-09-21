@@ -1,16 +1,9 @@
-import { PartialType } from '@nestjs/mapped-types';
+import { createZodDto } from 'nestjs-zod';
+import { auditLogUpdateInputSchema } from '@investment-platform/contracts/auditLog';
 
-import { CreateAuditLogDto } from './create-audit-log.dto';
-
-// All properties from CreateAuditLogDto become optional.
-//
-// Example:
-// PATCH /api/audit-log/:id
-//
-// {
-//   "fullName": "Updated Name"
-// }
-//
-// You don't need to send phoneNumber, email, etc.
-
-export class UpdateAuditLogDto extends PartialType(CreateAuditLogDto) {}
+// PATCH /api/audit-log/:id — corrections only (details/admin fields).
+// `action`, `targetTable` and `targetId` are intentionally not updatable —
+// see packages/contracts/src/auditLog.ts.
+export class UpdateAuditLogDto extends createZodDto(
+  auditLogUpdateInputSchema,
+) {}
