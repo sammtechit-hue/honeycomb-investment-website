@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { CreateRefferalCodeDto } from './dto/create-refferal-code.dto';
 import { UpdateRefferalCodeDto } from './dto/update-refferal-code.dto';
+import { RefferalCodeQueryDto } from './dto/query-refferal-code.dto';
 
 @Injectable()
 export class RefferalCodeService {
@@ -11,24 +12,24 @@ export class RefferalCodeService {
   ) {}
 
   // For getting all RefferalCode's data with filtering, searching, sorting & pagination.
-  // Example: GET /refferal-code?search=ABC123&status=active&category=referral&page=1&limit=10
-  async findAll({
-    search,
-    status,
-    category,
-    page = 1,
-    limit = 10,
-    sortBy = 'createdAt',
-    sortOrder = 'desc',
-  }: {
-    search?: string;
-    status?: string;
-    category?: string;
-    page?: number;
-    limit?: number;
-    sortBy?: string;
-    sortOrder?: 'asc' | 'desc';
-  }) {
+  // Example: GET /refferal-code?search=ABC123&isUsed=false&page=1&limit=10&sortBy=createdAt&sortOrder=desc
+  async findAll(query: RefferalCodeQueryDto) {
+    // Available filters: search, referrerId, referredId, isUsed,
+    // expiresAfter, expiresBefore,
+    // page, limit, sortBy, sortOrder
+    const {
+      search,
+      referrerId,
+      referredId,
+      isUsed,
+      expiresAfter,
+      expiresBefore,
+      page,
+      limit,
+      sortBy,
+      sortOrder,
+    } = query;
+
     return {
       message: "HelloWorld Return all RefferalCode's data",
     };
@@ -40,13 +41,17 @@ export class RefferalCodeService {
   }
 
   // For creating RefferalCode.
+  // Validated fields: code, referrerId, referredId, isUsed, expiresAt, usedAt
   async create(createRefferalCodeDto: CreateRefferalCodeDto) {
+    const { code, referrerId } = createRefferalCodeDto;
+
     return {
       message: 'RefferalCode Created Successfully',
     };
   }
 
   // For updating RefferalCode information.
+  // All fields optional — only provided fields are updated.
   async update(id: string, updateRefferalCodeDto: UpdateRefferalCodeDto) {
     return {
       message: 'RefferalCode Updated Successfully',

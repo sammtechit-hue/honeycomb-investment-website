@@ -15,8 +15,8 @@ export class ReferralService {
   // Example: GET /referral?search=ABC123&referrerId=&page=1&limit=10&sortBy=createdAt&sortOrder=desc
   async findAll(query: ReferralQueryDto) {
     // Available filters: search, referrerId, referredInvestorId,
-    // referralCodeId, minBonusAmount, maxBonusAmount, minBonusPercent,
-    // maxBonusPercent, fromDate, toDate, page, limit, sortBy, sortOrder
+    // referralCodeId, minBonusAmount, maxBonusAmount, fromDate, toDate,
+    // page, limit, sortBy, sortOrder
     const {
       search,
       referrerId,
@@ -24,8 +24,6 @@ export class ReferralService {
       referralCodeId,
       minBonusAmount,
       maxBonusAmount,
-      minBonusPercent,
-      maxBonusPercent,
       fromDate,
       toDate,
       page,

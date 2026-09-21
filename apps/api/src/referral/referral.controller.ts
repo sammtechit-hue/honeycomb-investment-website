@@ -26,7 +26,7 @@ export class ReferralController {
   constructor(private readonly referralService: ReferralService) {}
 
   // GET /api/referral?search=ABC123&referrerId=&referredInvestorId=&referralCodeId=
-  //   &minBonusAmount=&maxBonusAmount=&minBonusPercent=&maxBonusPercent=&fromDate=&toDate=
+  //   &minBonusAmount=&maxBonusAmount=&fromDate=&toDate=
   //   &page=1&limit=10&sortBy=createdAt&sortOrder=desc
   @Get()
   findAll(@Query() query: ReferralQueryDto) {
