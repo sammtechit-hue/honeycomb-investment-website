@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { CreateInvestmentDocumentDto } from './dto/create-investment-document.dto';
-import { UpdateInvestmentDocumentDto } from './dto/update-investment-document.dto';
+import type {
+    InvestmentDocumentCreateInput,
+    InvestmentDocumentQuery,
+    InvestmentDocumentUpdateInput,
+} from '@investment-platform/contracts/investmentDocument';
 
 @Injectable()
 export class InvestmentDocumentService {
@@ -11,46 +14,37 @@ export class InvestmentDocumentService {
     ) { }
 
     // For Getting All InvestmentDocument's Data with filtering, searching, sorting & pagination
-    // Example: GET /admin/investment-document?search=deed&status=active&category=certificate&page=1&limit=10
-    async findAll({
-        search,
-        status,
-        category,
-        page = 1,
-        limit = 10,
-        sortBy = 'createdAt',
-        sortOrder = 'desc',
-    }: {
-        search?: string;
-        status?: string;
-        category?: string;
-        page?: number;
-        limit?: number;
-        sortBy?: string;
-        sortOrder?: 'asc' | 'desc';
-    }) {
+    // Example: GET /admin/investment-document?hasDocument=certificate&page=1&limit=10
+    // Validated/normalized by InvestmentDocumentQueryDto — all fields are typed.
+    async findAll(query: InvestmentDocumentQuery) {
         return {
-            message: "HelloWorld Return all InvestmentDocument's data",
+            message: "Return all InvestmentDocument's data",
+            query,
         };
     }
 
     // For Getting One InvestmentDocument's Data
     async findOne(id: string) {
-        return id + 'This route is for InvestmentDocument who will see their necessary data and partially modify data';
+        return { message: `${id} - Return a single investment document bundle` };
     }
 
     // For Creating InvestmentDocument
-    // Expected fields (to be added to the DTO): investmentId, docType, fileUrl
-    async create(createInvestmentDocumentDto: CreateInvestmentDocumentDto) {
+    // Validated by CreateInvestmentDocumentDto — the eight document slots plus
+    // the owning investment; Prisma enforces one bundle per investment.
+    async create(createInvestmentDocumentDto: InvestmentDocumentCreateInput) {
         return {
             message: 'InvestmentDocument Created Successfully',
+            data: createInvestmentDocumentDto,
         };
     }
 
     // For updating InvestmentDocument Information
-    async update(id: string, updateInvestmentDocumentDto: UpdateInvestmentDocumentDto) {
+    // Because investment_documents has no timestamps, a handover is recorded by
+    // setting the slot's file URL — see UpdateInvestmentDocumentDto.
+    async update(id: string, updateInvestmentDocumentDto: InvestmentDocumentUpdateInput) {
         return {
             message: 'InvestmentDocument Updated Successfully',
+            data: updateInvestmentDocumentDto,
         };
     }
 

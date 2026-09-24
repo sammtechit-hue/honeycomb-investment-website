@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { CreateInvestorBankAccountDto } from './dto/create-investor-bank-account.dto';
-import { UpdateInvestorBankAccountDto } from './dto/update-investor-bank-account.dto';
+import type {
+  InvestorBankAccountCreateInput,
+  InvestorBankAccountQuery,
+  InvestorBankAccountUpdateInput,
+} from '@investment-platform/contracts/investorBankAccount';
 
 @Injectable()
 export class InvestorBankAccountService {
@@ -11,47 +14,40 @@ export class InvestorBankAccountService {
   ) {}
 
   // For Getting All InvestorBankAccount's Data with filtering, searching, sorting & pagination
-  // Example: GET /investor-bank-account?search=cbl&status=active&category=savings&page=1&limit=10
-  async findAll({
-    search,
-    status,
-    category,
-    page = 1,
-    limit = 10,
-    sortBy = 'createdAt',
-    sortOrder = 'desc',
-  }: {
-    search?: string;
-    status?: string;
-    category?: string;
-    page?: number;
-    limit?: number;
-    sortBy?: string;
-    sortOrder?: 'asc' | 'desc';
-  }) {
+  // Example: GET /investor-bank-account?isActive=true&page=1&limit=10
+  // Validated/normalized by InvestorBankAccountQueryDto — all fields are typed.
+  async findAll(query: InvestorBankAccountQuery) {
     return {
-      message: "HelloWorld Return all InvestorBankAccount's data",
+      message: "Return all InvestorBankAccount's data",
+      query,
     };
   }
 
   // For Getting One InvestorBankAccount's Data
   async findOne(id: string) {
-    return id + 'This route is for InvestorBankAccount who will see their necessary data and partially modify data';
+    return { message: `${id} - Return a single investor bank account` };
   }
 
   // For Creating InvestorBankAccount
-  async create(createInvestorBankAccountDto: CreateInvestorBankAccountDto) {
-    const { bankName, accountName, accountNumber } = createInvestorBankAccountDto;
+  // Validated by CreateInvestorBankAccountDto — the account may start inactive;
+  // activating it means deactivating the investor's other accounts in the same
+  // transaction, since exactly one row should carry isActive.
+  async create(createInvestorBankAccountDto: InvestorBankAccountCreateInput) {
+    const { investorId, isActive } = createInvestorBankAccountDto;
 
     return {
       message: 'InvestorBankAccount Created Successfully',
+      data: createInvestorBankAccountDto,
     };
   }
 
   // For updating InvestorBankAccount Information
-  async update(id: string, updateInvestorBankAccountDto: UpdateInvestorBankAccountDto) {
+  // Only the fields provided in the request will be updated; switching
+  // `isActive` to true must deactivate the investor's other accounts.
+  async update(id: string, updateInvestorBankAccountDto: InvestorBankAccountUpdateInput) {
     return {
       message: 'InvestorBankAccount Updated Successfully',
+      data: updateInvestorBankAccountDto,
     };
   }
 
