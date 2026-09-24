@@ -73,14 +73,9 @@ export const kycDocumentsSchema = z.object({
 
 export type KycDocumentsInput = z.infer<typeof kycDocumentsSchema>;
 
-
-
-
 // ---------------------------------------------------------------------------
 // Create
 // ---------------------------------------------------------------------------
-
-
 export const investorCreateInputSchema = z.object({
   fullName: z
     .string()

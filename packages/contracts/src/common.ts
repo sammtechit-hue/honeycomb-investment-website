@@ -54,9 +54,6 @@ export const bankSelectedSchema = z.enum(['city_bank', 'others']);
 // Mirrors Prisma `BankAccountType` enum
 export const bankAccountTypeSchema = z.enum(['savings', 'current']);
 
-
-
-
 // For reuse of code
 export const bankNameSchema = z
   .string()
