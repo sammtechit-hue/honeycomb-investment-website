@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./auth": "./src/auth.ts",
     "./investor": "./src/investor.ts",
     "./investment": "./src/investment.ts"
   },

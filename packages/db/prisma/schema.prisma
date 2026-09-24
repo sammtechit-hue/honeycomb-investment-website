@@ -177,14 +177,116 @@ model User {
     phone        String?  @unique @db.VarChar(20) // investor login identifier; null for admins
     passwordHash String   @map("password_hash") @db.VarChar(255)
     role         Role     @default(INVESTOR)
+    // Soft account-disable switch — checked on every request (see
+    // JwtStrategy). Distinct from Investor.status ('suspended' etc.), which
+    // is business-level state; this is purely "can this login still be used".
+    isActive     Boolean  @default(true) @map("is_active")
+    // Embedded in every access token as `tv`. Bumping it (password change,
+    // "log out everywhere", admin force-logout) kills every access token
+    // issued before the bump — JwtStrategy rejects a tv mismatch.
+    tokenVersion Int      @default(0) @map("token_version")
+    lastLoginAt  DateTime? @map("last_login_at")
     createdAt    DateTime @default(now()) @map("created_at")
     updatedAt    DateTime @updatedAt @map("updated_at")
 
-    investorProfile Investor?
-    adminProfile    AdminProfile?
+    investorProfile   Investor?
+    adminProfile      AdminProfile?
+    blacklistedTokens BlacklistedToken[]
+    refreshTokens     RefreshToken[]
+    passwordTokens    PasswordToken[]
 
     @@index([role])
     @@map("users")
+}
+
+// ----------------------------------------------------------------------------
+// PasswordToken — single-use emailed links that set a password:
+// PASSWORD_RESET (forgot password, 30 min) and ACCOUNT_INVITE (new admin
+// created by a super admin, 72 h). Only the SHA-256 hash is stored. Issuing
+// a new one for a user invalidates their older unused ones.
+// ----------------------------------------------------------------------------
+
+enum PasswordTokenPurpose {
+    PASSWORD_RESET
+    ACCOUNT_INVITE
+}
+
+model PasswordToken {
+    id          String               @id @default(uuid()) @db.Uuid
+    tokenHash   String               @unique @map("token_hash") @db.VarChar(64)
+    purpose     PasswordTokenPurpose
+    expiresAt   DateTime             @map("expires_at")
+    usedAt      DateTime?            @map("used_at")
+    requestedIp String?              @map("requested_ip") @db.VarChar(45)
+    createdAt   DateTime             @default(now()) @map("created_at")
+
+    userId String @map("user_id") @db.Uuid
+    user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@index([userId, createdAt])
+    @@index([expiresAt])
+    @@map("password_tokens")
+}
+
+// ----------------------------------------------------------------------------
+// BlacklistedToken — revoked-before-expiry access tokens (logout).
+// JwtStrategy rejects any token whose jti is found here even if the token
+// itself hasn't expired yet. Rows are purged after expiresAt (AuthCleanup).
+// ----------------------------------------------------------------------------
+
+model BlacklistedToken {
+    jti       String   @id @db.Uuid
+    expiresAt DateTime @map("expires_at")
+    createdAt DateTime @default(now()) @map("created_at")
+
+    userId String @map("user_id") @db.Uuid
+    user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@index([expiresAt])
+    @@map("blacklisted_tokens")
+}
+
+// ----------------------------------------------------------------------------
+// RefreshToken — rotating, single-use refresh tokens (httpOnly cookie).
+// Only the SHA-256 hash is stored, so a DB leak can't be replayed. Each
+// login starts a new familyId; each refresh consumes the current token and
+// issues the next in the same family. Presenting an already-consumed token
+// means it was stolen and replayed, so the whole family is revoked.
+// ----------------------------------------------------------------------------
+
+model RefreshToken {
+    id          String    @id @default(uuid()) @db.Uuid
+    tokenHash   String    @unique @map("token_hash") @db.VarChar(64)
+    familyId    String    @map("family_id") @db.Uuid
+    expiresAt   DateTime  @map("expires_at")
+    revokedAt   DateTime? @map("revoked_at")
+    createdByIp String?   @map("created_by_ip") @db.VarChar(45)
+    userAgent   String?   @map("user_agent") @db.VarChar(255)
+    createdAt   DateTime  @default(now()) @map("created_at")
+
+    userId String @map("user_id") @db.Uuid
+    user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@index([userId])
+    @@index([familyId])
+    @@index([expiresAt])
+    @@map("refresh_tokens")
+}
+
+// ----------------------------------------------------------------------------
+// LoginAttempt — failed-login counter per identifier (email/phone) for
+// account lockout. Per-IP throttling alone doesn't stop a distributed
+// guess against one account.
+// ----------------------------------------------------------------------------
+
+model LoginAttempt {
+    identifier   String    @id @db.VarChar(150)
+    attempts     Int       @default(0)
+    lastAttempt  DateTime  @map("last_attempt")
+    blockedUntil DateTime? @map("blocked_until")
+
+    @@index([lastAttempt])
+    @@map("login_attempts")
 }
 
 // ----------------------------------------------------------------------------
