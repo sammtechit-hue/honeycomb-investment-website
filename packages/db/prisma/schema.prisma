@@ -30,6 +30,13 @@ enum AuditAction {
     withdrawal_status_changed
     referral_code_generated
     company_document_uploaded
+    // Auth / staff accounts (apps/api/src/auth, admin/admin-account)
+    admin_login
+    admin_login_failed
+    admin_password_reset
+    admin_invite_accepted
+    admin_created
+    admin_invite_resent
 }
 
 enum InvestorCategory {

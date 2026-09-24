@@ -17,7 +17,7 @@ import { AdminAccountModule } from './admin-account/admin-account.module';
 import { RoiCalculatorLeadModule } from './roi-calculator-lead/roi-calculator-lead.module';
 
 @Module({
-  imports: [InvestorModule, InvestmentModule, MonthlyRateSettingModule, AuditLogModule, DisbursementBatchModule, DisbursementItemModule, IncomingPaymentModule, InvestmentDocumentModule, ProjectModule, WithdrawalRequestModule, InvestorKycDocumentModule, MonthlyProfitLedgerModule],
+  imports: [AdminAccountModule, InvestorModule, InvestmentModule, MonthlyRateSettingModule, AuditLogModule, DisbursementBatchModule, DisbursementItemModule, IncomingPaymentModule, InvestmentDocumentModule, ProjectModule, WithdrawalRequestModule, InvestorKycDocumentModule, MonthlyProfitLedgerModule],
   controllers: [AdminController],
   providers: [AdminService]
 })

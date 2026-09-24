@@ -1,22 +1,11 @@
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
-import { ZodValidationPipe } from 'nestjs-zod';
+import { configureApp } from './app.setup';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-
-  // Validation is applied per-controller (@UsePipes), not globally: a global
-  // class-validator ValidationPipe with whitelist:true strips every field on
-  // DTOs that use zod instead (nestjs-zod's createZodDto) since it only
-  // recognizes class-validator decorators, silently emptying the body before
-  // the zod pipe ever runs. See investor.controller.ts / investor/dto for
-  // the zod-based resource, and the other controllers for the class-validator
-  // ones — each opts into its own validation pipe.
-
-  app.setGlobalPrefix('api');
-  app.useGlobalPipes(new ZodValidationPipe());
-
-
-  await app.listen(process.env.PORT ?? 3000);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const config = configureApp(app);
+  await app.listen(config.get('PORT', { infer: true }));
 }
 bootstrap();

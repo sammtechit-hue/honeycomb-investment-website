@@ -1,0 +1,8 @@
+{
+  // TypeScript 6 requires an explicit rootDir once sources span test/ and
+  // src/ — without it ts-jest fails with TS5011 before any test runs.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".."
+  }
+}
