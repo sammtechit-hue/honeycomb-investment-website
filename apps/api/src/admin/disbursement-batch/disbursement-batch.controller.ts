@@ -1,55 +1,60 @@
-import { Body, Controller, Get, Param, Post, Patch, Delete, Query, UsePipes, ValidationPipe } from '@nestjs/common';
+import {
+    Body,
+    Controller,
+    Delete,
+    Get,
+    Param,
+    ParseUUIDPipe,
+    Patch,
+    Post,
+    Query,
+    UsePipes,
+} from '@nestjs/common';
+import { ZodValidationPipe } from 'nestjs-zod';
 import { CreateDisbursementBatchDto } from './dto/create-disbursement-batch.dto';
 import { UpdateDisbursementBatchDto } from './dto/update-disbursement-batch.dto';
+import { DisbursementBatchQueryDto } from './dto/query-disbursement-batch.dto';
 import { DisbursementBatchService } from './disbursement-batch.service';
 
+// Admin disbursement batch endpoints — list/filter batches, create a batch
+// draft and move it through draft → exported → confirmed.
+// Validation is scoped to this controller (@UsePipes): the global class-validator
+// pipe strips every field on zod DTOs. See main.ts.
 @Controller('admin/disbursement-batch')
-@UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
+@UsePipes(ZodValidationPipe)
 export class DisbursementBatchController {
     constructor(
         private readonly disbursementBatchService: DisbursementBatchService,
     ) { }
 
-    // GET /admin/disbursement-batch?search=slot_1&status=draft&category=cbl&page=1&limit=10&sortBy=createdAt&sortOrder=desc
+    // GET /api/admin/disbursement-batch?search=1st&slot=slot_1&exportType=cbl&status=draft
+    //   &batchDateFrom=&batchDateTo=&page=1&limit=10&sortBy=createdAt&sortOrder=desc
     @Get()
-    findAll(
-        @Query('search') search?: string,
-        @Query('status') status?: string,
-        @Query('category') category?: string,
-        @Query('page') page?: number,
-        @Query('limit') limit?: number,
-        @Query('sortBy') sortBy?: string,
-        @Query('sortOrder') sortOrder?: 'asc' | 'desc',
-    ) {
-        // GET /admin/disbursement-batch?search=slot_1&status=draft&category=cbl&page=1&limit=10&sortBy=createdAt&sortOrder=desc
-        return this.disbursementBatchService.findAll({
-            search,
-            status,
-            category,
-            page: page ? Number(page) : 1,
-            limit: limit ? Number(limit) : 10,
-            sortBy: sortBy ?? 'createdAt',
-            sortOrder: sortOrder ?? 'desc',
-        });
+    findAll(@Query() query: DisbursementBatchQueryDto) {
+        // Search, filters, batch date range, sort and pagination are
+        // validated by DisbursementBatchQueryDto.
+        return this.disbursementBatchService.findAll(query);
     }
 
-    // GET /admin/disbursement-batch/:id
+    // GET /api/admin/disbursement-batch/:id
     @Get(':id')
-    findOne(@Param('id') id: string) {
+    findOne(@Param('id', ParseUUIDPipe) id: string) {
         // Return a single disbursement batch data
         return this.disbursementBatchService.findOne(id);
     }
 
-    // POST /admin/disbursement-batch
+    // POST /api/admin/disbursement-batch
     @Post()
     create(@Body() createDisbursementBatchDto: CreateDisbursementBatchDto) {
+        // Create a new disbursement batch record (slot, slotLabel, batchDate,
+        // exportType; status defaults to draft).
         return this.disbursementBatchService.create(createDisbursementBatchDto);
     }
 
-    // PATCH /admin/disbursement-batch/:id
+    // PATCH /api/admin/disbursement-batch/:id
     @Patch(':id')
     update(
-        @Param('id') id: string,
+        @Param('id', ParseUUIDPipe) id: string,
         @Body() updateDisbursementBatchDto: UpdateDisbursementBatchDto,
     ) {
         // Only the fields provided in the request
@@ -58,9 +63,10 @@ export class DisbursementBatchController {
         return this.disbursementBatchService.update(id, updateDisbursementBatchDto);
     }
 
-    // DELETE /admin/disbursement-batch/:id
+    // DELETE /api/admin/disbursement-batch/:id
     @Delete(':id')
-    remove(@Param('id') id: string) {
+    remove(@Param('id', ParseUUIDPipe) id: string) {
+        // Delete a disbursement batch by id
         return this.disbursementBatchService.remove(id);
     }
 }

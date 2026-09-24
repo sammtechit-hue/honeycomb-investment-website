@@ -1,54 +1,63 @@
-import { Body, Controller, Get, Param, Post, Patch, Query, UsePipes, ValidationPipe } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+  UsePipes,
+} from '@nestjs/common';
+import { ZodValidationPipe } from 'nestjs-zod';
+import { CreateAuditLogDto } from './dto/create-audit-log.dto';
+import { UpdateAuditLogDto } from './dto/update-audit-log.dto';
+import { AuditLogQueryDto } from './dto/query-audit-log.dto';
 import { AuditLogService } from './audit-log.service';
 
+// Admin endpoints for the audit trail — who did what, to which row, when.
+// Validation is scoped to this controller (@UsePipes) instead of globally —
+// see main.ts for why.
 @Controller('admin/audit-log')
-@UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
+@UsePipes(ZodValidationPipe)
 export class AuditLogController {
     constructor(
         private readonly auditLogService: AuditLogService,
     ) { }
 
-    // GET /admin/audit-log?search=verified&targetTable=investor&page=1&limit=10&sortBy=createdAt&sortOrder=desc
+    // For getting all audit log entries with filtering, searching, sorting &
+    // pagination.
+    // GET /api/admin/audit-log?search=verified&action=verified_kyc
+    //   &targetTable=investors&targetId=&adminProfileId=
+    //   &createdFrom=&createdTo=&page=1&limit=10&sortBy=createdAt&sortOrder=desc
     @Get()
-    findAll(
-        @Query('search') search?: string,
-        @Query('action') action?: string,
-        @Query('targetTable') targetTable?: string,
-        @Query('adminId') adminId?: string,
-        @Query('page') page?: number,
-        @Query('limit') limit?: number,
-        @Query('sortBy') sortBy?: string,
-        @Query('sortOrder') sortOrder?: 'asc' | 'desc',
-    ) {
-        return this.auditLogService.findAll({
-            search,
-            action,
-            targetTable,
-            adminId,
-            page: page ? Number(page) : 1,
-            limit: limit ? Number(limit) : 10,
-            sortBy: sortBy ?? 'createdAt',
-            sortOrder: sortOrder ?? 'desc',
-        });
+    findAll(@Query() query: AuditLogQueryDto) {
+        // Search, filters, created-at range, sort and pagination are validated
+        // by AuditLogQueryDto.
+        return this.auditLogService.findAll(query);
     }
 
     // POST /admin/audit-log
+    // Creates an audit entry — `action`/`targetTable`/`targetId` required,
+    // `details` optional JSON, actor fields optional.
     @Post()
-    create(@Body() createAuditLogDto: { action: string; targetTable: string; targetId: string; details?: any; adminId: string }) {
+    create(@Body() createAuditLogDto: CreateAuditLogDto) {
         return this.auditLogService.create(createAuditLogDto);
     }
 
     // GET /admin/audit-log/:id
     @Get(':id')
-    findOne(@Param('id') id: string) {
+    findOne(@Param('id', ParseUUIDPipe) id: string) {
         return this.auditLogService.findOne(id);
     }
 
     // PATCH /admin/audit-log/:id
+    // Corrections only — content fields (action/targetTable/targetId) are not
+    // updatable, see UpdateAuditLogDto.
     @Patch(':id')
     update(
-        @Param('id') id: string,
-        @Body() updateAuditLogDto: { details?: any; action?: string },
+        @Param('id', ParseUUIDPipe) id: string,
+        @Body() updateAuditLogDto: UpdateAuditLogDto,
     ) {
         // Only the fields provided in the request
         // will be updated.

@@ -1,16 +1,10 @@
-import { PartialType } from '@nestjs/mapped-types';
+import { createZodDto } from 'nestjs-zod';
+import { adminUpdateInputSchema } from '@investment-platform/contracts/admin';
 
-import { CreateAdminDto } from './create-admin.dto';
-
-// All properties from CreateAdminDto become optional.
-//
-// Example:
 // PATCH /api/admin/:id
+// Every field is optional, e.g.:
+// { "department": "Compliance" }
 //
-// {
-//   "fullName": "Updated Name"
-// }
-//
-// You don't need to send phoneNumber, email, etc.
-
-export class UpdateAdminDto extends PartialType(CreateAdminDto) {}
+// `password` is not accepted here — credential changes need a dedicated,
+// re-authenticated flow (see packages/contracts/src/admin.ts).
+export class UpdateAdminDto extends createZodDto(adminUpdateInputSchema) {}

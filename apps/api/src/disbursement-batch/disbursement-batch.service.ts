@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { CreateDisbursementBatchDto } from './dto/create-disbursement-batch.dto';
 import { UpdateDisbursementBatchDto } from './dto/update-disbursement-batch.dto';
+import { DisbursementBatchQueryDto } from './dto/query-disbursement-batch.dto';
 
 @Injectable()
 export class DisbursementBatchService {
@@ -11,24 +12,21 @@ export class DisbursementBatchService {
   ) {}
 
   // For Getting All DisbursementBatch's Data with filtering, searching, sorting & pagination
-  // Example: GET /disbursement-batch?search=slot_1&status=draft&category=cbl&page=1&limit=10
-  async findAll({
-    search,
-    status,
-    category,
-    page = 1,
-    limit = 10,
-    sortBy = 'createdAt',
-    sortOrder = 'desc',
-  }: {
-    search?: string;
-    status?: string;
-    category?: string;
-    page?: number;
-    limit?: number;
-    sortBy?: string;
-    sortOrder?: 'asc' | 'desc';
-  }) {
+  // Example: GET /disbursement-batch?search=1st&slot=slot_1&exportType=cbl&status=draft&page=1&limit=10
+  async findAll(query: DisbursementBatchQueryDto) {
+    // Available filters: search, slot, exportType, status,
+    // page, limit, sortBy, sortOrder
+    const {
+      search,
+      slot,
+      exportType,
+      status,
+      page,
+      limit,
+      sortBy,
+      sortOrder,
+    } = query;
+
     return {
       message: "HelloWorld Return all DisbursementBatch's data",
     };
@@ -40,8 +38,9 @@ export class DisbursementBatchService {
   }
 
   // For Creating DisbursementBatch
+  // Validated fields: slot, slotLabel, batchDate, exportType, fileUrl, status
   async create(createDisbursementBatchDto: CreateDisbursementBatchDto) {
-    const { slot, slotLabel, batchDate } = createDisbursementBatchDto;
+    const { slot, slotLabel, batchDate, exportType } = createDisbursementBatchDto;
 
     return {
       message: 'DisbursementBatch Created Successfully',
@@ -49,6 +48,7 @@ export class DisbursementBatchService {
   }
 
   // For updating DisbursementBatch Information
+  // All fields optional — only provided fields are updated.
   async update(id: string, updateDisbursementBatchDto: UpdateDisbursementBatchDto) {
     return {
       message: 'DisbursementBatch Updated Successfully',

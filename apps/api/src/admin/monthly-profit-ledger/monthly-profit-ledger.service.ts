@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { CreateMonthlyProfitLedgerDto } from './dto/create-monthly-profit-ledger.dto';
-import { UpdateMonthlyProfitLedgerDto } from './dto/update-monthly-profit-ledger.dto';
+import type {
+    MonthlyProfitLedgerCreateInput,
+    MonthlyProfitLedgerQuery,
+    MonthlyProfitLedgerUpdateInput,
+} from '@investment-platform/contracts/monthlyProfitLedger';
 
 @Injectable()
 export class MonthlyProfitLedgerService {
@@ -11,31 +14,12 @@ export class MonthlyProfitLedgerService {
     ) { }
 
     // For Getting All MonthlyProfitLedger's Data with filtering, searching, sorting & pagination
-    // Example: GET /admin/monthly-profit-ledger?search=investment_id&status=accrued&category=accrued&page=1&limit=10
-    async findAll({
-        search,
-        status,
-        category,
-        page = 1,
-        limit = 10,
-        sortBy = 'createdAt',
-        sortOrder = 'desc',
-        min,
-        max,
-    }: {
-        search?: string;
-        status?: string;
-        category?: string;
-        page?: number;
-        limit?: number;
-        sortBy?: string;
-        sortOrder?: 'asc' | 'desc';
-        min?: number;
-        max?: number;
-    }) {
-
+    // Example: GET /admin/monthly-profit-ledger?payoutStatus=accrued&periodFrom=2026-09-01&periodTo=2026-09-30&page=1&limit=10
+    // Validated/normalized by MonthlyProfitLedgerQueryDto — all fields are typed.
+    async findAll(query: MonthlyProfitLedgerQuery) {
         return {
             message: "HelloWorld Return all MonthlyProfitLedger's data",
+            query,
         };
     }
 
@@ -45,18 +29,23 @@ export class MonthlyProfitLedgerService {
     }
 
     // For Creating MonthlyProfitLedger
-    async create(createMonthlyProfitLedgerDto: CreateMonthlyProfitLedgerDto) {
+    // Validated by CreateMonthlyProfitLedgerDto — see
+    // packages/contracts/src/monthlyProfitLedger.ts.
+    async create(createMonthlyProfitLedgerDto: MonthlyProfitLedgerCreateInput) {
         const { investmentId, periodMonth, rateApplied, profitAmount } = createMonthlyProfitLedgerDto;
 
         return {
             message: 'MonthlyProfitLedger Created Successfully',
+            data: createMonthlyProfitLedgerDto,
         };
     }
 
     // For updating MonthlyProfitLedger Information
-    async update(id: string, updateMonthlyProfitLedgerDto: UpdateMonthlyProfitLedgerDto) {
+    // Only the fields provided in the request will be updated.
+    async update(id: string, updateMonthlyProfitLedgerDto: MonthlyProfitLedgerUpdateInput) {
         return {
             message: 'MonthlyProfitLedger Updated Successfully',
+            data: updateMonthlyProfitLedgerDto,
         };
     }
 

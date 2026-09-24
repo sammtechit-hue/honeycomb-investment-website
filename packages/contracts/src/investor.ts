@@ -1,4 +1,25 @@
 import { z } from 'zod';
+import {
+  bankAccountSchema,
+  bankAccountTypeSchema,
+  bankSelectedSchema,
+  fileUrlSchema,
+  limitValidationSchema,
+  maxAmountQuerySchema,
+  minAmountQuerySchema,
+  pageValidationSchema,
+  phoneNumberSchema,
+  searchValidationSchema,
+  sortOrderSchema,
+  uuidSchema,
+} from './common.js';
+
+export {
+  bankAccountSchema,
+  bankAccountTypeSchema,
+  bankSelectedSchema,
+  type BankAccountInput,
+} from './common.js';
 
 // ---------------------------------------------------------------------------
 // Enum mirrors (kept in sync with prisma schema — avoids a runtime dep on
@@ -21,68 +42,13 @@ export const investorCategorySchema = z.enum([
   'titanium',
 ]);
 
-// Mirrors Prisma `BankSelected` enum
-export const bankSelectedSchema = z.enum(['city_bank', 'others']);
 
-// Mirrors Prisma `BankAccountType` enum
-export const bankAccountTypeSchema = z.enum(['savings', 'current']);
-
-// URL validator for uploaded file references (S3/CDN links)
-const fileUrlSchema = z
-  .string()
-  .trim()
-  .url('File URL must be a valid URL')
-  .max(500, 'File URL cannot exceed 500 characters');
-
-
-
-// Bank Account Schema
-export const bankAccountSchema = z
-  .object({
-    selectedBank: bankSelectedSchema, 
-    bankName: z
-      .string()
-      .trim()
-      .min(2, 'Bank name must be at least 2 characters')
-      .max(100, 'Bank name cannot exceed 100 characters'),
-    accountName: z
-      .string()
-      .trim()
-      .min(2, 'Account name must be at least 2 characters')
-      .max(150, 'Account name cannot exceed 150 characters')
-      .regex(
-        /^[a-zA-Z\s.\-']+$/,
-        "Account name can only contain letters, spaces, hyphens, periods, and apostrophes",
-      ),
-    accountNumber: z
-      .string()
-      .trim()
-      .min(6, 'Account number must be at least 6 digits')
-      .max(50, 'Account number cannot exceed 50 characters')
-      .regex(/^[0-9\-]+$/, 'Account number can only contain digits and hyphens'),
-    routingNumber: z
-      .string()
-      .trim()
-      .length(9, 'Routing number must be exactly 9 digits')  //Discuss
-      .regex(/^\d+$/, 'Routing number must contain only digits')
-      .optional(),
-    accountType: bankAccountTypeSchema.optional(),
-    branchName: z
-      .string()
-      .trim()
-      .max(150, 'Branch name cannot exceed 150 characters')
-      .optional(),
-  })
-  // Cross-field rule: non-city-bank accounts require a routing number for BEFTN
-  .refine(
-    (data) => data.selectedBank === 'city_bank' || !!data.routingNumber,
-    {
-      message: 'Routing number is required for banks other than City Bank',
-      path: ['routingNumber'],
-    },
-  );
-
-export type BankAccountInput = z.infer<typeof bankAccountSchema>;
+// Mirrors Prisma `VerificationStatus` enum (used for KYC checking)
+export const verificationStatusSchema = z.enum([
+  'pending',
+  'verified',
+  'rejected',
+]);
 
 // NomineeSchema
 export const nomineeSchema = z.object({
@@ -90,27 +56,8 @@ export const nomineeSchema = z.object({
     .string()
     .trim()
     .min(2, 'Nominee name must be at least 2 characters')
-    .max(150, 'Nominee name cannot exceed 150 characters')
-    .regex(
-      /^[a-zA-Z\s.\-']+$/,
-      "Nominee name can only contain letters, spaces, hyphens, periods, and apostrophes",
-    ),
-  // Phone Number
-  nomineePhone: z
-    .string({ required_error: 'Phone number is required' })
-    .trim()
-    // Remove spaces, dashes, parentheses (common user input)
-    .transform((val) => val.replace(/[\s\-()]/g, ''))
-    // Now enforce the BD mobile format
-    .refine(
-      (val) => /^(?:\+?880|0)1[3-9]\d{8}$/.test(val),
-      { message: 'Phone number must be a valid Bangladeshi mobile number' }
-    )
-    // Normalize to a single canonical format: +8801XXXXXXXXX
-    .transform((val) => {
-      const digits = val.replace(/^\+?880/, '').replace(/^0/, '');
-      return `+880${digits}`;
-    }),
+    .max(150, 'Nominee name cannot exceed 150 characters'),
+  nomineePhone: phoneNumberSchema,
 
   relation: z
     .string()
@@ -139,18 +86,12 @@ export type KycDocumentsInput = z.infer<typeof kycDocumentsSchema>;
 // ---------------------------------------------------------------------------
 // Create
 // ---------------------------------------------------------------------------
-
-
 export const investorCreateInputSchema = z.object({
   fullName: z
     .string()
     .trim()
-    .min(5, 'Full name must be at least 5 characters')
-    .max(150, 'Full name cannot exceed 150 characters')
-    .regex(
-      /^[a-zA-Z\s.\-']+$/,
-      "Full name can only contain letters, spaces, hyphens, periods, and apostrophes",
-    ),
+    .min(3, 'Full name must be at least 5 characters')
+    .max(150, 'Full name cannot exceed 150 characters'),
   address: z
     .string()
     .trim()
@@ -204,19 +145,27 @@ export type InvestorUpdateInput = z.infer<typeof investorUpdateInputSchema>;
 // /api/admin/investors?search=Rahman&status=active&category=gold&page=1&limit=15&sortBy=fullName&sortOrder=asc
 
 export const investorQuerySchema = z.object({
-  search: z.string().trim().optional(),
+  search: searchValidationSchema,
   status: investorStatusSchema.optional(),
   category: investorCategorySchema.optional(),
-  page: z.coerce.number().int().min(1).default(1),
+
+  // NEW: Filters for administrative bank profiling & matching
+  selectedBank: bankSelectedSchema.optional(),
+  accountType: bankAccountTypeSchema.optional(),
+
+  // NEW: Verification state filter for KYC submissions
+  kycVerificationStatus: verificationStatusSchema.optional(),
+  page: pageValidationSchema,
+
   // Safer — prevents garbage strings reaching Prisma
-  approvedBy: z.string().uuid().optional(),
-  limit: z.coerce.number().int().min(1).max(100).default(10),
+  approvedBy: uuidSchema.optional(),
+  limit: limitValidationSchema,
   sortBy: z
     .enum(['fullName', 'email', 'category', 'status', 'createdAt'])
     .default('createdAt'),
-  sortOrder: z.enum(['asc', 'desc']).default('desc'),
-  minTotalInvestment: z.coerce.number().min(0).default(0),
-  maxTotalInvestment: z.coerce.number().min(0).default(100_000_000),
+  sortOrder: sortOrderSchema,
+  minTotalInvestment: minAmountQuerySchema,
+  maxTotalInvestment: maxAmountQuerySchema,
 })
   // Cross-field rule: max must be >= min
   .refine((data) => data.maxTotalInvestment >= data.minTotalInvestment, {

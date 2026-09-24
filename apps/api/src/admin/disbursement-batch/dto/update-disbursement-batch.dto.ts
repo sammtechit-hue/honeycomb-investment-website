@@ -1,16 +1,14 @@
-import { PartialType } from '@nestjs/mapped-types';
+import { createZodDto } from 'nestjs-zod';
+import { disbursementBatchUpdateInputSchema } from '@investment-platform/contracts/disbursementBatch';
 
-import { CreateDisbursementBatchDto } from './create-disbursement-batch.dto';
-
-// All properties from CreateDisbursementBatchDto become optional.
+// PATCH /api/admin/disbursement-batch/:id — all batch fields optional
+// (see packages/contracts/src/disbursementBatch.ts).
 //
 // Example:
 // PATCH /api/admin/disbursement-batch/:id
-//
 // {
 //   "status": "exported"
 // }
-//
-// You don't need to send slot, batchDate, etc.
-
-export class UpdateDisbursementBatchDto extends PartialType(CreateDisbursementBatchDto) {}
+export class UpdateDisbursementBatchDto extends createZodDto(
+  disbursementBatchUpdateInputSchema,
+) {}

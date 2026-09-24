@@ -1,46 +1,55 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UsePipes, ValidationPipe } from '@nestjs/common';
-import { NotificationService } from './notification.service';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+  UsePipes,
+} from '@nestjs/common';
+import { ZodValidationPipe } from 'nestjs-zod';
 import { CreateNotificationDto } from './dto/create-notification.dto';
-// import { QueryNotificationDto } from './dto/query-notification.dto';
+import { UpdateNotificationStatusDto } from './dto/update-notification-status.dto';
+import { NotificationQueryDto } from './dto/query-notification.dto';
+import { NotificationService } from './notification.service';
 
+// Admin notification endpoints — the in-app feed of payout reminders,
+// investment requests and document expiries.
+// Validation is scoped to this controller (@UsePipes) instead of globally —
+// see main.ts for why.
 @Controller('notification')
-@UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
+@UsePipes(ZodValidationPipe)
 export class NotificationController {
     constructor(private readonly notificationService: NotificationService) {}
 
-    // For Investor and admin - with filtering, searching, sorting & pagination like admin/investor findAll
-    @Get(':id')
-    findAll(
-        @Param('id') id: string,
-        @Query('search') search?: string,
-        @Query('status') status?: string,
-        @Query('category') category?: string,
-        @Query('page') page?: number,
-        @Query('limit') limit?: number,
-        @Query('sortBy') sortBy?: string,
-        @Query('sortOrder') sortOrder?: 'asc' | 'desc',
-    ){
-        // GET /notification/:id?search=john&status=active&category=gold&page=1&limit=10&sortBy=createdAt&sortOrder=desc
-        return this.notificationService.findAll({
-            id,
-            search,
-            status,
-            category,
-            page: page ? Number(page) : 1,
-            limit: limit ? Number(limit) : 10,
-            sortBy: sortBy ?? 'createdAt',
-            sortOrder: sortOrder ?? 'desc',
-        });
+    // For getting all notifications with filtering, searching, sorting &
+    // pagination.
+    // GET /api/notification?search=payout&type=upcoming_payout&isRead=false
+    //   &referenceType=&referenceId=&createdFrom=&createdTo=
+    //   &page=1&limit=10&sortBy=createdAt&sortOrder=desc
+    @Get()
+    findAll(@Query() query: NotificationQueryDto) {
+        // Search, filters, created-at range, sort and pagination are validated
+        // by NotificationQueryDto.
+        return this.notificationService.findAll(query);
     }
 
+    // For creating a notification.
+    // `isRead` defaults to false; `referenceId`/`referenceType` are an
+    // all-or-nothing pair.
     @Post()
     createNotification(@Body() createNotificationDto: CreateNotificationDto) {
         return this.notificationService.create(createNotificationDto);
     }
 
-    // For update one's notification status
+    // For updating one notification's read status.
     @Patch(':id/status')
-    update(@Param('id') id: string, @Body() dto: any) {
+    updateStatus(
+        @Param('id', ParseUUIDPipe) id: string,
+        @Body() dto: UpdateNotificationStatusDto,
+    ) {
         return this.notificationService.updateStatus(id, dto);
     }
 }

@@ -9,6 +9,7 @@ import {
   Post,
   Query,
   UsePipes,
+  Req
 } from '@nestjs/common';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { CreateInvestorDto } from './dto/create-investor.dto';

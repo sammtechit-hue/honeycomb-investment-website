@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { CreateDisbursementItemDto } from './dto/create-disbursement-item.dto';
 import { UpdateDisbursementItemDto } from './dto/update-disbursement-item.dto';
+import { DisbursementItemQueryDto } from './dto/query-disbursement-item.dto';
 
 @Injectable()
 export class DisbursementItemService {
@@ -11,24 +12,23 @@ export class DisbursementItemService {
     ) { }
 
     // For Getting All DisbursementItem's Data with filtering, searching, sorting & pagination
-    // Example: GET /admin/disbursement-item?search=ROI&status=cbl&category=cbl&page=1&limit=10
-    async findAll({
-        search,
-        status,
-        category,
-        page = 1,
-        limit = 10,
-        sortBy = 'createdAt',
-        sortOrder = 'desc',
-    }: {
-        search?: string;
-        status?: string;
-        category?: string;
-        page?: number;
-        limit?: number;
-        sortBy?: string;
-        sortOrder?: 'asc' | 'desc';
-    }) {
+    // Example: GET /admin/disbursement-item?search=ROI&batchId=&exportFormat=cbl&page=1&limit=10
+    async findAll(query: DisbursementItemQueryDto) {
+        
+        const {
+            search,
+            batchId,
+            investmentId,
+            investorId,
+            exportFormat,
+            snapshotBankName,
+            minAmount,
+            maxAmount,
+            page,
+            limit,
+            sortBy,
+            sortOrder,
+        } = query;
 
         return {
             message: "HelloWorld Return all DisbursementItem's data",
@@ -41,6 +41,8 @@ export class DisbursementItemService {
     }
 
     // For Creating DisbursementItem
+    // Validated fields: reason, amount, exportFormat, remarks, investmentId,
+    // investorId, batchId and the snapshot* bank details
     async create(createDisbursementItemDto: CreateDisbursementItemDto) {
         const { batchId, investorId, reason, amount } = createDisbursementItemDto;
 
@@ -50,6 +52,7 @@ export class DisbursementItemService {
     }
 
     // For updating DisbursementItem Information
+    // All fields optional — only provided fields are updated.
     async update(id: string, updateDisbursementItemDto: UpdateDisbursementItemDto) {
         return {
             message: 'DisbursementItem Updated Successfully',

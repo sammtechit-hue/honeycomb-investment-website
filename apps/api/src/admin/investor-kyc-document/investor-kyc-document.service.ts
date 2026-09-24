@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { CreateInvestorKycDocumentDto } from './dto/create-investor-kyc-document.dto';
-import { UpdateInvestorKycDocumentDto } from './dto/update-investor-kyc-document.dto';
+import type {
+    InvestorKycDocumentCreateInput,
+    InvestorKycDocumentQuery,
+    InvestorKycDocumentUpdateInput,
+} from '@investment-platform/contracts/investorKycDocument';
 
 @Injectable()
 export class InvestorKycDocumentService {
@@ -11,46 +14,39 @@ export class InvestorKycDocumentService {
     ) { }
 
     // For Getting All InvestorKycDocument's Data with filtering, searching, sorting & pagination
-    // Example: GET /admin/investor-kyc-document?search=nid&status=pending&category=nid&page=1&limit=10
-    async findAll({
-        search,
-        status,
-        category,
-        page = 1,
-        limit = 10,
-        sortBy = 'createdAt',
-        sortOrder = 'desc',
-    }: {
-        search?: string;
-        status?: string;
-        category?: string;
-        page?: number;
-        limit?: number;
-        sortBy?: string;
-        sortOrder?: 'asc' | 'desc';
-    }) {
+    // Example: GET /admin/investor-kyc-document?verificationStatus=pending&page=1&limit=10
+    // Validated/normalized by InvestorKycDocumentQueryDto — all fields are typed.
+    async findAll(query: InvestorKycDocumentQuery) {
         return {
-            message: "HelloWorld Return all InvestorKycDocument's data",
+            message: "Return all InvestorKycDocument's data",
+            query,
         };
     }
 
     // For Getting One InvestorKycDocument's Data
     async findOne(id: string) {
-        return id + 'This route is for InvestorKycDocument who will see their necessary data and partially modify data';
+        return { message: `${id} - Return a single investor KYC document` };
     }
 
     // For Creating InvestorKycDocument
-    // Expected fields (to be added to the DTO): investorId, docType, fileUrl
-    async create(createInvestorKycDocumentDto: CreateInvestorKycDocumentDto) {
+    // Validated by CreateInvestorKycDocumentDto — three file URLs plus the
+    // owning investor; Prisma enforces one KYC set per investor.
+    async create(createInvestorKycDocumentDto: InvestorKycDocumentCreateInput) {
+        // TODO: write an AuditLog entry (action: investor_kyc_uploaded).
         return {
             message: 'InvestorKycDocument Created Successfully',
+            data: createInvestorKycDocumentDto,
         };
     }
 
     // For updating InvestorKycDocument Information
-    async update(id: string, updateInvestorKycDocumentDto: UpdateInvestorKycDocumentDto) {
+    // A review decision only sends `verificationStatus` — see
+    // UpdateInvestorKycDocumentDto. Status changes should also land in the
+    // audit trail (action: investor_kyc_status_changed).
+    async update(id: string, updateInvestorKycDocumentDto: InvestorKycDocumentUpdateInput) {
         return {
             message: 'InvestorKycDocument Updated Successfully',
+            data: updateInvestorKycDocumentDto,
         };
     }
 

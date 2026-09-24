@@ -1,46 +1,53 @@
-import { Body, Controller, Get, Param, Post, Patch, Delete, Query, UsePipes, ValidationPipe } from '@nestjs/common';
+import {
+    Body,
+    Controller,
+    Delete,
+    Get,
+    Param,
+    ParseUUIDPipe,
+    Patch,
+    Post,
+    Query,
+    UsePipes,
+} from '@nestjs/common';
+import { ZodValidationPipe } from 'nestjs-zod';
 import { CreateInvestmentDocumentDto } from './dto/create-investment-document.dto';
 import { UpdateInvestmentDocumentDto } from './dto/update-investment-document.dto';
+import { InvestmentDocumentQueryDto } from './dto/query-investment-document.dto';
 import { InvestmentDocumentService } from './investment-document.service';
 
+// Admin endpoints for investment documents — where the deed, cheque, voucher
+// and certificate handovers get recorded. Validation is scoped to this
+// controller (@UsePipes) instead of globally — see main.ts for why.
 @Controller('admin/investment-document')
-@UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
+@UsePipes(ZodValidationPipe)
 export class InvestmentDocumentController {
     constructor(
         private readonly investmentDocumentService: InvestmentDocumentService,
     ) { }
 
-    // GET /admin/investment-document?search=deed&status=active&category=certificate&page=1&limit=10&sortBy=createdAt&sortOrder=desc
+    // For getting all investment document bundles with filtering, searching,
+    // sorting & pagination.
+    // GET /api/admin/investment-document?search=deed&investmentId=
+    //   &hasDocument=certificate&uploadedFrom=&uploadedTo=
+    //   &page=1&limit=10&sortBy=uploadedAt&sortOrder=desc
     @Get()
-    findAll(
-        @Query('search') search?: string,
-        @Query('status') status?: string,
-        @Query('category') category?: string,
-        @Query('page') page?: number,
-        @Query('limit') limit?: number,
-        @Query('sortBy') sortBy?: string,
-        @Query('sortOrder') sortOrder?: 'asc' | 'desc',
-    ) {
-        // GET /admin/investment-document?search=deed&status=active&category=certificate&page=1&limit=10&sortBy=createdAt&sortOrder=desc
-        return this.investmentDocumentService.findAll({
-            search,
-            status,
-            category,
-            page: page ? Number(page) : 1,
-            limit: limit ? Number(limit) : 10,
-            sortBy: sortBy ?? 'createdAt',
-            sortOrder: sortOrder ?? 'desc',
-        });
+    findAll(@Query() query: InvestmentDocumentQueryDto) {
+        // Search, filters, uploaded-at range, sort and pagination are
+        // validated by InvestmentDocumentQueryDto.
+        return this.investmentDocumentService.findAll(query);
     }
 
     // GET /admin/investment-document/:id
     @Get(':id')
-    findOne(@Param('id') id: string) {
+    findOne(@Param('id', ParseUUIDPipe) id: string) {
         // Return a single investment document data
         return this.investmentDocumentService.findOne(id);
     }
 
     // POST /admin/investment-document
+    // At least one document slot is required; Prisma enforces one bundle per
+    // investment (investmentId is unique).
     @Post()
     create(@Body() createInvestmentDocumentDto: CreateInvestmentDocumentDto) {
         // Create a new investment document record
@@ -48,9 +55,10 @@ export class InvestmentDocumentController {
     }
 
     // PATCH /admin/investment-document/:id
+    // Used to record each handover (certificate given, souvenir given, ...).
     @Patch(':id')
     update(
-        @Param('id') id: string,
+        @Param('id', ParseUUIDPipe) id: string,
         @Body() updateInvestmentDocumentDto: UpdateInvestmentDocumentDto,
     ) {
         // Only the fields provided in the request
@@ -61,7 +69,7 @@ export class InvestmentDocumentController {
 
     // DELETE /admin/investment-document/:id
     @Delete(':id')
-    remove(@Param('id') id: string) {
+    remove(@Param('id', ParseUUIDPipe) id: string) {
         // Delete an investment document by id
         return this.investmentDocumentService.remove(id);
     }

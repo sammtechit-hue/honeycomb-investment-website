@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
+import { ProjectQueryDto } from './dto/query-project.dto';
 
 @Injectable()
 export class ProjectService {
@@ -11,24 +12,13 @@ export class ProjectService {
     ) { }
 
     // For Getting All Project's Data with filtering, searching, sorting & pagination
-    // Example: GET /admin/project?search=deed&status=active&category=certificate&page=1&limit=10
-    async findAll({
-        search,
-        status,
-        category,
-        page = 1,
-        limit = 10,
-        sortBy = 'createdAt',
-        sortOrder = 'desc',
-    }: {
-        search?: string;
-        status?: string;
-        category?: string;
-        page?: number;
-        limit?: number;
-        sortBy?: string;
-        sortOrder?: 'asc' | 'desc';
-    }) {
+    // Example: GET /admin/project?search=deed&status=OPEN&page=1&limit=10
+    async findAll(query: ProjectQueryDto) {
+        // Available filters: search, status, isActive, isVisible,
+        // minInvestment, maxInvestment, fromDate, toDate,
+        // page, limit, sortBy, sortOrder
+        const { search, status, isActive, isVisible, minInvestment, maxInvestment, page, limit, sortBy, sortOrder } = query;
+
         return {
             message: "HelloWorld Return all Project's data",
         };
@@ -40,7 +30,9 @@ export class ProjectService {
     }
 
     // For Creating Project
-    // Expected fields (to be added to the DTO): name, description, etc.
+    // Validated fields: name, description, status, minimumInvestment,
+    // maximumInvestment, targetAmount, startDate, endDate, isActive, isVisible
+    // (totalInvestedAmount is server-managed and never client-submitted)
     async create(createProjectDto: CreateProjectDto) {
         return {
             message: 'Project Created Successfully',
@@ -48,6 +40,7 @@ export class ProjectService {
     }
 
     // For updating Project Information
+    // All fields optional — only provided fields are updated.
     async update(id: string, updateProjectDto: UpdateProjectDto) {
         return {
             message: 'Project Updated Successfully',
