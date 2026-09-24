@@ -3,20 +3,24 @@ import {
   accountNameSchema,
   accountNumberSchema,
   bankAccountTypeSchema,
+  bankExportFormatSchema,
   bankNameSchema,
   branchNameSchema,
+  limitValidationSchema,
   moneySchema,
+  nonNegativeNumberSchema,
+  pageValidationSchema,
   routingNumberSchema,
+  searchValidationSchema,
+  sortOrderSchema,
   uuidSchema,
 } from './common.js';
 
 // Mirrors Prisma `ExportFormat` — file format of this single line item.
-export const exportFormatSchema = z.enum(['cbl', 'beftn'], {
-  message: 'Export format must be one of: cbl, beftn',
-});
+export const exportFormatSchema = bankExportFormatSchema;
 
 
-const disbursementItemBaseSchema = z.object({
+export const disbursementItemBaseSchema = z.object({
   // Why the investor is being paid — VarChar(150) in Prisma.
   reason: z
     .string()
@@ -78,11 +82,7 @@ export const disbursementItemSortBySchema = z.enum([
 
 export const disbursementItemQuerySchema = z
   .object({
-    search: z
-      .string()
-      .trim()
-      .max(150, 'Search cannot exceed 150 characters')
-      .optional(),
+    search: searchValidationSchema,
 
     // --- Filters ---
     batchId: uuidSchema.optional(),
@@ -92,31 +92,16 @@ export const disbursementItemQuerySchema = z
     snapshotBankName: bankNameSchema,
 
     // Amount range (both ends inclusive and optional).
-    minAmount: z.coerce
-      .number()
-      .nonnegative('minAmount cannot be negative')
-      .optional(),
-    maxAmount: z.coerce
-      .number()
-      .nonnegative('maxAmount cannot be negative')
-      .optional(),
+    minAmount: nonNegativeNumberSchema.optional(),
+    maxAmount: nonNegativeNumberSchema.optional(),
 
     // --- Pagination ---
-    page: z.coerce
-      .number()
-      .int('Page must be a whole number')
-      .min(1, 'Page must be at least 1')
-      .default(1),
-    limit: z.coerce
-      .number()
-      .int('Limit must be a whole number')
-      .min(1, 'Limit must be at least 1')
-      .max(100, 'Limit cannot exceed 100')
-      .default(10),
+    page: pageValidationSchema,
+    limit: limitValidationSchema,
 
     // --- Sorting ---
     sortBy: disbursementItemSortBySchema.default('createdAt'),
-    sortOrder: z.enum(['asc', 'desc']).default('desc'),
+    sortOrder: sortOrderSchema,
   })
 
 export type DisbursementItemQuery = z.infer<typeof disbursementItemQuerySchema>;

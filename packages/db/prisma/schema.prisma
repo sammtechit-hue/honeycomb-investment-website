@@ -221,7 +221,7 @@ model Investor {
     user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
     kycDocuments InvestorKycDocument?
-    bankAccount  InvestorBankAccount?
+    bankAccount  InvestorBankAccount[]
     nominee      Nominee?
     investments  Investment[]
 
@@ -294,8 +294,9 @@ model InvestorBankAccount {
     routingNumber String?          @map("routing_number") @db.VarChar(9)
     accountType   BankAccountType? @map("account_type")
     branchName    String?
+    isActive      Boolean          @default(false)
 
-    investorId String   @unique @map("investor_id") @db.Uuid
+    investorId String   @map("investor_id") @db.Uuid
     investor   Investor @relation(fields: [investorId], references: [id], onDelete: Cascade)
 
     @@map("investor_bank_accounts")
@@ -435,7 +436,7 @@ model InvestmentDocument {
     membership_card String?
     souvenir        String?
     proof_photo     String?
-    clearance_video String?
+    clearance_video String? //8
 
     uploadedAt DateTime @default(now()) @map("uploaded_at")
 
@@ -662,7 +663,6 @@ model RoiCalculatorLead {
     phoneNumber          String   @map("phone_number") @db.VarChar(20)
     email                String?  @db.VarChar(150)
     enteredAmount        Decimal  @map("entered_amount") @db.Decimal(14, 2)
-    calculatedProjection Json?    @map("calculated_projection")
     createdAt            DateTime @default(now()) @map("created_at")
     followedUp           Boolean  @default(false) @map("followed_up")
 
@@ -678,10 +678,8 @@ model AdminNotification {
     id            String                @id @default(uuid()) @db.Uuid
     type          AdminNotificationType
     referenceId   String?               @map("reference_id") @db.Uuid
-    // Polymorphic reference to the related entity.
-    referenceType String?               @map("reference_type") @db.VarChar(50)
 
-    message   String   @db.VarChar(255)
+    message   String?   @db.VarChar(255)
     isRead    Boolean  @default(false) @map("is_read")
     createdAt DateTime @default(now()) @map("created_at")
 
@@ -694,19 +692,83 @@ model AdminNotification {
 // 20. Audit Log
 // ----------------------------------------------------------------------------
 
+// model AuditLog {
+//     id             String        @id @default(uuid()) @db.Uuid
+//     action         AuditAction // was: String @db.VarChar(100)
+//     targetTable    String        @map("target_table") @db.VarChar(50)
+//     targetId       String        @map("target_id") @db.Uuid
+//     details        Json?
+//     createdAt      DateTime      @default(now()) @map("created_at")
+//     adminName      String?
+
+//     adminProfileId String?       @db.Uuid
+//     adminProfile   AdminProfile? @relation(fields: [adminProfileId], references: [id])
+
+//     @@index([targetTable, targetId])
+//     @@index([createdAt])
+//     @@map("audit_log")
+// }
+
+enum LogModule {
+    CATALOG
+    PRODUCT
+    ORDER
+    USER
+    MARKETING
+    INVENTORY
+    CONTENT
+    SUPPORT
+    AUTH
+    SYSTEM
+}
+
+enum LogSeverity {
+    INFO
+    WARNING
+    ERROR
+    CRITICAL
+}
+
+enum LogStatus {
+    SUCCESS
+    FAILED
+    PENDING
+}
+
 model AuditLog {
-    id             String        @id @default(uuid()) @db.Uuid
-    action         AuditAction // was: String @db.VarChar(100)
-    targetTable    String        @map("target_table") @db.VarChar(50)
-    targetId       String        @map("target_id") @db.Uuid
-    details        Json?
-    createdAt      DateTime      @default(now()) @map("created_at")
-    adminName      String?
-    
+    id        Int     @id @default(autoincrement())
+    adminName String?
+
     adminProfileId String?       @db.Uuid
     adminProfile   AdminProfile? @relation(fields: [adminProfileId], references: [id])
 
-    @@index([targetTable, targetId])
+    // What happened
+    action   AuditAction // "UPDATE_PRODUCT", "DELETE_ORDER"
+    module   LogModule? // PRODUCT, ORDER, etc.
+    severity LogSeverity @default(INFO)
+    status   LogStatus   @default(SUCCESS)
+
+    // What was affected
+    targetLabel String? // Human-readable name at time of action
+    targetTable String  @map("target_table") @db.VarChar(50)
+    targetId    String  @map("target_id") @db.Uuid
+
+    // What changed
+    oldValue Json? // Previous state
+    newValue Json? // New state
+    metadata Json? // Extra context
+
+    // Who, where, when
+    ipAddress String?
+    userAgent String?
+    sessionId String? // Group related actions
+
+    statement String?
+
+    createdAt DateTime @default(now())
+
+    @@index([adminProfileId])
+    @@index([module])
     @@index([createdAt])
-    @@map("audit_log")
+    @@index([targetId])
 }

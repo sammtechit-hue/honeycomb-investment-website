@@ -1,5 +1,14 @@
 import { z } from 'zod';
-import { fileUrlSchema } from './common.js';
+import {
+  bankExportFormatSchema,
+  dateSchema,
+  fileUrlSchema,
+  limitValidationSchema,
+  pageValidationSchema,
+  searchValidationSchema,
+  sortOrderSchema,
+} from './common.js';
+import { disbursementItemBaseSchema } from './disbursementItem.js';
 
 // Mirrors Prisma `DisbursementSlot` — the 4 fixed payout windows.
 export const disbursementSlotSchema = z.enum(
@@ -10,12 +19,7 @@ export const disbursementSlotSchema = z.enum(
 );
 
 // Mirrors Prisma `DisbursementExportType` — format of the exported file.
-export const disbursementExportTypeSchema = z.enum(
-  ['cbl', 'beftn'],
-  {
-    message: 'Export type must be one of: cbl, beftn',
-  },
-);
+export const disbursementExportTypeSchema = bankExportFormatSchema;
 
 // Mirrors Prisma `DisbursementBatchStatus`.
 export const disbursementBatchStatusSchema = z.enum(
@@ -37,10 +41,10 @@ const disbursementBatchBaseSchema = z.object({
     .string()
     .trim()
     .min(1, 'Slot label is required')
-    .max(50, 'Slot label cannot exceed 50 characters'),
+    .max(50, 'Slot label cannot exceed 50 characters').optional(),
 
   // Batch date — @db.Date in Prisma; accepts ISO strings and Date objects.
-  batchDate: z.coerce.date(),
+  batchDate: dateSchema,
 
   // Export file type for the whole batch — required in Prisma.
   exportType: disbursementExportTypeSchema,
@@ -50,6 +54,7 @@ const disbursementBatchBaseSchema = z.object({
 
   // Defaults to draft in Prisma; only set explicitly to skip the draft step.
   status: disbursementBatchStatusSchema.default('draft'),
+
 });
 
 // ============================================================================
@@ -109,11 +114,7 @@ export const disbursementBatchSortBySchema = z.enum([
 export const disbursementBatchQuerySchema = z
   .object({
     // Free-text search over the slot label (e.g. "1st-8th").
-    search: z
-      .string()
-      .trim()
-      .max(50, 'Search cannot exceed 50 characters')
-      .optional(),
+    search: searchValidationSchema,
 
     // --- Filters ---
     slot: disbursementSlotSchema.optional(),
@@ -121,21 +122,12 @@ export const disbursementBatchQuerySchema = z
     status: disbursementBatchStatusSchema.optional(),
 
     // --- Pagination ---
-    page: z.coerce
-      .number()
-      .int('Page must be a whole number')
-      .min(1, 'Page must be at least 1')
-      .default(1),
-    limit: z.coerce
-      .number()
-      .int('Limit must be a whole number')
-      .min(1, 'Limit must be at least 1')
-      .max(100, 'Limit cannot exceed 100')
-      .default(10),
+    page: pageValidationSchema,
+    limit: limitValidationSchema,
 
     // --- Sorting ---
     sortBy: disbursementBatchSortBySchema.default('createdAt'),
-    sortOrder: z.enum(['asc', 'desc']).default('desc'),
+    sortOrder: sortOrderSchema,
   })
 
 export type DisbursementBatchQuery = z.infer<

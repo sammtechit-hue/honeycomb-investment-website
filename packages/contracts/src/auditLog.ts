@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { uuidSchema } from './common.js';
+import { dateSchema, ipAddressSchema, limitValidationSchema, pageValidationSchema, searchValidationSchema, sortOrderSchema, uuidSchema } from './common.js';
 
 // ============================================================================
 // Audit Log — shared zod contracts
@@ -26,6 +26,25 @@ export const auditActionSchema = z.enum([
   'company_document_uploaded',
 ]);
 
+
+// Mirrors Prisma `LogSeverity` enum.
+export const logSeveritySchema = z.enum(['INFO', 'WARNING', 'ERROR', 'CRITICAL']);
+
+// Mirrors Prisma `LogStatus` enum.
+export const logStatusSchema = z.enum(['SUCCESS', 'FAILURE', 'PENDING']);
+
+export const logModuleSchema = z.enum([
+  'INVESTOR',
+  'INVESTMENT',
+  'KYC',
+  'DISBURSEMENT',
+  'WITHDRAWAL',
+  'REFERRAL',
+  'COMPANY_DOCUMENT',
+  'AUTH',
+  'SYSTEM',
+]);
+
 // The table/entity the action was performed on, e.g. "investors".
 // VarChar(50) in Prisma.
 export const auditTargetTableSchema = z
@@ -33,6 +52,50 @@ export const auditTargetTableSchema = z
   .trim()
   .min(2, 'Target table must be at least 2 characters')
   .max(50, 'Target table cannot exceed 50 characters');
+
+export const auditTargetLabelSchema = z
+  .string()
+  .trim()
+  .min(1, 'Target label cannot be empty')
+  .max(255, 'Target label cannot exceed 255 characters');
+
+
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
+export const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+    z.array(jsonValueSchema),
+    z.record(jsonValueSchema),
+  ]),
+);
+
+
+
+export const auditUserAgentSchema = z
+  .string()
+  .trim()
+  .max(512, 'User agent cannot exceed 512 characters');
+
+export const auditSessionIdSchema = z
+  .string()
+  .trim()
+  .min(1, 'Session id cannot be empty')
+  .max(255, 'Session id cannot exceed 255 characters');
+
+export const auditStatementSchema = z
+  .string()
+  .trim()
+  .max(5000, 'Statement cannot exceed 5000 characters');
 
 
 // ============================================================================
@@ -42,18 +105,31 @@ export const auditTargetTableSchema = z
 // ============================================================================
 
 const auditLogBaseSchema = z.object({
-  action: auditActionSchema,
-  targetTable: auditTargetTableSchema,
-  // Uuid of the affected row.
-  targetId: uuidSchema,
-  // Acting admin (null for system-generated entries).
   adminProfileId: uuidSchema.nullish(),
-  // Denormalized display name kept for readability after profile deletion.
   adminName: z
     .string()
     .trim()
     .max(150, 'Admin name cannot exceed 150 characters')
     .nullish(),
+  action: auditActionSchema,
+  // Uuid of the affected row.
+  module: logModuleSchema.nullish(),
+  // Acting admin (null for system-generated entries).
+  severity: logSeveritySchema.default('INFO'),
+  status: logStatusSchema.default('SUCCESS'),
+
+  targetLabel: auditTargetLabelSchema.nullish(),
+  targetId: uuidSchema,
+  targetTable: auditTargetTableSchema,
+
+  oldValue: jsonValueSchema.nullish(),
+  newValue: jsonValueSchema.nullish(),
+  metadata: jsonValueSchema.nullish(),
+
+  ipAddress: ipAddressSchema.nullish(),
+  userAgent: auditUserAgentSchema.nullish(),
+  sessionId: auditSessionIdSchema.nullish(),
+  statement: auditStatementSchema.nullish(),
 });
 
 // ============================================================================
@@ -91,16 +167,15 @@ export const auditLogSortBySchema = z.enum([
   'targetTable',
   'createdAt',
   'adminProfileId',
+  'severity',
+  'status',
+  'module',
 ]);
 
 export const auditLogQuerySchema = z
   .object({
     // Free-text search over action, target table and admin name.
-    search: z
-      .string()
-      .trim()
-      .max(150, 'Search cannot exceed 150 characters')
-      .optional(),
+    search: searchValidationSchema,
 
     // --- Filters ---
     action: auditActionSchema.optional(),
@@ -110,25 +185,16 @@ export const auditLogQuerySchema = z
 
     // Time range (both ends inclusive and optional) — the natural "when"
     // filter for audit trails (@@index([createdAt])).
-    createdFrom: z.coerce.date().optional(),
-    createdTo: z.coerce.date().optional(),
+    createdFrom: dateSchema.optional(),
+    createdTo: dateSchema.optional(),
 
     // --- Pagination ---
-    page: z.coerce
-      .number()
-      .int('Page must be a whole number')
-      .min(1, 'Page must be at least 1')
-      .default(1),
-    limit: z.coerce
-      .number()
-      .int('Limit must be a whole number')
-      .min(1, 'Limit must be at least 1')
-      .max(100, 'Limit cannot exceed 100')
-      .default(10),
+    page: pageValidationSchema,
+    limit: limitValidationSchema,
 
     // --- Sorting ---
     sortBy: auditLogSortBySchema.default('createdAt'),
-    sortOrder: z.enum(['asc', 'desc']).default('desc'),
+    sortOrder: sortOrderSchema,
   })
   .refine(
     (data) =>

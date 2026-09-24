@@ -4,7 +4,14 @@ import {
   bankAccountTypeSchema,
   bankSelectedSchema,
   fileUrlSchema,
+  limitValidationSchema,
+  maxAmountQuerySchema,
+  minAmountQuerySchema,
+  pageValidationSchema,
   phoneNumberSchema,
+  searchValidationSchema,
+  sortOrderSchema,
+  uuidSchema,
 } from './common.js';
 
 export {
@@ -79,8 +86,6 @@ export type KycDocumentsInput = z.infer<typeof kycDocumentsSchema>;
 // ---------------------------------------------------------------------------
 // Create
 // ---------------------------------------------------------------------------
-
-
 export const investorCreateInputSchema = z.object({
   fullName: z
     .string()
@@ -140,7 +145,7 @@ export type InvestorUpdateInput = z.infer<typeof investorUpdateInputSchema>;
 // /api/admin/investors?search=Rahman&status=active&category=gold&page=1&limit=15&sortBy=fullName&sortOrder=asc
 
 export const investorQuerySchema = z.object({
-  search: z.string().trim().optional(),
+  search: searchValidationSchema,
   status: investorStatusSchema.optional(),
   category: investorCategorySchema.optional(),
 
@@ -150,17 +155,17 @@ export const investorQuerySchema = z.object({
 
   // NEW: Verification state filter for KYC submissions
   kycVerificationStatus: verificationStatusSchema.optional(),
-  page: z.coerce.number().int().min(1).default(1),
-  
+  page: pageValidationSchema,
+
   // Safer — prevents garbage strings reaching Prisma
-  approvedBy: z.string().uuid().optional(),
-  limit: z.coerce.number().int().min(1).max(100).default(10),
+  approvedBy: uuidSchema.optional(),
+  limit: limitValidationSchema,
   sortBy: z
     .enum(['fullName', 'email', 'category', 'status', 'createdAt'])
     .default('createdAt'),
-  sortOrder: z.enum(['asc', 'desc']).default('desc'),
-  minTotalInvestment: z.coerce.number().min(0).default(0),
-  maxTotalInvestment: z.coerce.number().min(0).default(100_000_000),
+  sortOrder: sortOrderSchema,
+  minTotalInvestment: minAmountQuerySchema,
+  maxTotalInvestment: maxAmountQuerySchema,
 })
   // Cross-field rule: max must be >= min
   .refine((data) => data.maxTotalInvestment >= data.minTotalInvestment, {

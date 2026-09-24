@@ -2,6 +2,41 @@ import { z } from 'zod';
 
 export const uuidSchema = z.string().uuid('Must be a valid UUID');
 
+export const dateSchema = z.coerce.date();
+
+export const sortOrderSchema = z.enum(['asc', 'desc']).default('desc');
+
+export const percentSchema = z
+  .coerce
+  .number()
+  .min(0, 'Rate cannot be negative')
+  .max(100, 'Rate cannot exceed 100%')
+  .transform((val) => Math.round(val * 100) / 100);
+
+export const incomingPaymentMethodSchema = z.enum(
+  ['bkash', 'nagad', 'rocket', 'bank_transfer'],
+  {
+    message:
+      'Payment method must be one of: bkash, nagad, rocket, bank_transfer',
+  },
+);
+
+export const incomingPaymentStatusSchema = z.enum([
+  'pending',
+  'confirmed',
+  'overdue',
+]);
+
+export const bankExportFormatSchema = z.enum(['cbl', 'beftn'], {
+  message: 'Export format must be one of: cbl, beftn',
+});
+
+export const nonNegativeNumberSchema = z.coerce.number().min(0);
+
+export const minAmountQuerySchema = nonNegativeNumberSchema.default(0);
+
+export const maxAmountQuerySchema = nonNegativeNumberSchema.default(100_000_000);
+
 export const moneySchema = z
   .coerce
   .number()
@@ -41,6 +76,15 @@ export const phoneNumberSchema = z
     const digits = val.replace(/^\+?880/, '').replace(/^0/, '');
     return `0${digits}`;
   });
+
+// Plaintext credential, handed to the hashing service. It is never persisted
+// or returned as-is — Prisma stores only `User.passwordHash`.
+export const passwordSchema = z
+  .string()
+  .min(6, 'Password must be at least 6 characters')
+  .max(72, 'Password cannot exceed 72 characters')
+  .regex(/[A-Za-z]/, 'Password must contain at least one letter')
+  .regex(/\d/, 'Password must contain at least one number');
 
 // Query strings arrive as text, so "true"/"false" is mapped to a real boolean.
 // (z.coerce.boolean() is not used on purpose — Boolean('false') is true.)
@@ -92,23 +136,61 @@ export const branchNameSchema = z
   .trim()
   .max(150, 'Branch name cannot exceed 150 characters');
 
-export const bankAccountSchema = z
-  .object({
-    selectedBank: bankSelectedSchema,
-    bankName: bankNameSchema,
-    accountName: accountNameSchema,
-    accountNumber: accountNumberSchema,
-    routingNumber: routingNumberSchema.optional(),
-    accountType: bankAccountTypeSchema.optional(),
-    branchName: branchNameSchema.optional(),
-  })
-  // Cross-field rule: non-city-bank accounts require a routing number for BEFTN
-  .refine(
-    (data) => data.selectedBank === 'city_bank' || !!data.routingNumber,
-    {
-      message: 'Routing number is required for banks other than City Bank',
-      path: ['routingNumber'],
-    },
-  );
+// Cross-field rule: non-City-Bank accounts require a routing number for BEFTN.
+// Stated so it also holds on `.partial()` schemas — an absent `selectedBank`
+// means "unchanged", not "no routing number", so the rule stays quiet on a
+// partial body that does not touch the bank selection at all.
+export const bankAccountRoutingRule = (data: {
+  selectedBank?: z.infer<typeof bankSelectedSchema>;
+  routingNumber?: string;
+}) => !!data.routingNumber || data.selectedBank !== 'others';
+
+// Plain field rules for a payout account. Kept as a ZodObject (unrefined) so
+// callers can `.extend()` / `.omit()` them — e.g. the dedicated
+// InvestorBankAccount contract, where the account is its own resource.
+// `bankAccountSchema` adds the cross-field rule on top.
+export const bankAccountFieldsSchema = z.object({
+  selectedBank: bankSelectedSchema,
+  bankName: bankNameSchema,
+  accountName: accountNameSchema,
+  accountNumber: accountNumberSchema,
+  routingNumber: routingNumberSchema.optional(),
+  accountType: bankAccountTypeSchema.optional(),
+  branchName: branchNameSchema.optional(),
+});
+
+export const bankAccountSchema = bankAccountFieldsSchema.refine(
+  bankAccountRoutingRule,
+  {
+    message: 'Routing number is required for banks other than City Bank',
+    path: ['routingNumber'],
+  },
+);
 
 export type BankAccountInput = z.infer<typeof bankAccountSchema>;
+
+
+export const ipAddressSchema = z
+  .string()
+  .trim()
+  .ip({ message: 'Must be a valid IPv4 or IPv6 address' });
+
+
+export const pageValidationSchema = z.coerce
+      .number()
+      .int('Page must be a whole number')
+      .min(1, 'Page must be at least 1')
+      .default(1);
+
+export const limitValidationSchema = z.coerce
+      .number()
+      .int('Limit must be a whole number')
+      .min(1, 'Limit must be at least 1')
+      .max(100, 'Limit cannot exceed 100')
+      .default(10);
+
+export const searchValidationSchema = z
+      .string()
+      .trim()
+      .max(150, 'Search cannot exceed 150 characters')
+      .optional();

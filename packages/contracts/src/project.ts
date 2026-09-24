@@ -1,5 +1,15 @@
 import { z } from 'zod';
-import { moneySchema } from './common.js';
+import {
+  dateSchema,
+  limitValidationSchema,
+  maxAmountQuerySchema,
+  minAmountQuerySchema,
+  moneySchema,
+  pageValidationSchema,
+  queryBooleanSchema,
+  searchValidationSchema,
+  sortOrderSchema,
+} from './common.js';
 
 // ============================================================================
 // Project Status
@@ -41,8 +51,8 @@ const projectBaseSchema = z.object({
   maximumInvestment: moneySchema.default(100_000_000), //10 koti,
   targetAmount: moneySchema.optional(),
 
-  startDate: z.coerce.date().optional(),
-  endDate: z.coerce.date().optional(),
+  startDate: dateSchema.optional(),
+  endDate: dateSchema.optional(),
 
   isActive: z.boolean().optional(),
   isVisible: z.boolean().optional(),
@@ -137,20 +147,20 @@ export type ProjectUpdateInput = z.infer<
 
 // Project Query
 export const projectQuerySchema = z.object({
-  search: z.string().trim().optional(),
+  search: searchValidationSchema,
   status: projectStatusSchema.optional(),
 
   // Visibility / activity toggles
-  isActive: z.boolean().optional(),
-  isVisible: z.boolean().optional(),
+  isActive: queryBooleanSchema.optional(),
+  isVisible: queryBooleanSchema.optional(),
 
   // Pagination
-  page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(10),
+  page: pageValidationSchema,
+  limit: limitValidationSchema,
 
   // Investment amount range (matched against minimumInvestment)
-  minInvestment: z.coerce.number().min(0).default(0),
-  maxInvestment: z.coerce.number().min(0).default(100_000_000), //10 koti
+  minInvestment: minAmountQuerySchema,
+  maxInvestment: maxAmountQuerySchema, //10 koti
 
   // Sorting
   sortBy: z
@@ -165,7 +175,7 @@ export const projectQuerySchema = z.object({
       'createdAt',
     ])
     .default('createdAt'),
-  sortOrder: z.enum(['asc', 'desc']).default('desc'),
+  sortOrder: sortOrderSchema,
 })// Cross-field rule: max must be >= min
   .refine((data) => data.maxInvestment >= data.minInvestment, {
     message: 'maxInvestment must be greater than or equal to minInvestment',

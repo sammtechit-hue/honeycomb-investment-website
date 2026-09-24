@@ -1,21 +1,24 @@
 import { z } from 'zod';
-import { fileUrlSchema, moneySchema } from './common.js';
+import {
+  dateSchema,
+  fileUrlSchema,
+  incomingPaymentMethodSchema,
+  incomingPaymentStatusSchema,
+  limitValidationSchema,
+  moneySchema,
+  nonNegativeNumberSchema,
+  pageValidationSchema,
+  searchValidationSchema,
+  sortOrderSchema,
+  uuidSchema,
+} from './common.js';
 
-export const IncomingPaymentMethodEnum = z.enum([
-  "bkash",
-  "nagad",
-  "rocket",
-  "bank_transfer",
-]);
+export const IncomingPaymentMethodEnum = incomingPaymentMethodSchema;
 
-export const IncomingPaymentStatusEnum = z.enum([
-  "pending",
-  "confirmed",
-  "overdue",
-]);
+export const IncomingPaymentStatusEnum = incomingPaymentStatusSchema;
 
 export const incomingPaymentCreateSchema = z.object({
-  investmentId: z.string().uuid({ message: "Invalid ID format" }),
+  investmentId: uuidSchema,
   amount: moneySchema,
   paymentMethod: IncomingPaymentMethodEnum,
   screenshotUrl: fileUrlSchema,
@@ -29,7 +32,7 @@ export const incomingPaymentCreateSchema = z.object({
     .int("Installment number must be a whole number")
     .positive("Installment number must be positive")
     .optional(),
-  dueDate: z.coerce.date().optional(),
+  dueDate: dateSchema.optional(),
 })
 
 export type IncomingPaymentCreateInput = z.infer<typeof incomingPaymentCreateSchema>;
@@ -38,7 +41,7 @@ export type IncomingPaymentCreateInput = z.infer<typeof incomingPaymentCreateSch
 // For admin
 export const incomingPaymentConfirmSchema = z
   .object({
-    id: z.string().uuid({ message: "Invalid ID format" }),
+    id: uuidSchema,
     status: IncomingPaymentStatusEnum,
   })
 
@@ -68,35 +71,26 @@ export const incomingPaymentSortByEnum = z.enum([
 
 export const incomingPaymentQuerySchema = z.object({
   // --- Pagination ---
-  page: z.coerce
-    .number()
-    .int("Page must be a whole number")
-    .positive("Page must be greater than zero")
-    .default(1),
-  limit: z.coerce
-    .number()
-    .int("Limit must be a whole number")
-    .positive("Limit must be greater than zero")
-    .max(100, "Limit cannot exceed 100")
-    .default(20),
+  page: pageValidationSchema,
+  limit: limitValidationSchema,
   // --- Sorting ---
   sortBy: incomingPaymentSortByEnum.default("dueDate"),
-  sortOrder: z.enum(["asc", "desc"]).default("desc"),
+  sortOrder: sortOrderSchema,
 
   //--- Filters ---
-  investmentId: z.string().uuid({ message: "Invalid ID format" }).optional(),
-  investorId: z.string().uuid({ message: "Invalid ID format" }).optional(), // via investment.investorId
+  investmentId: uuidSchema.optional(),
+  investorId: uuidSchema.optional(), // via investment.investorId
   status: IncomingPaymentStatusEnum.optional(),
   paymentMethod: IncomingPaymentMethodEnum.optional(),
 
   // Amount range
-  minAmount: z.coerce.number().nonnegative().optional(),
-  maxAmount: z.coerce.number().nonnegative().optional(),
+  minAmount: nonNegativeNumberSchema.optional(),
+  maxAmount: nonNegativeNumberSchema.optional(),
 
   // Due date range (installment due, not record creation — see note)
-  dueDateFrom: z.coerce.date().optional(),
-  dueDateTo: z.coerce.date().optional(),
+  dueDateFrom: dateSchema.optional(),
+  dueDateTo: dateSchema.optional(),
 
   // Free-text search over sender account info
-  search: z.string().trim().max(150).optional(),
+  search: searchValidationSchema,
 })

@@ -1,5 +1,26 @@
 import { z } from 'zod';
-import { moneySchema, uuidSchema } from './common.js';
+import {
+  dateSchema,
+  incomingPaymentMethodSchema,
+  incomingPaymentStatusSchema,
+  limitValidationSchema,
+  maxAmountQuerySchema,
+  minAmountQuerySchema,
+  moneySchema,
+  nonNegativeNumberSchema,
+  pageValidationSchema,
+  percentSchema,
+  searchValidationSchema,
+  sortOrderSchema,
+  uuidSchema,
+} from './common.js';
+
+export {
+  incomingPaymentMethodSchema,
+  incomingPaymentStatusSchema,
+} from './common.js';
+
+
 
 export const investmentTypeSchema = z.enum(
   ['fixed', 'unfixed'],
@@ -18,27 +39,11 @@ export const disbursementPeriodSchema = z.enum(
   },
 );
 
-// Mirrors Prisma `IncomingPaymentMethod`
-export const incomingPaymentMethodSchema = z.enum(
-  ['bkash', 'nagad', 'rocket', 'bank_transfer'],
-  {
-    message:
-      'Payment method must be one of: bkash, nagad, rocket, bank_transfer',
-  },
-);
-
-// Mirrors Prisma `IncomingPaymentStatus`
-export const incomingPaymentStatusSchema = z.enum([
-  'pending',
-  'confirmed',
-  'overdue',
-]);
-
 // InvestmentCreateInputSchema
 export const investmentCreateInputSchema = z
   .object({
     projectId: uuidSchema,
-    investmentDate: z.coerce.date().optional(),
+    investmentDate: dateSchema.optional(),
     amount: moneySchema,
     investmentType: investmentTypeSchema,
     // Only meaningful for fixed-rate investments — enforced below since a
@@ -54,24 +59,13 @@ export const investmentCreateInputSchema = z
 export type InvestmentCreateInput = z.infer<typeof investmentCreateInputSchema>;
 
 
-// Percentage rate — Prisma Decimal(5,2) → max 999.99
-const ratePercentSchema = z
-  .coerce
-  .number()
-  .min(0, 'Rate cannot be negative')
-  .max(100, 'Rate cannot exceed 100%')
-
-  //For getting 2 number after decimal point
-  .transform((val) => Math.round(val * 100) / 100);
-
-
 // For admin 
 export const investmentAdminUpdateInputSchema = investmentCreateInputSchema
   .extend({
     status: investmentStatusSchema.optional(),
     // rate is intentionally excluded — admin sets it during approval
-    rate: ratePercentSchema.optional(),
-    agreementEndDate: z.coerce.date().optional(),
+    rate: percentSchema.optional(),
+    agreementEndDate: dateSchema.optional(),
     agreementPlace: z.string().trim().max(150).optional(),
     deedOffical: z.string().trim().optional(),
     deedGoverment: z.string().trim().optional(),
@@ -111,27 +105,29 @@ export type InvestmentUpdateInput = z.infer<
   typeof investmentUpdateInputSchema
 >;
 
+const emptyToUndefined = (v: unknown) => v === "" ? undefined : v;
+
 // For query
 export const investmentQuerySchema = z.object({
-  search: z.string().trim().optional(),
+  search: searchValidationSchema,
   status: investmentStatusSchema.optional(),
   investmentType: investmentTypeSchema.optional(),
   disbursementPeriod: disbursementPeriodSchema.optional(),
-  projectId: uuidSchema.optional(),
+  projectId: z.preprocess(emptyToUndefined, uuidSchema.optional()),
   paymentMethod: incomingPaymentMethodSchema.optional(),
   paymentStatus: incomingPaymentStatusSchema.optional(),
-  paymentAmount: z.coerce.number().min(0).optional(),
+  paymentAmount: nonNegativeNumberSchema.optional(),
   investorId: uuidSchema.optional(),
 
   // Filtering ranges
-  minAmount: z.coerce.number().min(0).default(0),
-  maxAmount: z.coerce.number().min(0).default(100_000_000),
-  fromDate: z.coerce.date().optional(),
-  toDate: z.coerce.date().optional(),
+  minAmount: minAmountQuerySchema,
+  maxAmount: maxAmountQuerySchema,
+  fromDate: dateSchema.optional(),
+  toDate: dateSchema.optional(),
 
   // Pagination
-  page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(10),
+  page: pageValidationSchema,
+  limit: limitValidationSchema,
 
   // Sorting
   sortBy: z
@@ -146,7 +142,7 @@ export const investmentQuerySchema = z.object({
       'createdAt',
     ])
     .default('createdAt'),
-  sortOrder: z.enum(['asc', 'desc']).default('desc'),
+  sortOrder: sortOrderSchema,
 })
 
 export type InvestmentQuerySchema = z.infer<typeof investmentQuerySchema>;
