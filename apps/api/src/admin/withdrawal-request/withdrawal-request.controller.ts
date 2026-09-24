@@ -1,72 +1,70 @@
-import { Body, Controller, Get, Param, Post, Patch, Delete, Query, UsePipes, ValidationPipe } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+  UsePipes,
+} from '@nestjs/common';
+import { ZodValidationPipe } from 'nestjs-zod';
 import { CreateWithdrawalRequestDto } from './dto/create-withdrawal-request.dto';
 import { UpdateWithdrawalRequestDto } from './dto/update-withdrawal-request.dto';
+import { WithdrawalRequestQueryDto } from './dto/query-withdrawal-request.dto';
 import { WithdrawalRequestService } from './withdrawal-request.service';
 
 @Controller('admin/withdrawal-request')
-@UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
+@UsePipes(ZodValidationPipe)
 export class WithdrawalRequestController {
-    constructor(
-        private readonly withdrawalRequestService: WithdrawalRequestService,
-    ) { }
+  // Inject WithdrawalRequestService to handle business logic.
+  constructor(
+    private readonly withdrawalRequestService: WithdrawalRequestService,
+  ) {}
 
-    // GET /admin/withdrawal-request?search=pending&status=pending&category=manual&page=1&limit=10&sortBy=createdAt&sortOrder=desc
-    @Get()
-    findAll(
-        @Query('search') search?: string,
-        @Query('status') status?: string,
-        @Query('category') category?: string,
-        @Query('page') page?: number,
-        @Query('limit') limit?: number,
-        @Query('sortBy') sortBy?: string,
-        @Query('sortOrder') sortOrder?: 'asc' | 'desc',
-        @Query('min') min?: number,
-        @Query('max') max?: number,
-    ) {
-        // GET /admin/withdrawal-request?search=pending&status=pending&category=manual&page=1&limit=10&sortBy=createdAt&sortOrder=desc
-        return this.withdrawalRequestService.findAll({
-            search,
-            status,
-            category,
-            page: page ? Number(page) : 1,
-            limit: limit ? Number(limit) : 10,
-            sortBy: sortBy ?? 'createdAt',
-            sortOrder: sortOrder ?? 'desc',
-            min: min ? Number(min) : undefined,
-            max: max ? Number(max) : undefined,
-        });
-    }
+  // For getting all withdrawal requests with filtering, searching, sorting &
+  // pagination.
+  // GET /api/admin/withdrawal-request?search=&investmentId=&status=pending
+  //   &withdrawalMethod=auto&min=&max=&requestDateFrom=&requestDateTo=
+  //   &page=1&limit=10&sortBy=requestDate&sortOrder=desc
+  @Get()
+  findAll(@Query() query: WithdrawalRequestQueryDto) {
+    // Search, filters, amount/date ranges, sort and pagination are validated
+    // by WithdrawalRequestQueryDto.
+    return this.withdrawalRequestService.findAll(query);
+  }
 
-    // GET /admin/withdrawal-request/:id
-    @Get(':id')
-    findOne(@Param('id') id: string) {
-        // Return a single withdrawal request data
-        return this.withdrawalRequestService.findOne(id);
-    }
+  // For getting a single withdrawal request by id.
+  @Get(':id')
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
+    // Return a single withdrawal request data.
+    return this.withdrawalRequestService.findOne(id);
+  }
 
-    // POST /admin/withdrawal-request
-    @Post()
-    create(@Body() createWithdrawalRequestDto: CreateWithdrawalRequestDto) {
-        // Create a new withdrawal request record
-        return this.withdrawalRequestService.create(createWithdrawalRequestDto);
-    }
+  // For creating a new withdrawal request.
+  // `withdrawalMethod` defaults to "auto", `status` to "pending".
+  @Post()
+  create(@Body() createWithdrawalRequestDto: CreateWithdrawalRequestDto) {
+    return this.withdrawalRequestService.create(createWithdrawalRequestDto);
+  }
 
-    // PATCH /admin/withdrawal-request/:id
-    @Patch(':id')
-    update(
-        @Param('id') id: string,
-        @Body() updateWithdrawalRequestDto: UpdateWithdrawalRequestDto,
-    ) {
-        // Only the fields provided in the request
-        // will be updated.
+  // For updating an existing withdrawal request by id.
+  @Patch(':id')
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() updateWithdrawalRequestDto: UpdateWithdrawalRequestDto,
+  ) {
+    // Only the fields provided in the request
+    // will be updated.
 
-        return this.withdrawalRequestService.update(id, updateWithdrawalRequestDto);
-    }
+    return this.withdrawalRequestService.update(id, updateWithdrawalRequestDto);
+  }
 
-    // DELETE /admin/withdrawal-request/:id
-    @Delete(':id')
-    remove(@Param('id') id: string) {
-        // Delete a withdrawal request by id
-        return this.withdrawalRequestService.remove(id);
-    }
+  // For deleting a withdrawal request by id.
+  @Delete(':id')
+  remove(@Param('id', ParseUUIDPipe) id: string) {
+    return this.withdrawalRequestService.remove(id);
+  }
 }

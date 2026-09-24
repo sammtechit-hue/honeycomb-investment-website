@@ -1,4 +1,25 @@
 import { z } from 'zod';
+import {
+  bankAccountSchema,
+  bankAccountTypeSchema,
+  bankSelectedSchema,
+  fileUrlSchema,
+  limitValidationSchema,
+  maxAmountQuerySchema,
+  minAmountQuerySchema,
+  pageValidationSchema,
+  phoneNumberSchema,
+  searchValidationSchema,
+  sortOrderSchema,
+  uuidSchema,
+} from './common.js';
+
+export {
+  bankAccountSchema,
+  bankAccountTypeSchema,
+  bankSelectedSchema,
+  type BankAccountInput,
+} from './common.js';
 
 // ---------------------------------------------------------------------------
 // Enum mirrors (kept in sync with prisma schema — avoids a runtime dep on
@@ -21,53 +42,56 @@ export const investorCategorySchema = z.enum([
   'titanium',
 ]);
 
-export const KycDocType = z.enum(
-  ['nid', 'photo', 'other'],
-  {
-    message: 'Document type must be one of: nid, photo, other',
-  },
-);
 
+// Mirrors Prisma `VerificationStatus` enum (used for KYC checking)
+export const verificationStatusSchema = z.enum([
+  'pending',
+  'verified',
+  'rejected',
+]);
 
-// ============================================================================
-// KYC Document Schema
-// ============================================================================
-
-export const kycDocumentSchema = z.object({
-  docType: KycDocType,
-  fileUrl: z
+// NomineeSchema
+export const nomineeSchema = z.object({
+  nomineeName: z
     .string()
     .trim()
-    .url('File URL must be a valid URL')
-    .max(500, 'File URL cannot exceed 500 characters'),
-  // notes: z
-  //   .string()
-  //   .trim()
-  //   .max(255, 'Notes cannot exceed 255 characters')
-  //   .optional(),
+    .min(2, 'Nominee name must be at least 2 characters')
+    .max(150, 'Nominee name cannot exceed 150 characters'),
+  nomineePhone: phoneNumberSchema,
+
+  relation: z
+    .string()
+    .trim()
+    .min(2, 'Relation must be at least 2 characters')
+    .max(50, 'Relation cannot exceed 50 characters'),
+  nomineeNidFront: fileUrlSchema.optional(),
+  nomineeNidBack: fileUrlSchema.optional(),
+  nomineePhoto: fileUrlSchema.optional(),
 });
+
+export type NomineeInput = z.infer<typeof nomineeSchema>;
+
+// KYC Document
+export const kycDocumentsSchema = z.object({
+  nidFront: fileUrlSchema,
+  nidBack: fileUrlSchema,
+  photo: fileUrlSchema,
+});
+
+export type KycDocumentsInput = z.infer<typeof kycDocumentsSchema>;
+
+
+
 
 // ---------------------------------------------------------------------------
 // Create
 // ---------------------------------------------------------------------------
-
-
 export const investorCreateInputSchema = z.object({
   fullName: z
     .string()
     .trim()
-    .min(5, 'Full name must be at least 2 characters')
-    .max(150, 'Full name cannot exceed 150 characters')
-    .regex(
-      /^[a-zA-Z\s.\-']+$/,
-      "Full name can only contain letters, spaces, hyphens, periods, and apostrophes",
-    ),
-  // email: z
-  //   .string()
-  //   .trim()
-  //   .email('Invalid email address')
-  //   .max(150, 'Email cannot exceed 150 characters')
-  //   .toLowerCase(),
+    .min(3, 'Full name must be at least 5 characters')
+    .max(150, 'Full name cannot exceed 150 characters'),
   address: z
     .string()
     .trim()
@@ -83,10 +107,13 @@ export const investorCreateInputSchema = z.object({
     .trim()
     .max(150, 'Workplace cannot exceed 150 characters')
     .optional(),
-  kycDocuments: z
-    .array(kycDocumentSchema)
-    .min(2, 'At least 2 KYC documents are required (NID front, NID back, and photo)')
-    .max(7, 'Cannot upload more than 7 KYC documents at once'),
+
+  // Nested required objects — created in the same transaction as the Investor
+  bankAccount: bankAccountSchema,
+  nominee: nomineeSchema,
+  kycDocuments: kycDocumentsSchema,
+
+  // Optional: investor can join without being referred
   referralCode: z
     .string()
     .trim()
@@ -102,28 +129,48 @@ export type InvestorCreateInput = z.infer<typeof investorCreateInputSchema>;
 // ---------------------------------------------------------------------------
 
 export const investorUpdateInputSchema = investorCreateInputSchema
-  .omit({ kycDocuments: true, referralCode: true }) // Can't update KYC or referral after registration
+  // .omit({
+  //   kycDocuments: true,   // KYC changes go through re-verification
+  //   bankAccount: true,    // Bank changes go through a dedicated endpoint
+  //   nominee: true,        // Nominee changes go through a dedicated endpoint
+  //   referralCode: true,   // Cannot change referrer after registration
+  // })
   .partial();
 
 export type InvestorUpdateInput = z.infer<typeof investorUpdateInputSchema>;
 
-// ---------------------------------------------------------------------------
+
 // Query (findAll — search, filter, pagination, sorting)
-// ---------------------------------------------------------------------------
+
+// /api/admin/investors?search=Rahman&status=active&category=gold&page=1&limit=15&sortBy=fullName&sortOrder=asc
 
 export const investorQuerySchema = z.object({
-  search: z.string().trim().optional(),
+  search: searchValidationSchema,
   status: investorStatusSchema.optional(),
   category: investorCategorySchema.optional(),
-  page: z.coerce.number().int().min(1).default(1),
-  approvedBy: z.string().trim().optional(),
-  limit: z.coerce.number().int().min(1).max(100).default(10),
+
+  // NEW: Filters for administrative bank profiling & matching
+  selectedBank: bankSelectedSchema.optional(),
+  accountType: bankAccountTypeSchema.optional(),
+
+  // NEW: Verification state filter for KYC submissions
+  kycVerificationStatus: verificationStatusSchema.optional(),
+  page: pageValidationSchema,
+
+  // Safer — prevents garbage strings reaching Prisma
+  approvedBy: uuidSchema.optional(),
+  limit: limitValidationSchema,
   sortBy: z
     .enum(['fullName', 'email', 'category', 'status', 'createdAt'])
     .default('createdAt'),
-  sortOrder: z.enum(['asc', 'desc']).default('desc'),
-  minTotalInvestment: z.coerce.number().int().default(0),
-  maxTotalInvestment: z.coerce.number().int().default(100000000),
-});
+  sortOrder: sortOrderSchema,
+  minTotalInvestment: minAmountQuerySchema,
+  maxTotalInvestment: maxAmountQuerySchema,
+})
+  // Cross-field rule: max must be >= min
+  .refine((data) => data.maxTotalInvestment >= data.minTotalInvestment, {
+    message: 'maxTotalInvestment must be greater than or equal to minTotalInvestment',
+    path: ['maxTotalInvestment'],
+  });
 
 export type InvestorQuery = z.infer<typeof investorQuerySchema>;

@@ -1,51 +1,56 @@
-import { Body, Controller, Get, Param, Post, Patch, Delete, Query, UsePipes, ValidationPipe } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+  UsePipes,
+} from '@nestjs/common';
+import { ZodValidationPipe } from 'nestjs-zod';
 import { CreateAdminDto } from './dto/create-admin.dto';
 import { UpdateAdminDto } from './dto/update-admin.dto';
+import { AdminQueryDto } from './dto/query-admin.dto';
 import { AdminService } from './admin.service';
 
-@Controller('admin')
-@UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
+// Admin account endpoints — the `AdminProfile` + `User` pair behind the back
+// office. Investor management lives under /admin/investor.
+// Validation is scoped to this controller (@UsePipes) instead of globally —
+// see main.ts for why.
+@Controller('admin/account')
+@UsePipes(ZodValidationPipe)
 export class AdminController {
-  constructor(
-    private readonly adminService: AdminService,
-  ) { }
+  constructor(private readonly adminService: AdminService) { }
 
+  // For getting all admin accounts with filtering, searching, sorting &
+  // pagination.
+  // GET /api/admin?search=rakib&role=ADMIN&department=Operations
+  //   &page=1&limit=10&sortBy=createdAt&sortOrder=desc
   @Get()
-  findAll(
-    @Query('search') search?: string,
-    @Query('status') status?: string,
-    @Query('category') category?: string,
-    @Query('page') page?: number,
-    @Query('limit') limit?: number,
-    @Query('verified_kyc') verified_kyc?: string,
-    @Query('sortBy') sortBy?: string,
-    @Query('sortOrder') sortOrder?: 'asc' | 'desc',
-  ) {
-    return this.adminService.findAll({
-      search,
-      status,
-      verified_kyc,
-      category,
-      page: page ? Number(page) : 1,
-      limit: limit ? Number(limit) : 10,
-      sortBy: sortBy ?? 'createdAt',
-      sortOrder: sortOrder ?? 'desc',
-    })
+  findAll(@Query() query: AdminQueryDto) {
+    // Search, filters, sort and pagination are validated by AdminQueryDto.
+    return this.adminService.findAll(query);
   }
 
+  // GET /api/admin/:id
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.adminService.findOne(id);
   }
 
+  // POST /api/admin
+  // Creates the User (credentials) and its 1:1 AdminProfile; role defaults to
+  // "ADMIN" and only admin roles are accepted.
   @Post()
   create(@Body() createAdminDto: CreateAdminDto) {
     return this.adminService.create(createAdminDto);
   }
 
-  @Patch(':id')
+  // PATCH /api/admin/:id
   update(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() updateAdminDto: UpdateAdminDto,
   ) {
     // Only the fields provided in the request
@@ -53,5 +58,4 @@ export class AdminController {
 
     return this.adminService.update(id, updateAdminDto);
   }
-
 }

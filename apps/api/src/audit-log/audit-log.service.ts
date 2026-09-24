@@ -1,5 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { UpdateAuditLogDto } from './dto/update-audit-log.dto';
+import type {
+    AuditLogQuery,
+    AuditLogUpdateInput,
+} from '@investment-platform/contracts/auditLog';
 
 @Injectable()
 export class AuditLogService {
@@ -10,27 +13,12 @@ export class AuditLogService {
     ) { }
 
     // For Getting All AuditLog's Data with filtering, searching, sorting & pagination
-    // Example: GET /api/audit-log?search=verified_kyc&status=verified_kyc&category=audit_log&page=1&limit=10
-    async findAllLog({
-        search,
-        status,
-        category,
-        page = 1,
-        limit = 10,
-        sortBy = 'createdAt',
-        sortOrder = 'desc',
-    }: {
-        search?: string;
-        status?: string;
-        category?: string;
-        page?: number;
-        limit?: number;
-        sortBy?: string;
-        sortOrder?: 'asc' | 'desc';
-    }) {
-
+    // Example: GET /audit-log?action=verified_kyc&targetTable=investors&page=1&limit=10
+    // Validated/normalized by AuditLogQueryDto — all fields are typed.
+    async findAllLog(query: AuditLogQuery) {
         return {
             message: "HelloWorld Return all AuditLog's data",
+            query,
         };
     }
 
@@ -40,10 +28,11 @@ export class AuditLogService {
     }
 
     // For updating AuditLog Information
-    async update(id: string, updateAuditLogDto: UpdateAuditLogDto){
+    // Only correction fields (details/admin) are updatable — see UpdateAuditLogDto.
+    async update(id: string, updateAuditLogDto: AuditLogUpdateInput) {
         return {
-            message: 'AuditLog Updated Successfully'
-        }
+            message: 'AuditLog Updated Successfully',
+            data: updateAuditLogDto,
+        };
     }
-
 }
