@@ -11,6 +11,20 @@ export class InvestorService {
   constructor(private readonly prisma: PrismaService) { }
 
   // -----------------------------------------------------------------------
+  // findOwnerUserId — User.id that owns this investor profile, or null if
+  // the profile doesn't exist. Used by the controller's ownership check;
+  // kept separate from findOne so that check never depends on what
+  // findOne's response shape happens to include.
+  // -----------------------------------------------------------------------
+  async findOwnerUserId(id: string): Promise<string | null> {
+    const investor = await this.prisma.investor.findUnique({
+      where: { id },
+      select: { userId: true },
+    });
+    return investor?.userId ?? null;
+  }
+
+  // -----------------------------------------------------------------------
   // findOne — single investor with full related data
   // -----------------------------------------------------------------------
   async findOne(id: string) {

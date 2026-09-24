@@ -1,7 +1,12 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { validateEnv } from './config/env';
 import { PrismaModule } from './prisma/prisma.module';
+import { AuthModule } from './auth/auth.module';
+import { MailModule } from './mail/mail.module';
 import { AdminModule } from './admin/admin.module';
 import { InvestorModule } from './investor/investor.module';
 import { InvestmentModule } from './investment/investment.module';
@@ -23,7 +28,20 @@ import { MonthlyProfitLedgerModule } from './monthly-profit-ledger/monthly-profi
 
 @Module({
   imports: [
+    // Loads apps/api/.env, then packages/db/.env (where DATABASE_URL lives
+    // for the prisma CLI), and validates the result (config/env.ts) before
+    // anything else is constructed — a bad/missing secret fails boot, not a
+    // request. Paths are relative to apps/api, the cwd of every api script.
+    ConfigModule.forRoot({
+      isGlobal: true,
+      cache: true,
+      envFilePath: ['.env', '../../packages/db/.env'],
+      validate: validateEnv,
+    }),
+    ScheduleModule.forRoot(),
     PrismaModule,
+    MailModule,
+    AuthModule,
     AdminModule,
     InvestorModule,
     InvestmentModule,
