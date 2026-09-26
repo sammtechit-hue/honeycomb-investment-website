@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { emailSchema, moneySchema, phoneNumberSchema } from './common.js';
+import { emailSchema, limitValidationSchema, maxAmountQuerySchema, minAmountQuerySchema, moneySchema, pageValidationSchema, phoneNumberSchema, searchValidationSchema, sortOrderSchema } from './common.js';
 
 // Creating
 export const roiCalculatorLeadCreateSchema = z.object({
@@ -24,20 +24,20 @@ export const roiCalculatorLeadUpdateSchema = z.object({
 export type RoiCalculatorLeadUpdateSchema = z.infer<typeof roiCalculatorLeadUpdateSchema>;
 
 export const roiCalculatorLeadQuerySchema = z.object({
-    search: z.string().trim().optional(),
+    search: searchValidationSchema,
 
     // Pagination
-    page: z.coerce.number().int().min(1).default(1),
-    limit: z.coerce.number().int().min(1).max(100).default(10),
+    page: pageValidationSchema,
+    limit: limitValidationSchema,
 
     // Filtering ranges
-    minAmount: z.coerce.number().min(0).default(0),
-    maxAmount: z.coerce.number().min(0).default(100_000_000),
+    minAmount: minAmountQuerySchema,
+    maxAmount: maxAmountQuerySchema,
 
     // Sorting
     sortBy: z.enum(['name', 'phoneNumber', 'email', 'followedUp', 'createdAt',])
     .default('createdAt'),
-    sortOrder: z.enum(['asc', 'desc']).default('desc'),
+    sortOrder: sortOrderSchema,
 })
 
 export type RoiCalculatorLeadQuerySchema = z.infer<typeof roiCalculatorLeadQuerySchema>;

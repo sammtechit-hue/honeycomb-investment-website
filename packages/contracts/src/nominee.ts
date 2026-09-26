@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { uuidSchema } from './common.js';
+import { limitValidationSchema, pageValidationSchema, searchValidationSchema, sortOrderSchema, uuidSchema } from './common.js';
 // The nominee field rules (name, BD phone, relation, NID/photo URLs) already
 // exist for nested investor registration — reuse them as the single source of
 // truth instead of duplicating them here.
@@ -58,29 +58,16 @@ export const nomineeSortBySchema = z.enum([
 
 export const nomineeQuerySchema = z.object({
   // Free-text search over the nominee name and relation.
-  search: z
-    .string()
-    .trim()
-    .max(150, 'Search cannot exceed 150 characters')
-    .optional(),
+  search: searchValidationSchema,
 
   // --- Pagination ---
-  page: z.coerce
-    .number()
-    .int('Page must be a whole number')
-    .min(1, 'Page must be at least 1')
-    .default(1),
-  limit: z.coerce
-    .number()
-    .int('Limit must be a whole number')
-    .min(1, 'Limit must be at least 1')
-    .max(100, 'Limit cannot exceed 100')
-    .default(10),
+  page: pageValidationSchema,
+  limit: limitValidationSchema,
 
   // --- Sorting ---
   // The model has no createdAt; sort by stored columns only.
   sortBy: nomineeSortBySchema.default('nomineeName'),
-  sortOrder: z.enum(['asc', 'desc']).default('desc'),
+  sortOrder: sortOrderSchema,
 });
 
 export type NomineeQuery = z.infer<typeof nomineeQuerySchema>;

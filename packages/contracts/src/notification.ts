@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { queryBooleanSchema, uuidSchema } from './common.js';
+import { limitValidationSchema, pageValidationSchema, queryBooleanSchema, searchValidationSchema, sortOrderSchema, uuidSchema } from './common.js';
 
 // ============================================================================
 // Admin Notification — shared zod contracts
@@ -15,13 +15,6 @@ export const adminNotificationTypeSchema = z.enum([
   'company_document_expiring',
 ]);
 
-// VarChar(255) in Prisma.
-export const notificationMessageSchema = z
-  .string()
-  .trim()
-  .min(1, 'Message is required')
-  .max(255, 'Message cannot exceed 255 characters');
-
 // ============================================================================
 // Base Admin Notification Schema
 // ============================================================================
@@ -35,50 +28,26 @@ const adminNotificationBaseSchema = z.object({
   // "investment" with the investment's uuid. Both must be sent together,
   // so the pair is validated with a superRefine below.
   referenceId: uuidSchema.nullish(),
-  referenceType: z
+
+  message: z
     .string()
     .trim()
-    .max(50, 'Reference type cannot exceed 50 characters')
-    .nullish(),
-
-  message: notificationMessageSchema,
+    .max(255, 'Message cannot exceed 255 characters')
+    .optional(),
 
   // Mirrors the Prisma default of false.
   isRead: z.boolean().default(false),
 });
 
 // Shared rule: the polymorphic reference is only meaningful as a pair.
-const addReferencePairIssues = (
-  data: {
-    referenceId?: string | null;
-    referenceType?: string | null;
-  },
-  ctx: z.RefinementCtx,
-) => {
-  if (data.referenceId != null && data.referenceType == null) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: 'referenceType is required when referenceId is provided',
-      path: ['referenceType'],
-    });
-  }
 
-  if (data.referenceType != null && data.referenceId == null) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: 'referenceId is required when referenceType is provided',
-      path: ['referenceId'],
-    });
-  }
-};
 
 // ============================================================================
 // Admin Notification Create Schema
 // For POST /notification
 // ============================================================================
 
-export const adminNotificationCreateInputSchema =
-  adminNotificationBaseSchema.superRefine(addReferencePairIssues);
+export const adminNotificationCreateInputSchema = adminNotificationBaseSchema;
 
 export type AdminNotificationCreateInput = z.infer<
   typeof adminNotificationCreateInputSchema
@@ -115,39 +84,21 @@ export const adminNotificationSortBySchema = z.enum([
 export const adminNotificationQuerySchema = z
   .object({
     // Free-text search over the message.
-    search: z
-      .string()
-      .trim()
-      .max(255, 'Search cannot exceed 255 characters')
-      .optional(),
+    search: searchValidationSchema,
 
     // --- Filters ---
     type: adminNotificationTypeSchema.optional(),
     // "true"/"false" query string mapped to a real boolean.
     isRead: queryBooleanSchema.optional(),
-    referenceType: z
-      .string()
-      .trim()
-      .max(50, 'Reference type cannot exceed 50 characters')
-      .optional(),
     referenceId: uuidSchema.optional(),
 
     // --- Pagination ---
-    page: z.coerce
-      .number()
-      .int('Page must be a whole number')
-      .min(1, 'Page must be at least 1')
-      .default(1),
-    limit: z.coerce
-      .number()
-      .int('Limit must be a whole number')
-      .min(1, 'Limit must be at least 1')
-      .max(100, 'Limit cannot exceed 100')
-      .default(10),
+    page: pageValidationSchema,
+    limit: limitValidationSchema,
 
     // --- Sorting ---
     sortBy: adminNotificationSortBySchema.default('createdAt'),
-    sortOrder: z.enum(['asc', 'desc']).default('desc'),
+    sortOrder: sortOrderSchema,
   })
 
 export type AdminNotificationQuery = z.infer<

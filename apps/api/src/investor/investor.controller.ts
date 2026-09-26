@@ -17,7 +17,7 @@ import { ZodValidationPipe } from 'nestjs-zod';
 import { CreateInvestorDto } from './dto/create-investor.dto';
 import { UpdateInvestorDto } from './dto/update-investor.dto';
 import { InvestorService } from './investor.service';
-import type { AuthenticationRequest } from './dto/interface';
+import type { AuthenticationRequest } from '../utils/common types';
 
 // Scoped to this controller only — the app-wide ValidationPipe in main.ts
 // still runs class-validator for every other resource until they migrate.
@@ -36,9 +36,9 @@ export class InvestorController {
   @Post()
   create(
     @Body() createInvestorDto: CreateInvestorDto,
-    @Req() req: AuthenticationRequest,
-    @Ip() ip: string,
-    @Headers('user-agent') userAgent: string,
+    @Req() req?: AuthenticationRequest,
+    @Ip() ip?: string,
+    @Headers('user-agent') userAgent?: string,
     @Headers("x-session-id") sessionId?: string,
   ) {
     const context = {

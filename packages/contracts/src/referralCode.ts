@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { uuidSchema } from './common.js';
+import { dateSchema, limitValidationSchema, pageValidationSchema, queryBooleanSchema, searchValidationSchema, sortOrderSchema, uuidSchema } from './common.js';
 
 
 // The code itself — VarChar(20) and unique in Prisma. Normalized to upper case
@@ -11,12 +11,6 @@ export const referralCodeValueSchema = z
   .max(20, 'Referral code cannot exceed 20 characters')
   .regex(/^[A-Za-z0-9]+$/, 'Referral code may only contain letters and numbers')
   .transform((val) => val.toUpperCase());
-
-// Query strings arrive as text, so "true"/"false" is mapped to a real boolean.
-// (z.coerce.boolean() is not used on purpose — Boolean('false') is true.)
-export const queryBooleanSchema = z
-  .enum(['true', 'false'], { message: 'Value must be "true" or "false"' })
-  .transform((val) => val === 'true');
 
 // ============================================================================
 // Base Referral Code Schema
@@ -38,10 +32,10 @@ const referralCodeBaseSchema = z.object({
   isUsed: z.boolean().default(false),
 
   // When the code stops being redeemable.
-  expiresAt: z.coerce.date().optional(),
+  expiresAt: dateSchema.optional(),
 
   // When the code was redeemed.
-  usedAt: z.coerce.date().optional(),
+  usedAt: dateSchema.optional(),
 });
 
 // Create rule: a code may only be marked as used once somebody has actually
@@ -146,11 +140,7 @@ export const referralCodeQuerySchema = z
   .object({
     // Free-text search over the code and the referrer/referred investor names
     // (relation fields). VarChar(150) investor names.
-    search: z
-      .string()
-      .trim()
-      .max(150, 'Search cannot exceed 150 characters')
-      .optional(),
+    search: searchValidationSchema,
 
     // --- Filters ---
     referrerId: uuidSchema.optional(),
@@ -159,25 +149,16 @@ export const referralCodeQuerySchema = z
 
     // Expiry range (both ends inclusive and optional) — useful for cleaning up
     // codes whose expiry date has passed (@@index([expiresAt])).
-    expiresAfter: z.coerce.date().optional(),
-    expiresBefore: z.coerce.date().optional(),
+    expiresAfter: dateSchema.optional(),
+    expiresBefore: dateSchema.optional(),
 
     // --- Pagination ---
-    page: z.coerce
-      .number()
-      .int('Page must be a whole number')
-      .min(1, 'Page must be at least 1')
-      .default(1),
-    limit: z.coerce
-      .number()
-      .int('Limit must be a whole number')
-      .min(1, 'Limit must be at least 1')
-      .max(100, 'Limit cannot exceed 100')
-      .default(10),
+    page: pageValidationSchema,
+    limit: limitValidationSchema,
 
     // --- Sorting ---
     sortBy: referralCodeSortBySchema.default('createdAt'),
-    sortOrder: z.enum(['asc', 'desc']).default('desc'),
+    sortOrder: sortOrderSchema,
   })
   .refine(
     (data) =>

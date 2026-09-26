@@ -1,20 +1,24 @@
 import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  ParseUUIDPipe,
-  Patch,
-  Post,
-  Query,
-  UsePipes,
+    Body,
+    Controller,
+    Delete,
+    Get,
+    Param,
+    ParseUUIDPipe,
+    Patch,
+    Post,
+    Query,
+    UsePipes,
+    Req,
+    Ip,
+    Headers
 } from '@nestjs/common';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { ProjectQueryDto } from './dto/query-project.dto';
 import { ProjectService } from './project.service';
+import type { AuthenticationRequest } from '../../utils/common types';
 
 // Scoped to this controller only — matches the zod-based admin/investor
 // controller. See main.ts for why validation pipes are opt-in per controller.
@@ -40,10 +44,24 @@ export class ProjectController {
     }
 
     // POST /api/admin/project
+    // Create a new project record
     @Post()
-    create(@Body() createProjectDto: CreateProjectDto) {
-        // Create a new project record
-        return this.projectService.create(createProjectDto);
+    create(
+        @Body() createProjectDto: CreateProjectDto,
+        @Req() req?: AuthenticationRequest,
+        @Ip() ip?: string,
+        @Headers('user-agent') userAgent?: string,
+        @Headers("x-session-id") sessionId?: string,
+    ) {
+        const context = {
+            ipAddress: ip,
+            userAgent: userAgent,
+            sessionId: sessionId,
+        }
+
+        // Read user ID attached by the Auth Guard
+        const userId = req?.user?.id;
+        return this.projectService.create(createProjectDto, userId, context);
     }
 
     // PATCH /api/admin/project/:id

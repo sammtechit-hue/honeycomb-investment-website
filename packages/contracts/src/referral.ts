@@ -1,14 +1,17 @@
 import { z } from 'zod';
-import { moneySchema, uuidSchema } from './common.js';
+import {
+  dateSchema,
+  limitValidationSchema,
+  moneySchema,
+  nonNegativeNumberSchema,
+  pageValidationSchema,
+  percentSchema,
+  searchValidationSchema,
+  sortOrderSchema,
+  uuidSchema,
+} from './common.js';
 
-
-export const bonusPercentSchema = z
-  .coerce
-  .number()
-  .min(0, 'Bonus percent cannot be negative')
-  .max(100, 'Bonus percent cannot exceed 100')
-  // Round to 2 decimal places to match Decimal(5,2).
-  .transform((val) => Math.round(val * 100) / 100);
+export const bonusPercentSchema = percentSchema;
 
 
 const referralBaseSchema = z.object({
@@ -76,11 +79,7 @@ export const referralQuerySchema = z
   .object({
     
     // investor names (relation fields). VarChar(150) investor names.
-    search: z
-      .string()
-      .trim()
-      .max(150, 'Search cannot exceed 150 characters')
-      .optional(),
+    search: searchValidationSchema,
 
     // --- Filters ---
     referrerId: uuidSchema.optional(),
@@ -88,36 +87,21 @@ export const referralQuerySchema = z
     referralCodeId: uuidSchema.optional(),
 
     // Bonus amount range (both ends inclusive and optional).
-    minBonusAmount: z.coerce
-      .number()
-      .nonnegative('minBonusAmount cannot be negative')
-      .optional(),
-    maxBonusAmount: z.coerce
-      .number()
-      .nonnegative('maxBonusAmount cannot be negative')
-      .optional(),
+    minBonusAmount: nonNegativeNumberSchema.optional(),
+    maxBonusAmount: nonNegativeNumberSchema.optional(),
 
 
     // Created-at range (both ends inclusive).
-    fromDate: z.coerce.date().optional(),
-    toDate: z.coerce.date().optional(),
+    fromDate: dateSchema.optional(),
+    toDate: dateSchema.optional(),
 
     // --- Pagination ---
-    page: z.coerce
-      .number()
-      .int('Page must be a whole number')
-      .min(1, 'Page must be at least 1')
-      .default(1),
-    limit: z.coerce
-      .number()
-      .int('Limit must be a whole number')
-      .min(1, 'Limit must be at least 1')
-      .max(100, 'Limit cannot exceed 100')
-      .default(10),
+    page: pageValidationSchema,
+    limit: limitValidationSchema,
 
     // --- Sorting ---
     sortBy: referralSortBySchema.default('createdAt'),
-    sortOrder: z.enum(['asc', 'desc']).default('desc'),
+    sortOrder: sortOrderSchema,
   })
   
   .refine(

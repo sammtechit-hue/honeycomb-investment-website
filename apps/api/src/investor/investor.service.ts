@@ -4,11 +4,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, LogModule, LogSeverity, LogStatus } from '@investment-platform/db';
+import { Prisma, LogModule, LogSeverity, LogStatus, AdminNotificationType } from '@investment-platform/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateInvestorDto } from './dto/create-investor.dto';
 import { UpdateInvestorDto } from './dto/update-investor.dto';
-import { RequestAuditContext } from './dto/interface';
+import { RequestAuditContext } from '../utils/common types';
 
 @Injectable()
 export class InvestorService {
@@ -24,7 +24,7 @@ export class InvestorService {
   // -----------------------------------------------------------------------
   // Create service function 
   // -----------------------------------------------------------------------
-  async create(dto: CreateInvestorDto, userId: string, context?: RequestAuditContext) {
+  async create(dto: CreateInvestorDto, userId: string | undefined, context?: RequestAuditContext) {
     // Verify User exists
     const [user, existingInvestor, referralCodeRecord] = await Promise.all([
       this.prisma.user.findUnique({ where: { id: userId } }),
@@ -65,15 +65,18 @@ export class InvestorService {
               connect: { id: userId },
             },
             bankAccount: {
-              create: {
-                selectedBank: dto.bankAccount.selectedBank,
-                bankName: dto.bankAccount.bankName,
-                accountName: dto.bankAccount.accountName,
-                accountNumber: dto.bankAccount.accountNumber,
-                routingNumber: dto.bankAccount.routingNumber,
-                accountType: dto.bankAccount.accountType,
-                branchName: dto.bankAccount.branchName,
-              }
+              create: [
+                {
+                  selectedBank: dto.bankAccount.selectedBank,
+                  bankName: dto.bankAccount.bankName,
+                  accountName: dto.bankAccount.accountName,
+                  accountNumber: dto.bankAccount.accountNumber,
+                  routingNumber: dto.bankAccount.routingNumber,
+                  accountType: dto.bankAccount.accountType,
+                  branchName: dto.bankAccount.branchName,
+                  isActive: false,
+                },
+              ],
             },
             nominee: {
               create: {
@@ -111,7 +114,7 @@ export class InvestorService {
 
           // That's exactly the kind of race condition you want to protect against.
           // Conditional update closes the race: only succeeds if still unused.
-          const { count } = await tx.referralCode.updateMany({
+          const { count } = await tx.referralCode.updateMany({   
             where: { id: referralCodeRecord.id, isUsed: false },
             data: {
               isUsed: true,
@@ -137,37 +140,48 @@ export class InvestorService {
         }
 
         // System Audit Logs using the updated Schema format
-        const auditPayload = {
-          fullName: investor.fullname,
-          address: investor.address,
-          profession: investor.profession,
-          workplace: investor.workplace,
-          category: investor.category,
-          status: investor.status,
-        };
+        // const auditPayload = {
+        //   fullName: investor.fullname,
+        //   address: investor.address,
+        //   profession: investor.profession,
+        //   workplace: investor.workplace,
+        //   category: investor.category,
+        //   status: investor.status,
+        // };
 
-        await tx.auditLog.create({
+        // await tx.auditLog.create({
+        //   data: {
+        //     adminName: 'Self-Registration',  // 
+        //     adminProfileId: null, // Executed by the user, not administrative staff
+        //     action: 'investor_registered',
+        //     module: LogModule.USER,
+        //     severity: LogSeverity.INFO,
+        //     status: LogStatus.SUCCESS,
+        //     targetLabel: `Investor Profile Created: ${investor.fullname}`,
+        //     targetTable: 'investors',
+        //     targetId: investor.id,
+        //     oldValue: Prisma.DbNull, // No previous state on creation
+        //     newValue: auditPayload as unknown as Prisma.InputJsonValue,
+        //     metadata: {
+        //       referralApplied: !!referralCodeRecord,
+        //       referralCodeUsed: dto.referralCode || null,
+        //     } as Prisma.InputJsonValue,
+        //     ipAddress: context?.ipAddress || null,
+        //     userAgent: context?.userAgent || null,
+        //     sessionId: context?.sessionId || null,
+        //   }
+        // })
+
+        // Notification
+        await tx.adminNotification.create({
           data: {
-            adminName: 'Self-Registration',  // 
-            adminProfileId: null, // Executed by the user, not administrative staff
-            action: 'investor_registered',
-            module: LogModule.USER,
-            severity: LogSeverity.INFO,
-            status: LogStatus.SUCCESS,
-            targetLabel: `Investor Profile Created: ${investor.fullname}`,
-            targetTable: 'investors',
-            targetId: investor.id,
-            oldValue: Prisma.DbNull, // No previous state on creation
-            newValue: auditPayload as unknown as Prisma.InputJsonValue,
-            metadata: {
-              referralApplied: !!referralCodeRecord,
-              referralCodeUsed: dto.referralCode || null,
-            } as Prisma.InputJsonValue,
-            ipAddress: context?.ipAddress || null,
-            userAgent: context?.userAgent || null,
-            sessionId: context?.sessionId || null,
-          }
-        })
+            type: 'new_investment_request' as AdminNotificationType,
+            referenceId: investor.id,
+            message: `New profile registration: ${investor.fullname} (Status: pending) has uploaded KYC documents and is waiting for your manual review.`,
+            isRead: false,
+            clickLink: `/admin/investors/${investor.id}`,
+          },
+        });
 
         return investor;
       })
@@ -182,9 +196,7 @@ export class InvestorService {
     }
   } //end of the Block
 
-  // -----------------------------------------------------------------------
-  // update — partial update (locked when status is 'active')
-  // -----------------------------------------------------------------------
+  // ---------------------------------
   async update(id: string, dto: UpdateInvestorDto) {
     const investor = await this.findOne(id);
 

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { moneySchema, uuidSchema } from './common.js';
+import { dateSchema, limitValidationSchema, maxAmountQuerySchema, minAmountQuerySchema, moneySchema, pageValidationSchema, percentSchema, searchValidationSchema, sortOrderSchema, uuidSchema } from './common.js';
 
 // ============================================================================
 // Monthly Profit Ledger — shared zod contracts
@@ -10,7 +10,7 @@ import { moneySchema, uuidSchema } from './common.js';
 export const payoutStatusSchema = z.enum(['accrued', 'disbursed']);
 
 // @db.Date column — the profit month, accepts any Date-parseable input.
-export const periodMonthSchema = z.coerce.date();
+export const periodMonthSchema = dateSchema;
 
 // ============================================================================
 // Base Monthly Profit Ledger Schema
@@ -26,10 +26,7 @@ const monthlyProfitLedgerBaseSchema = z.object({
   periodMonth: periodMonthSchema,
 
   // Decimal(5,2) — the monthly rate applied, e.g. 10.50 (%).
-  rateApplied: z.coerce
-    .number()
-    .min(0, 'Rate applied cannot be negative')
-    .max(100, 'Rate applied cannot exceed 100'),
+  rateApplied: percentSchema,
 
   // Decimal(14,2) — the computed profit for the month.
   profitAmount: moneySchema,
@@ -104,11 +101,7 @@ export const monthlyProfitLedgerSortBySchema = z.enum([
 export const monthlyProfitLedgerQuerySchema = z
   .object({
     // Free-text search over the related investment info.
-    search: z
-      .string()
-      .trim()
-      .max(150, 'Search cannot exceed 150 characters')
-      .optional(),
+    search: searchValidationSchema,
 
     // --- Filters ---
     investmentId: uuidSchema.optional(),
@@ -116,8 +109,8 @@ export const monthlyProfitLedgerQuerySchema = z
     payoutStatus: payoutStatusSchema.optional(),
 
     // Profit amount range (both ends inclusive and optional).
-    min: z.coerce.number().min(0).default(0),
-    max: z.coerce.number().min(0).default(100_000_000),
+    min: minAmountQuerySchema,
+    max: maxAmountQuerySchema,
 
     // Profit-month range (both ends inclusive and optional) — the model has
     // no createdAt, so periodMonth is the natural "when" filter.
@@ -125,21 +118,12 @@ export const monthlyProfitLedgerQuerySchema = z
     periodTo: periodMonthSchema.optional(),
 
     // --- Pagination ---
-    page: z.coerce
-      .number()
-      .int('Page must be a whole number')
-      .min(1, 'Page must be at least 1')
-      .default(1),
-    limit: z.coerce
-      .number()
-      .int('Limit must be a whole number')
-      .min(1, 'Limit must be at least 1')
-      .max(100, 'Limit cannot exceed 100')
-      .default(10),
+    page: pageValidationSchema,
+    limit: limitValidationSchema,
 
     // --- Sorting ---
     sortBy: monthlyProfitLedgerSortBySchema.default('periodMonth'),
-    sortOrder: z.enum(['asc', 'desc']).default('desc'),
+    sortOrder: sortOrderSchema,
   })
   .refine((data) => data.min == null || data.max == null || data.min <= data.max, {
     message: 'max must be greater than or equal to min',
