@@ -22,6 +22,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
 import type { AuthenticatedUser } from './types/jwt-payload.interface';
 import { LoginDto } from './dto/login.dto';
+import { SignupDto } from './dto/signup.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ForgotPasswordDto, ResetPasswordDto } from './dto/password-reset.dto';
 
@@ -44,6 +45,21 @@ export class AuthController {
       secure: config.get('NODE_ENV', { infer: true }) === 'production',
       domain: config.get('COOKIE_DOMAIN', { infer: true }),
     };
+  }
+
+  // POST /api/auth/signup 
+  // Cookies are set so the client can continue to the investor registration page.
+  @Post('signup')
+  @HttpCode(HttpStatus.CREATED)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  async signup(
+    @Body() dto: SignupDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { user, tokens } = await this.authService.signup(dto, clientOf(req));
+    setAuthCookies(res, this.cookieSettings, tokens);
+    return { user };
   }
 
   // POST /api/auth/login

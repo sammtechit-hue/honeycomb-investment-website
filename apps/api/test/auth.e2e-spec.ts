@@ -175,6 +175,98 @@ describeIfDb('Auth (e2e)', () => {
     };
   }
 
+  // --- signup ------------------------------------------------------------
+
+  function signup(body: {
+    email: string;
+    phoneNumber: string;
+    password: string;
+  }) {
+    return http().post('/api/auth/signup').set('Origin', ORIGIN).send(body);
+  }
+
+  it('signs up an investor, sets cookies, and lets /me work without a separate login', async () => {
+    const res = await signup({
+      email: 'New.Investor@example.com',
+      phoneNumber: '+880 1712-345678',
+      password: PASSWORD,
+    }).expect(201);
+
+    expect(JSON.stringify(res.body)).not.toMatch(/eyJ/);
+    expect(res.body.user).toMatchObject({
+      email: 'new.investor@example.com',
+      phone: '01712345678',
+      role: 'INVESTOR',
+    });
+    expect(res.body.user.passwordHash).toBeUndefined();
+
+    const accessToken = cookie(res, 'access_token')!;
+    const refreshToken = cookie(res, 'refresh_token')!;
+    expect(accessToken).toBeTruthy();
+    expect(refreshToken).toBeTruthy();
+
+    await http()
+      .get('/api/auth/me')
+      .set('Cookie', access(accessToken))
+      .expect(200)
+      .expect((me) => {
+        expect(me.body).toMatchObject({
+          email: 'new.investor@example.com',
+          phone: '01712345678',
+          role: 'INVESTOR',
+        });
+      });
+
+    const stored = await prisma.user.findUniqueOrThrow({
+      where: { email: 'new.investor@example.com' },
+    });
+    expect(
+      await prisma.investor.count({ where: { userId: stored.id } }),
+    ).toBe(0);
+  });
+
+  it('rejects a duplicate email or phone with a clear conflict message', async () => {
+    await createUser({
+      email: 'taken@example.com',
+      phone: '01712345678',
+    });
+
+    const emailClash = await signup({
+      email: 'TAKEN@example.com',
+      phoneNumber: '01812345678',
+      password: PASSWORD,
+    }).expect(409);
+    expect(emailClash.body.message).toBe(
+      'An account with this email already exists',
+    );
+
+    const phoneClash = await signup({
+      email: 'other@example.com',
+      phoneNumber: '01712345678',
+      password: PASSWORD,
+    }).expect(409);
+    expect(phoneClash.body.message).toBe(
+      'An account with this phone number already exists',
+    );
+
+    const bothClash = await signup({
+      email: 'taken@example.com',
+      phoneNumber: '01712345678',
+      password: PASSWORD,
+    }).expect(409);
+    expect(bothClash.body.message).toBe(
+      'This email and phone number are already in use',
+    );
+  });
+
+  it('rejects a weak signup password', async () => {
+    await signup({
+      email: 'weak@example.com',
+      phoneNumber: '01712345678',
+      password: 'short1',
+    }).expect(400);
+  });
+
   // --- login -------------------------------------------------------------
 
   it('logs in and sets hardened cookies without leaking tokens in the body', async () => {
