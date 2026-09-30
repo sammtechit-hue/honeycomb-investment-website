@@ -359,8 +359,9 @@ export class AuthService {
 
 // Emails lowercased so "A@x.com" and "a@x.com" share one lockout counter
 // (the DB lookup itself is case-insensitive). Phones are stored as
-// +8801XXXXXXXXX (BD_PHONE_REGEX); investors naturally type "017â€¦" or
-// "88017â€¦", with spaces/dashes, so those are folded into that format.
+// 01XXXXXXXXX (see phoneNumberSchema in @investment-platform/contracts);
+// investors naturally type "+88017…", "88017…", or "017…", with
+// spaces/dashes/parens, so those are folded into that format.
 function whereIdentifier(identifier: string) {
   return identifier.includes('@')
     ? { email: { equals: identifier, mode: 'insensitive' as const } }
@@ -369,10 +370,18 @@ function whereIdentifier(identifier: string) {
 
 function normalizeIdentifier(raw: string): string {
   const trimmed = raw.trim();
+
+  // Email
   if (trimmed.includes('@')) return trimmed.toLowerCase();
 
-  const digits = trimmed.replace(/[\s-]/g, '');
-  if (/^01\d{9}$/.test(digits)) return `+88${digits}`;
-  if (/^8801\d{9}$/.test(digits)) return `+${digits}`;
-  return digits;
+  // Phone
+  // Remove spaces, -, \, and ()
+  const cleaned = trimmed.replace(/[\s\-()]/g, '');
+  // +8801712345678
+  if (/^\+8801\d{9}$/.test(cleaned)) return `0${cleaned.slice(4)}`;
+  // 8801712345678
+  if (/^8801\d{9}$/.test(cleaned)) return `0${cleaned.slice(3)}`;
+  // 01712345678
+  if (/^01\d{9}$/.test(cleaned)) return cleaned;
+  return cleaned;
 }
