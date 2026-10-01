@@ -47,7 +47,10 @@ export type LoginInput = z.infer<typeof loginInputSchema>;
 export const newPasswordSchema = z
   .string()
   .min(8, 'Password must be at least 8 characters')
-  .refine((value) => utf8ByteLength(value) <= BCRYPT_MAX_BYTES, {      // Maximum: 72 ASCII characters, 24 Bengali characters, 18 emoji.
+  .refine((value) => /^[\x00-\x7F]+$/.test(value), {
+    message: 'Password must contain only English characters',
+  })
+  .refine((value) => utf8ByteLength(value) <= BCRYPT_MAX_BYTES, {      // Maximum: 72 ASCII characters
     message: 'Password is too long',
   })
   .refine((value) => /[a-z]/.test(value), {

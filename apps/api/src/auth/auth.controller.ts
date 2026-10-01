@@ -59,7 +59,10 @@ export class AuthController {
   ) {
     const { user, tokens } = await this.authService.signup(dto, clientOf(req));
     setAuthCookies(res, this.cookieSettings, tokens);
-    return { user };
+    return {
+      "message": "Signup successful",
+      "success": true
+    };
   }
 
   // POST /api/auth/login
@@ -73,7 +76,10 @@ export class AuthController {
   ) {
     const { user, tokens } = await this.authService.login(dto, clientOf(req));
     setAuthCookies(res, this.cookieSettings, tokens);
-    return { user };
+    return {
+      "message": "Login successful",
+      "success": true
+    };
   }
 
   // POST /api/auth/refresh — secure-web calls this when a request gets 401,
@@ -116,7 +122,10 @@ export class AuthController {
       cookieOf(req, REFRESH_TOKEN_COOKIE),
     );
     clearAuthCookies(res, this.cookieSettings);
-    return { ok: true };
+    return {
+      "message": "Logout successful",
+      "success": true
+    };;
   }
 
   // POST /api/auth/logout-all — ends every session on every device.

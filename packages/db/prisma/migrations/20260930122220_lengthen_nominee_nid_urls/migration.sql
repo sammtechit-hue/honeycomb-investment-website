@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "nominees" ALTER COLUMN "nomineeNidFront" SET DATA TYPE VARCHAR(500),
+ALTER COLUMN "nomineeNidBack" SET DATA TYPE VARCHAR(500);

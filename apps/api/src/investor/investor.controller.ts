@@ -3,15 +3,16 @@ import {
   Controller,
   ForbiddenException,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
   UseGuards,
   UsePipes,
-  Req,
   Ip,
-  Headers
+  Headers,
 } from '@nestjs/common';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { Role } from '@investment-platform/db';
@@ -23,17 +24,8 @@ import type { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import { CreateInvestorDto } from './dto/create-investor.dto';
 import { UpdateInvestorDto } from './dto/update-investor.dto';
 import { InvestorService } from './investor.service';
-import type { AuthenticationRequest } from '../utils/common types';
 
-// Scoped to this controller only — the app-wide ValidationPipe in main.ts
-// still runs class-validator for every other resource until they migrate.
-//
-// This is the investor self-service surface (route: /investor), not the
-// staff-facing one — that's /admin/investor, guarded separately. Every
-// route here requires a valid session (JwtAuthGuard) and the INVESTOR role
-// (RolesGuard + @Roles), and GET/PATCH additionally enforce that an
-// investor can only ever touch their own profile — see
-// assertOwnInvestorRecord.
+
 @Controller('investor')
 @UsePipes(ZodValidationPipe)
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -51,24 +43,22 @@ export class InvestorController {
     return this.investorService.findOne(id);
   }
 
-  // POST /api/admin/investor
+  // POST /api/investor
   @Post()
+  @HttpCode(HttpStatus.CREATED)
   create(
     @Body() createInvestorDto: CreateInvestorDto,
-    @Req() req?: AuthenticationRequest,
+    @CurrentUser() user: AuthenticatedUser,
     @Ip() ip?: string,
     @Headers('user-agent') userAgent?: string,
-    @Headers("x-session-id") sessionId?: string,
+    @Headers('x-session-id') sessionId?: string,
   ) {
     const context = {
       ipAddress: ip,
       userAgent: userAgent,
       sessionId: sessionId,
-    }
-
-    // Read user ID attached by the Auth Guard
-    const userId = req?.user?.id;
-    return this.investorService.create(createInvestorDto, userId, context);
+    };
+    return this.investorService.create(createInvestorDto, user?.userId, context);
   }
 
   // PATCH /api/investor/:id

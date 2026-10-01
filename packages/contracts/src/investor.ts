@@ -87,7 +87,7 @@ export const investorCreateInputSchema = z.object({
   fullName: z
     .string()
     .trim()
-    .min(3, 'Full name must be at least 5 characters')
+    .min(3, 'Full name must be at least 3 characters')
     .max(150, 'Full name cannot exceed 150 characters'),
   address: z
     .string()

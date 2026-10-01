@@ -3,12 +3,75 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
-import { Prisma, LogModule, LogSeverity, LogStatus, AdminNotificationType } from '@investment-platform/db';
+import { Prisma, AdminNotificationType } from '@investment-platform/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateInvestorDto } from './dto/create-investor.dto';
 import { UpdateInvestorDto } from './dto/update-investor.dto';
 import { RequestAuditContext } from '../utils/common types';
+
+// The investor's own profile view. An explicit `select` (instead of a bare
+// `include`) keeps this a stable response contract and guarantees we never
+// leak the related User's credentials — `passwordHash` / `tokenVersion`
+// simply aren't part of the selection.
+const INVESTOR_PROFILE_SELECT = {
+  id: true,
+  fullname: true,
+  address: true,
+  profession: true,
+  workplace: true,
+  category: true,
+  status: true,      //pending etc
+  totalInvestmentAmount: true,
+  approvedAt: true,
+  createdAt: true,
+  updatedAt: true,
+  // Contact details live on the 1:1 User; the profile form edits `email`.
+  user: {
+    select: {
+      email: true,
+      phone: true,
+      lastLoginAt: true,
+    },
+  },
+  // KYC review state — the investor watches this go pending -> verified.
+  kycDocuments: {
+    select: {
+      id: true,
+      nidFront: true,
+      nidBack: true,
+      photo: true,
+      verificationStatus: true,
+      uploadedAt: true,
+    },
+  },
+  // Payout account(s); `isActive` marks the one that receives disbursements.
+  bankAccount: {
+    select: {
+      id: true,
+      selectedBank: true,
+      bankName: true,
+      accountName: true,
+      accountNumber: true,
+      routingNumber: true,
+      accountType: true,
+      branchName: true,
+      isActive: true,
+    },
+  },
+  nominee: {
+    select: {
+      id: true,
+      nomineeName: true,
+      nomineeNidFront: true,
+      nomineeNidBack: true,
+      nomineePhoto: true,
+      nomineePhone: true,
+      relation: true,
+    },
+  },
+} satisfies Prisma.InvestorSelect;
 
 @Injectable()
 export class InvestorService {
@@ -28,23 +91,55 @@ export class InvestorService {
     return investor?.userId ?? null;
   }
 
-  // -----------------------------------------------------------------------
   // findOne — single investor with full related data
-  // -----------------------------------------------------------------------
   async findOne(id: string) {
-    return "Investor Data";
+    const investor = await this.prisma.investor.findUnique({
+      where: { id },
+      select: INVESTOR_PROFILE_SELECT,
+    });
+
+    if (!investor) {
+      throw new NotFoundException(`Investor with ID "${id}" not found`);
+    }
+
+    // Flatten the 1:1 User contact onto the profile and expose the DB column
+    // `fullname` under the contract name `fullName`, so the response matches
+    // what the portal consumes (see apps/secure-web/app/investor/[id]/page.tsx).
+    // const { fullname, user, ...profile } = investor;
+    // return {
+    //   ...profile,
+    //   fullName: fullname,
+    //   email: user.email,
+    //   phone: user.phone,
+    // };
+
+
+    // Don't expose category until investor is beyond the initial KYC stages
+    if (investor.status === 'pending' || investor.status === 'uploaded_kyc') {
+      const { category, ...profile } = investor;
+
+      return profile;
+    }
+
+    return investor;
   }
 
   // -----------------------------------------------------------------------
-  // Create service function 
+  // Create service function
   // -----------------------------------------------------------------------
   async create(dto: CreateInvestorDto, userId: string | undefined, context?: RequestAuditContext) {
+    if (!userId) {
+      throw new UnauthorizedException('Session is no longer valid');
+    }
+
+    const referralCode = dto.referralCode?.trim() || undefined;
+
     // Verify User exists
     const [user, existingInvestor, referralCodeRecord] = await Promise.all([
       this.prisma.user.findUnique({ where: { id: userId } }),
       this.prisma.investor.findUnique({ where: { userId } }),
       // Process referral code if provided
-      dto.referralCode ? this.prisma.referralCode.findUnique({ where: { code: dto.referralCode } }) : Promise.resolve(null),
+      referralCode ? this.prisma.referralCode.findUnique({ where: { code: referralCode } }) : Promise.resolve(null),
     ]);
 
     if (!user) {
@@ -53,7 +148,7 @@ export class InvestorService {
     if (existingInvestor) {
       throw new ConflictException('An Investor profile already exists for this user account.');
     }
-    if (dto.referralCode) {
+    if (referralCode) {
       if (!referralCodeRecord) {
         throw new BadRequestException('The provided referral code is invalid');
       }
@@ -74,7 +169,7 @@ export class InvestorService {
             profession: dto.profession,
             workplace: dto.workplace,
             status: 'pending',
-            catagory: 'bronze',
+            category: 'bronze',
             user: {
               connect: { id: userId },
             },
@@ -128,12 +223,12 @@ export class InvestorService {
 
           // That's exactly the kind of race condition you want to protect against.
           // Conditional update closes the race: only succeeds if still unused.
-          const { count } = await tx.referralCode.updateMany({   
+          const { count } = await tx.referralCode.updateMany({
             where: { id: referralCodeRecord.id, isUsed: false },
             data: {
               isUsed: true,
-              useAt: new Date(),
-              referradId: investor.id,
+              usedAt: new Date(),
+              referredId: investor.id,
             },
           });
 
@@ -197,7 +292,10 @@ export class InvestorService {
           },
         });
 
-        return investor;
+        return {
+          message: 'Investor Registration successful',
+          success: true,
+        };;
       })
     } catch (err) {
       // Backstop for the duplicate-investor race: DB unique constraint on
@@ -206,6 +304,11 @@ export class InvestorService {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
         throw new ConflictException('An Investor profile already exists for this user account.');
       }
+      // P2000 = value too long for column (e.g. a URL longer than its
+      // VARCHAR). Surface as 400 with an actionable message instead of 500.
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2000') {
+        throw new BadRequestException('One of the provided values is too long for its field.');
+      }
       throw err;
     }
   } //end of the Block
@@ -213,7 +316,6 @@ export class InvestorService {
   // ---------------------------------
   async update(id: string, dto: UpdateInvestorDto) {
     const investor = await this.findOne(id);
-
     return "Investor Data";
   }
 }
