@@ -66,7 +66,7 @@ export class AuthService {
     private readonly loginAttempts: LoginAttemptsService,
     private readonly passwordTokens: PasswordTokensService,
     private readonly mail: MailService,
-  ) {}
+  ) { }
 
   // Creates an INVESTOR User only — the investor profile/KYC is filled in
   // afterwards on the registration page, while this session is already live.
@@ -195,7 +195,10 @@ export class AuthService {
     });
 
     const tokens = await this.tokens.issueForNewSession(user, client);
-    await this.auditAdmin(user, AuditAction.admin_login, client);
+
+    if (user.role !== Role.INVESTOR) {
+      await this.auditAdmin(user, AuditAction.admin_login, client);
+    }
 
     return { user: updated, tokens };
   }

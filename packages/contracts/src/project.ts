@@ -44,7 +44,7 @@ const projectBaseSchema = z.object({
     .trim()
     .max(5000, 'Description cannot exceed 5000 characters'),
 
-  status: projectStatusSchema,
+  status: projectStatusSchema.default('DRAFT'),
 
   // Money fields — Decimal(18, 2) in Prisma
   minimumInvestment: moneySchema,

@@ -37,8 +37,8 @@ export class ProjectService {
         context?: RequestAuditContext,
     ) {
         try {
-            const project = await this.prisma.$transaction(async (tx) => {
-                
+            await this.prisma.$transaction(async (tx) => {
+
                 const project = await tx.project.create({
                     data: {
                         name: createProjectDto.name,
@@ -98,13 +98,11 @@ export class ProjectService {
                         sessionId: context?.sessionId || null,
                     },
                 });
-
-                return project;
             });
 
             return {
                 message: 'Project Created Successfully',
-                data: project,
+                success: true,
             };
         } catch (err) {
             // Only handle Prisma errors we can turn into a meaningful, actionable

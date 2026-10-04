@@ -102,9 +102,6 @@ export class InvestorService {
       throw new NotFoundException(`Investor with ID "${id}" not found`);
     }
 
-    // Flatten the 1:1 User contact onto the profile and expose the DB column
-    // `fullname` under the contract name `fullName`, so the response matches
-    // what the portal consumes (see apps/secure-web/app/investor/[id]/page.tsx).
     // const { fullname, user, ...profile } = investor;
     // return {
     //   ...profile,
@@ -112,7 +109,6 @@ export class InvestorService {
     //   email: user.email,
     //   phone: user.phone,
     // };
-
 
     // Don't expose category until investor is beyond the initial KYC stages
     if (investor.status === 'pending' || investor.status === 'uploaded_kyc') {
@@ -295,7 +291,7 @@ export class InvestorService {
         return {
           message: 'Investor Registration successful',
           success: true,
-        };;
+        };
       })
     } catch (err) {
       // Backstop for the duplicate-investor race: DB unique constraint on

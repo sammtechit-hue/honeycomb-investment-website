@@ -35,6 +35,7 @@ export class InvestorController {
 
   // GET /api/investor/:id
   @Get(':id')
+  @HttpCode(HttpStatus.OK)
   async findOne(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: AuthenticatedUser,
