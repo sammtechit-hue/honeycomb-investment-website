@@ -33,9 +33,9 @@ export const bankExportFormatSchema = z.enum(['cbl', 'beftn'], {
 
 export const nonNegativeNumberSchema = z.coerce.number().min(0);
 
-export const minAmountQuerySchema = nonNegativeNumberSchema.default(0);
+export const minAmountQuerySchema = nonNegativeNumberSchema.optional();
 
-export const maxAmountQuerySchema = nonNegativeNumberSchema.default(100_000_000);
+export const maxAmountQuerySchema = nonNegativeNumberSchema.optional();
 
 export const moneySchema = z
   .coerce
@@ -88,9 +88,14 @@ export const passwordSchema = z
 
 // Query strings arrive as text, so "true"/"false" is mapped to a real boolean.
 // (z.coerce.boolean() is not used on purpose — Boolean('false') is true.)
-export const queryBooleanSchema = z
-  .enum(['true', 'false'], { message: 'Value must be "true" or "false"' })
-  .transform((val) => val === 'true');
+export const queryBooleanSchema = z.preprocess(
+  (value) => {
+    if (value === 'true' || value === true) return true;
+    if (value === 'false' || value === false) return false;
+    return value;
+  },
+  z.boolean(),
+);
 
 // Mirrors Prisma `BankSelected` enum
 export const bankSelectedSchema = z.enum(['city_bank', 'others']);

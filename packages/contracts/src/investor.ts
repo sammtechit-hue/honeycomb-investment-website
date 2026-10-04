@@ -165,7 +165,10 @@ export const investorQuerySchema = z.object({
   maxTotalInvestment: maxAmountQuerySchema,
 })
   // Cross-field rule: max must be >= min
-  .refine((data) => data.maxTotalInvestment >= data.minTotalInvestment, {
+  .refine((d) =>
+    d.minTotalInvestment === undefined ||
+    d.maxTotalInvestment === undefined ||
+    d.maxTotalInvestment >= d.minTotalInvestment,{
     message: 'maxTotalInvestment must be greater than or equal to minTotalInvestment',
     path: ['maxTotalInvestment'],
   });

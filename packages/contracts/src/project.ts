@@ -165,6 +165,7 @@ export const projectQuerySchema = z.object({
   // Sorting
   sortBy: z
     .enum([
+      'id',
       'name',
       'status',
       'minimumInvestment',
@@ -177,9 +178,15 @@ export const projectQuerySchema = z.object({
     .default('createdAt'),
   sortOrder: sortOrderSchema,
 })// Cross-field rule: max must be >= min
-  .refine((data) => data.maxInvestment >= data.minInvestment, {
-    message: 'maxInvestment must be greater than or equal to minInvestment',
-    path: ['maxInvestment'],
-  });
+
+// it drops rows where minimumInvestment is NULL if the column is nullable. It also makes every query filter on a column the user never asked about. so default has removed
+  .refine((d) =>
+    d.minInvestment === undefined ||
+    d.maxInvestment === undefined ||
+    d.maxInvestment >= d.minInvestment,
+    {
+      message: 'maxInvestment must be greater than or equal to minInvestment',
+      path: ['maxInvestment'],
+    });
 
 export type ProjectQuery = z.infer<typeof projectQuerySchema>;

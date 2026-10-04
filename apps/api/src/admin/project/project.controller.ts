@@ -27,14 +27,7 @@ import { UpdateProjectDto } from './dto/update-project.dto';
 import { ProjectQueryDto } from './dto/query-project.dto';
 import { ProjectService } from './project.service';
 
-// Admin project endpoints — list/filter, read, create, update and delete.
-// ADMIN, MODERATOR and SUPER_ADMIN may view, update and delete projects; only
-// ADMIN and SUPER_ADMIN may create them (see the method-level @Roles on create,
-// which overrides this class-level list). SUPER_ADMIN always passes the
-// RolesGuard (see roles.guard.ts), so it's never listed explicitly. A missing
-// @Roles would deny everyone, because RolesGuard denies by default.
-// Validation is scoped to this controller (@UsePipes): the global
-// class-validator pipe strips every field on zod DTOs. See main.ts.
+
 @Controller('admin/project')
 @UsePipes(ZodValidationPipe)
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -44,10 +37,10 @@ export class ProjectController {
         private readonly projectService: ProjectService,
     ) { }
 
-    // GET /api/admin/project?search=deed&status=OPEN&page=1&limit=10&sortBy=createdAt&sortOrder=desc
+    //   GET /api/admin/project?search=deed&status=OPEN&isActive=true&page=1&limit=10&sortBy=createdAt&sortOrder=desc
     @Get()
+    @HttpCode(HttpStatus.OK)
     findAll(@Query() query: ProjectQueryDto) {
-        // Search, filter, sort and pagination are validated by ProjectQueryDto.
         return this.projectService.findAll(query);
     }
 
