@@ -53,7 +53,6 @@ export class ProjectController {
 
     // POST /api/admin/project
     // Create a new project record. Only ADMIN and SUPER_ADMIN may create
-    // projects — this method-level @Roles overrides the class-level
     // @Roles(Role.ADMIN, Role.MODERATOR), so MODERATOR is denied here.
     @Post()
     @Roles(Role.ADMIN)
@@ -80,17 +79,42 @@ export class ProjectController {
     update(
         @Param('id', ParseUUIDPipe) id: string,
         @Body() updateProjectDto: UpdateProjectDto,
+        @CurrentUser() user: AuthenticatedUser,
+        @Ip() ip?: string,
+        @Headers('user-agent') userAgent?: string,
+        @Headers('x-session-id') sessionId?: string,
     ) {
-        // Only the fields provided in the request
-        // will be updated.
+        const context = {
+            ipAddress: ip,
+            userAgent: userAgent,
+            sessionId: sessionId,
+        };
 
-        return this.projectService.update(id, updateProjectDto);
+        // user.userId is the User.id attached by JwtAuthGuard/JwtStrategy.
+        return this.projectService.update(id, updateProjectDto, user?.userId, context);
     }
 
     // DELETE /api/admin/project/:id
+    // Destructive: only ADMIN may delete (SUPER_ADMIN passes via RolesGuard).
+    // MODERATOR is denied here even though the class allows ADMIN + MODERATOR.
     @Delete(':id')
-    remove(@Param('id', ParseUUIDPipe) id: string) {
+    @Roles(Role.ADMIN)
+    @HttpCode(HttpStatus.OK)
+    remove(
+        @Param('id', ParseUUIDPipe) id: string,
+        @CurrentUser() user: AuthenticatedUser,
+        @Ip() ip?: string,
+        @Headers('user-agent') userAgent?: string,
+        @Headers('x-session-id') sessionId?: string,
+    ) {
         // Delete a project by id
-        return this.projectService.remove(id);
+        const context = {
+            ipAddress: ip,
+            userAgent: userAgent,
+            sessionId: sessionId,
+        };
+
+        // user.userId is the User.id attached by JwtAuthGuard/JwtStrategy.
+        return this.projectService.remove(id, user?.userId, context);
     }
 }

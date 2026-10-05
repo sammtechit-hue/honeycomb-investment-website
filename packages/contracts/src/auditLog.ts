@@ -11,6 +11,8 @@ import { dateSchema, ipAddressSchema, limitValidationSchema, pageValidationSchem
 // (avoids a runtime dep on @prisma/client in the shared contracts package).
 export const auditActionSchema = z.enum([
   'project_created',
+  'project_updated',
+  'project_deleted',
   'investor_registered',
   'investor_kyc_uploaded',
   'investor_kyc_status_changed',

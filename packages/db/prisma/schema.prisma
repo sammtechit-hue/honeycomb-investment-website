@@ -17,6 +17,8 @@ datasource db {
 
 enum AuditAction {
     project_created
+    project_updated // any edit to an existing project (fields and/or status)
+    project_deleted
     investor_registered
     investor_kyc_uploaded
     investor_kyc_status_changed // e.g. Kamal changed KYC doc status to verified
