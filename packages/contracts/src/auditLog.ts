@@ -18,6 +18,7 @@ export const auditActionSchema = z.enum([
   'investor_kyc_status_changed',
   'investor_status_changed',
   'investor_verified',
+  'investor_information_updated',
   'investment_created',
   'investment_status_changed',
   'monthly_rate_set',
@@ -27,6 +28,12 @@ export const auditActionSchema = z.enum([
   'withdrawal_status_changed',
   'referral_code_generated',
   'company_document_uploaded',
+  'admin_login',
+  'admin_login_failed',
+  'admin_password_reset',
+  'admin_invite_accepted',
+  'admin_created',
+  'admin_invite_resent',
 ]);
 
 
@@ -41,6 +48,7 @@ export const logModuleSchema = z.enum([
   'USER',          // User management (Admins, Moderators)
   'INVESTOR',      // Investor profile lifecycle (status, category, profile updates)
   'KYC',           // NID, photo verification, compliance approvals/rejections
+  'NOMINEE',
   'BANK_ACCOUNT',  // Investor bank account additions, modifications, verifications
   'PROJECT',       // Projects/ventures creation, targets, status transitions
   'INVESTMENT',    // Investment commitments, contracts, slot allocations

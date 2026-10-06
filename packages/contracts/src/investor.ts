@@ -3,6 +3,7 @@ import {
   bankAccountSchema,
   bankAccountTypeSchema,
   bankSelectedSchema,
+  emailSchema,
   fileUrlSchema,
   limitValidationSchema,
   maxAmountQuerySchema,
@@ -135,6 +136,54 @@ export const investorUpdateInputSchema = investorCreateInputSchema
   .partial();
 
 export type InvestorUpdateInput = z.infer<typeof investorUpdateInputSchema>;
+
+// ---------------------------------------------------------------------------
+// Admin update — every investor profile field, plus nested KYC / nominee
+// and the related User contact fields. All keys optional (PATCH).
+// NOTE: bank account changes go through a dedicated endpoint, not here.
+// NOTE: totalInvestmentAmount is system-computed (incremented on investment
+// creation) — neither admins nor investors may set it, so it is not accepted here.
+// NOTE: approvedAt / approvedBy are system-set on the transition to `active`
+// (stamped from the acting admin's session) — they are not accepted as input.
+// ---------------------------------------------------------------------------
+export const investorAdminUpdateInputSchema = z.object({
+  fullName: z
+    .string()
+    .trim()
+    .min(3, 'Full name must be at least 3 characters')
+    .max(150, 'Full name cannot exceed 150 characters')
+    .optional(),
+  address: z
+    .string()
+    .trim()
+    .max(500, 'Address cannot exceed 500 characters')
+    .optional(),
+  profession: z
+    .string()
+    .trim()
+    .max(150, 'Profession cannot exceed 150 characters')
+    .optional(),
+  workplace: z
+    .string()
+    .trim()
+    .max(150, 'Workplace cannot exceed 150 characters')
+    .optional(),
+  status: investorStatusSchema.optional(),
+  category: investorCategorySchema.optional(),
+  email: emailSchema.optional(),
+  phone: phoneNumberSchema.optional(),
+  nominee: nomineeSchema.partial().optional(),
+  kycDocuments: kycDocumentsSchema
+    .extend({
+      verificationStatus: verificationStatusSchema.optional(),
+    })
+    .partial()
+    .optional(),
+});
+
+export type InvestorAdminUpdateInput = z.infer<
+  typeof investorAdminUpdateInputSchema
+>;
 
 
 // Query (findAll — search, filter, pagination, sorting)

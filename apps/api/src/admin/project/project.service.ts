@@ -74,8 +74,6 @@ export class ProjectService {
                 limit,
                 total,
                 totalPages,
-                // hasNextPage: page < totalPages,
-                // hasPreviousPage: page > 1,
             },
         };
     }

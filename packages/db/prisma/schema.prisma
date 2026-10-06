@@ -24,6 +24,7 @@ enum AuditAction {
     investor_kyc_status_changed // e.g. Kamal changed KYC doc status to verified
     investor_status_changed // e.g. investor approved/suspended
     investor_verified // shortcut for status -> active, if you want it separate from the generic one above
+    investor_information_updated
     investment_created
     investment_status_changed
     monthly_rate_set
@@ -828,6 +829,7 @@ enum LogModule {
     USER // User management (Admins, Moderators)
     INVESTOR // Investor profile lifecycle (status, category, profile updates)
     KYC // NID, photo verification, compliance approvals/rejections
+    NOMINEE
     BANK_ACCOUNT // Investor bank account additions, modifications, verifications
     PROJECT // Projects/ventures creation, targets, status transitions
     INVESTMENT // Investment commitments, contracts, slot allocations
