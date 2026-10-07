@@ -33,10 +33,10 @@ export default async function InvestorProfilePage({
   const investor: Investor = await res.json();
 
   // Prisma returns null for empty optional columns; the zod schema (and
-  // react-hook-form) expect undefined instead.
+  // react-hook-form) expect undefined instead. Email is not edited here:
+  // it lives on the User account, not in the investor update schema.
   const defaultValues = {
     fullName: investor.fullName,
-    email: investor.email ?? undefined,
     address: investor.address ?? undefined,
     profession: investor.profession ?? undefined,
     workplace: investor.workplace ?? undefined,
