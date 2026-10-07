@@ -6,9 +6,13 @@ generator client {
     provider = "prisma-client-js"
 }
 
+// DATABASE_URL: the connection the app uses at runtime (on Supabase, the
+// transaction pooler). DIRECT_URL: a non-pooled session, which `prisma db
+// push` / `migrate` need. Locally both can be the same URL.
 datasource db {
-    provider = "postgresql"
-    url      = env("DATABASE_URL")
+    provider  = "postgresql"
+    url       = env("DATABASE_URL")
+    directUrl = env("DIRECT_URL")
 }
 
 // ----------------------------------------------------------------------------
