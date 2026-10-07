@@ -11,13 +11,14 @@ services:
     region: singapore
     # Built from the repo root: the API depends on packages/contracts and
     # packages/db. turbo builds contracts (dist/) before the API.
-    # --prod=false: NODE_ENV=production would otherwise skip devDependencies
-    # (Nest CLI, TypeScript) that the build needs.
+    # NODE_ENV=development for the install step only: with the service's
+    # NODE_ENV=production, pnpm skips devDependencies (Nest CLI, TypeScript)
+    # that the build needs, and pnpm 12 has no flag to override that.
     # `corepack pnpm` runs the pnpm version pinned in package.json
     # (packageManager) without `corepack enable`, which fails on Render:
     # /usr/bin is read-only.
     buildCommand: >-
-      corepack pnpm install --frozen-lockfile --prod=false &&
+      NODE_ENV=development corepack pnpm install --frozen-lockfile &&
       corepack pnpm --filter @investment-platform/db generate &&
       corepack pnpm turbo run build --filter=api
     # Same as the api's start:prod script, without needing pnpm at runtime.
