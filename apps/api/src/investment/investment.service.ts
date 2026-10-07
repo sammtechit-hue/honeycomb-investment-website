@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import {
   AdminNotificationType,
+  InvestmentType,
   InvestorStatus,
   Prisma,
   ProjectStatus,
@@ -95,12 +96,19 @@ export class InvestmentService {
 
     this.assertProjectAcceptsInvestment(project, amount);
 
+    // Fixed-rate investments carry a default agreed rate from day one;
+    // unfixed ones leave `rate` unset so it is driven by the admin / monthly
+    // rate settings instead.
+    const rate =
+      dto.investmentType === InvestmentType.fixed ? 2.5 : undefined;
+
     try {
       return await this.prisma.$transaction(async (tx) => {
         const investment = await tx.investment.create({
           data: {
             amount,
             investmentType: dto.investmentType,
+            rate,
             investmentPeriodMonths: dto.investmentPeriodMonths,
             disbursementPeriod: dto.disbursementPeriod,
             // Default to "now" so later slot math has a date even if the
