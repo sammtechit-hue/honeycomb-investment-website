@@ -10,11 +10,15 @@ import { dateSchema, ipAddressSchema, limitValidationSchema, pageValidationSchem
 // Mirrors Prisma `AuditAction` enum — kept in sync with prisma schema
 // (avoids a runtime dep on @prisma/client in the shared contracts package).
 export const auditActionSchema = z.enum([
+  'project_created',
+  'project_updated',
+  'project_deleted',
   'investor_registered',
   'investor_kyc_uploaded',
   'investor_kyc_status_changed',
   'investor_status_changed',
   'investor_verified',
+  'investor_information_updated',
   'investment_created',
   'investment_status_changed',
   'monthly_rate_set',
@@ -24,6 +28,12 @@ export const auditActionSchema = z.enum([
   'withdrawal_status_changed',
   'referral_code_generated',
   'company_document_uploaded',
+  'admin_login',
+  'admin_login_failed',
+  'admin_password_reset',
+  'admin_invite_accepted',
+  'admin_created',
+  'admin_invite_resent',
 ]);
 
 
@@ -34,15 +44,22 @@ export const logSeveritySchema = z.enum(['INFO', 'WARNING', 'ERROR', 'CRITICAL']
 export const logStatusSchema = z.enum(['SUCCESS', 'FAILURE', 'PENDING']);
 
 export const logModuleSchema = z.enum([
-  'INVESTOR',
-  'INVESTMENT',
-  'KYC',
-  'DISBURSEMENT',
-  'WITHDRAWAL',
-  'REFERRAL',
-  'COMPANY_DOCUMENT',
-  'AUTH',
-  'SYSTEM',
+  'AUTH',          // Login, logout, password resets, role changes
+  'USER',          // User management (Admins, Moderators)
+  'INVESTOR',      // Investor profile lifecycle (status, category, profile updates)
+  'KYC',           // NID, photo verification, compliance approvals/rejections
+  'NOMINEE',
+  'BANK_ACCOUNT',  // Investor bank account additions, modifications, verifications
+  'PROJECT',       // Projects/ventures creation, targets, status transitions
+  'INVESTMENT',    // Investment commitments, contracts, slot allocations
+  'PAYMENT',       // Incoming payment deposits (bKash, Nagad, Bank Transfer)
+  'DISBURSEMENT',  // Payout batches, export generations (CBL, BEFTN), payout completions
+  'WITHDRAWAL',    // Principal capital withdrawal requests & notice periods
+  'PROFIT_LEDGER', // Monthly profit rate settings, profit accrual runs
+  'REFERRAL',      // Referral codes generation, bonus tracking
+  'DOCUMENT',      // Company documents, deeds, vouchers, certificates
+  'LEAD',          // ROI Calculator leads & follow-up tracking
+  'SYSTEM',        // System configurations, automated cron jobs, maintenance
 ]);
 
 // The table/entity the action was performed on, e.g. "investors".

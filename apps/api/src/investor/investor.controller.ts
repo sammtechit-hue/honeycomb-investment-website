@@ -3,12 +3,16 @@ import {
   Controller,
   ForbiddenException,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
   UseGuards,
   UsePipes,
+  Ip,
+  Headers,
 } from '@nestjs/common';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { Role } from '@investment-platform/db';
@@ -21,24 +25,17 @@ import { CreateInvestorDto } from './dto/create-investor.dto';
 import { UpdateInvestorDto } from './dto/update-investor.dto';
 import { InvestorService } from './investor.service';
 
-// Scoped to this controller only — the app-wide ValidationPipe in main.ts
-// still runs class-validator for every other resource until they migrate.
-//
-// This is the investor self-service surface (route: /investor), not the
-// staff-facing one — that's /admin/investor, guarded separately. Every
-// route here requires a valid session (JwtAuthGuard) and the INVESTOR role
-// (RolesGuard + @Roles), and GET/PATCH additionally enforce that an
-// investor can only ever touch their own profile — see
-// assertOwnInvestorRecord.
+
 @Controller('investor')
 @UsePipes(ZodValidationPipe)
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.INVESTOR)
 export class InvestorController {
-  constructor(private readonly investorService: InvestorService) {}
+  constructor(private readonly investorService: InvestorService) { }
 
   // GET /api/investor/:id
   @Get(':id')
+  @HttpCode(HttpStatus.OK)
   async findOne(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: AuthenticatedUser,
@@ -49,13 +46,20 @@ export class InvestorController {
 
   // POST /api/investor
   @Post()
-  create(@Body() createInvestorDto: CreateInvestorDto) {
-    // The Investor.userId that owns the created profile must come from the
-    // verified token (JwtStrategy), never from the request body — the DTO
-    // deliberately has no userId field. TODO(service): thread the
-    // authenticated user id through once InvestorService.create is wired
-    // to Prisma instead of returning a stub.
-    return this.investorService.create(createInvestorDto);
+  @HttpCode(HttpStatus.CREATED)
+  create(
+    @Body() createInvestorDto: CreateInvestorDto,
+    @CurrentUser() user: AuthenticatedUser,
+    @Ip() ip?: string,
+    @Headers('user-agent') userAgent?: string,
+    @Headers('x-session-id') sessionId?: string,
+  ) {
+    const context = {
+      ipAddress: ip,
+      userAgent: userAgent,
+      sessionId: sessionId,
+    };
+    return this.investorService.create(createInvestorDto, user?.userId, context);
   }
 
   // PATCH /api/investor/:id

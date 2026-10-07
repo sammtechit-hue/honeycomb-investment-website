@@ -22,6 +22,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
 import type { AuthenticatedUser } from './types/jwt-payload.interface';
 import { LoginDto } from './dto/login.dto';
+import { SignupDto } from './dto/signup.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ForgotPasswordDto, ResetPasswordDto } from './dto/password-reset.dto';
 
@@ -46,6 +47,24 @@ export class AuthController {
     };
   }
 
+  // POST /api/auth/signup 
+  // Cookies are set so the client can continue to the investor registration page.
+  @Post('signup')
+  @HttpCode(HttpStatus.CREATED)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  async signup(
+    @Body() dto: SignupDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { user, tokens } = await this.authService.signup(dto, clientOf(req));
+    setAuthCookies(res, this.cookieSettings, tokens);
+    return {
+      "message": "Signup successful",
+      "success": true
+    };
+  }
+
   // POST /api/auth/login
   @Post('login')
   @HttpCode(HttpStatus.OK)
@@ -57,7 +76,10 @@ export class AuthController {
   ) {
     const { user, tokens } = await this.authService.login(dto, clientOf(req));
     setAuthCookies(res, this.cookieSettings, tokens);
-    return { user };
+    return {
+      "message": "Login successful",
+      "success": true
+    };
   }
 
   // POST /api/auth/refresh — secure-web calls this when a request gets 401,
@@ -100,7 +122,10 @@ export class AuthController {
       cookieOf(req, REFRESH_TOKEN_COOKIE),
     );
     clearAuthCookies(res, this.cookieSettings);
-    return { ok: true };
+    return {
+      "message": "Logout successful",
+      "success": true
+    };;
   }
 
   // POST /api/auth/logout-all — ends every session on every device.

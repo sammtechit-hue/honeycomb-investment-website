@@ -16,11 +16,15 @@ datasource db {
 // ----------------------------------------------------------------------------
 
 enum AuditAction {
+    project_created
+    project_updated // any edit to an existing project (fields and/or status)
+    project_deleted
     investor_registered
     investor_kyc_uploaded
     investor_kyc_status_changed // e.g. Kamal changed KYC doc status to verified
     investor_status_changed // e.g. investor approved/suspended
     investor_verified // shortcut for status -> active, if you want it separate from the generic one above
+    investor_information_updated
     investment_created
     investment_status_changed
     monthly_rate_set
@@ -190,22 +194,22 @@ enum DisbursementSlot {
 // ----------------------------------------------------------------------------
 
 model User {
-    id           String   @id @default(uuid()) @db.Uuid
-    email        String   @unique @db.VarChar(150)
-    phone        String?  @unique @db.VarChar(20) // Investor login identifier; null for admins
-    passwordHash String   @map("password_hash") @db.VarChar(255)
-    role         Role     @default(INVESTOR)
+    id           String    @id @default(uuid()) @db.Uuid
+    email        String    @unique @db.VarChar(150)
+    phone        String?   @unique @db.VarChar(20) // Investor login identifier; null for admins
+    passwordHash String    @map("password_hash") @db.VarChar(255)
+    role         Role      @default(INVESTOR)
     // Soft account-disable switch — checked on every request (see
     // JwtStrategy). Distinct from Investor.status ('suspended' etc.), which
     // is business-level state; this is purely "can this login still be used".
-    isActive     Boolean  @default(true) @map("is_active")
+    isActive     Boolean   @default(true) @map("is_active")
     // Embedded in every access token as `tv`. Bumping it (password change,
     // "log out everywhere", admin force-logout) kills every access token
     // issued before the bump — JwtStrategy rejects a tv mismatch.
-    tokenVersion Int      @default(0) @map("token_version")
+    tokenVersion Int       @default(0) @map("token_version")
     lastLoginAt  DateTime? @map("last_login_at")
-    createdAt    DateTime @default(now()) @map("created_at")
-    updatedAt    DateTime @updatedAt @map("updated_at")
+    createdAt    DateTime  @default(now()) @map("created_at")
+    updatedAt    DateTime  @updatedAt @map("updated_at")
 
     investorProfile   Investor?
     adminProfile      AdminProfile?
@@ -322,7 +326,7 @@ model Investor {
     category              InvestorCategory @default(bronze)
     status                InvestorStatus   @default(pending)
     approvedAt            DateTime?        @map("approved_at")
-    approvedBy            String?          @db.Uuid
+    approvedBy            String?          @db.Uuid // UserId from User Model who is admin. Dont need adminprofileId
     createdAt             DateTime         @default(now()) @map("created_at")
     updatedAt             DateTime         @updatedAt @map("updated_at")
 
@@ -418,8 +422,8 @@ model InvestorBankAccount {
 model Nominee {
     id              String  @id @default(uuid()) @db.Uuid
     nomineeName     String  @map("nominee_name") @db.VarChar(150)
-    nomineeNidFront String? @db.VarChar(30)
-    nomineeNidBack  String? @db.VarChar(30)
+    nomineeNidFront String? @db.VarChar(500)
+    nomineeNidBack  String? @db.VarChar(500)
     nomineePhoto    String? @map("nominee_photo")
     nomineePhone    String  @map("nominee_phone") @db.VarChar(20)
     relation        String  @db.VarChar(50)
@@ -458,8 +462,9 @@ model Project {
 
     investments Investment[]
 
-    @@index([status])
-    @@index([isVisible, isActive])
+    @@index([isVisible, isActive, status, createdAt])
+    @@index([minimumInvestment])
+    @@index([createdAt, id])
     @@map("projects")
 }
 
@@ -767,13 +772,13 @@ model Referral {
 // ----------------------------------------------------------------------------
 
 model RoiCalculatorLead {
-    id                   String   @id @default(uuid()) @db.Uuid
-    name                 String   @db.VarChar(150)
-    phoneNumber          String   @map("phone_number") @db.VarChar(20)
-    email                String?  @db.VarChar(150)
-    enteredAmount        Decimal  @map("entered_amount") @db.Decimal(14, 2)
-    createdAt            DateTime @default(now()) @map("created_at")
-    followedUp           Boolean  @default(false) @map("followed_up")
+    id            String   @id @default(uuid()) @db.Uuid
+    name          String   @db.VarChar(150)
+    phoneNumber   String   @map("phone_number") @db.VarChar(20)
+    email         String?  @db.VarChar(150)
+    enteredAmount Decimal  @map("entered_amount") @db.Decimal(14, 2)
+    createdAt     DateTime @default(now()) @map("created_at")
+    followedUp    Boolean  @default(false) @map("followed_up")
 
     @@index([followedUp])
     @@map("roi_calculator_leads")
@@ -784,13 +789,14 @@ model RoiCalculatorLead {
 // ----------------------------------------------------------------------------
 
 model AdminNotification {
-    id            String                @id @default(uuid()) @db.Uuid
-    type          AdminNotificationType
-    referenceId   String?               @map("reference_id") @db.Uuid
+    id          String                @id @default(uuid()) @db.Uuid
+    type        AdminNotificationType
+    referenceId String?               @map("reference_id") @db.Uuid
 
-    message   String?   @db.VarChar(255)
+    message   String?  @db.VarChar(255)
     isRead    Boolean  @default(false) @map("is_read")
     createdAt DateTime @default(now()) @map("created_at")
+    clickLink String?
 
     @@index([isRead, createdAt])
     @@index([type])
@@ -819,16 +825,22 @@ model AdminNotification {
 // }
 
 enum LogModule {
-    CATALOG
-    PRODUCT
-    ORDER
-    USER
-    MARKETING
-    INVENTORY
-    CONTENT
-    SUPPORT
-    AUTH
-    SYSTEM
+    AUTH // Login, logout, password resets, role changes
+    USER // User management (Admins, Moderators)
+    INVESTOR // Investor profile lifecycle (status, category, profile updates)
+    KYC // NID, photo verification, compliance approvals/rejections
+    NOMINEE
+    BANK_ACCOUNT // Investor bank account additions, modifications, verifications
+    PROJECT // Projects/ventures creation, targets, status transitions
+    INVESTMENT // Investment commitments, contracts, slot allocations
+    PAYMENT // Incoming payment deposits (bKash, Nagad, Bank Transfer)
+    DISBURSEMENT // Payout batches, export generations (CBL, BEFTN), payout completions
+    WITHDRAWAL // Principal capital withdrawal requests & notice periods
+    PROFIT_LEDGER // Monthly profit rate settings, profit accrual runs
+    REFERRAL // Referral codes generation, bonus tracking
+    DOCUMENT // Company documents, deeds, vouchers, certificates
+    LEAD // ROI Calculator leads & follow-up tracking
+    SYSTEM // System configurations, automated cron jobs, maintenance
 }
 
 enum LogSeverity {

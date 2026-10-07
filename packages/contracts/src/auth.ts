@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { emailSchema, phoneNumberSchema } from './common.js';
 
 // bcrypt only hashes the first 72 BYTES of a password — anything after that
 // is silently ignored, so a longer password would give a false sense of
@@ -45,9 +46,12 @@ export type LoginInput = z.infer<typeof loginInputSchema>;
 
 export const newPasswordSchema = z
   .string()
-  .min(10, 'Password must be at least 10 characters')
-  .refine((value) => utf8ByteLength(value) <= BCRYPT_MAX_BYTES, {
-    message: 'Password is too long (max 72 bytes)',
+  .min(8, 'Password must be at least 8 characters')
+  .refine((value) => /^[\x00-\x7F]+$/.test(value), {
+    message: 'Password must contain only English characters',
+  })
+  .refine((value) => utf8ByteLength(value) <= BCRYPT_MAX_BYTES, {      // Maximum: 72 ASCII characters
+    message: 'Password is too long',
   })
   .refine((value) => /[a-z]/.test(value), {
     message: 'Password must contain a lowercase letter',
@@ -70,6 +74,18 @@ export const changePasswordInputSchema = z
   });
 
 export type ChangePasswordInput = z.infer<typeof changePasswordInputSchema>;
+
+// ---------------------------------------------------------------------------
+// Investor sign-up (creates the User; KYC/profile is a later step)
+// ---------------------------------------------------------------------------
+
+export const signupInputSchema = z.object({
+  email: emailSchema.toLowerCase(),
+  phoneNumber: phoneNumberSchema,
+  password: newPasswordSchema,
+});
+
+export type SignupInput = z.infer<typeof signupInputSchema>;
 
 // ---------------------------------------------------------------------------
 // Forgot / reset password (reset also completes an admin invite)

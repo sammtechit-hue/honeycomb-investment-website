@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -12,6 +13,7 @@ import {
   LogSeverity,
   LogStatus,
   PasswordTokenPurpose,
+  Prisma,
   Role,
 } from '@investment-platform/db';
 import type {
@@ -19,6 +21,7 @@ import type {
   ForgotPasswordInput,
   LoginInput,
   ResetPasswordInput,
+  SignupInput,
 } from '@investment-platform/contracts/auth';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
@@ -63,7 +66,68 @@ export class AuthService {
     private readonly loginAttempts: LoginAttemptsService,
     private readonly passwordTokens: PasswordTokensService,
     private readonly mail: MailService,
-  ) {}
+  ) { }
+
+  // Creates an INVESTOR User only — the investor profile/KYC is filled in
+  // afterwards on the registration page, while this session is already live.
+  async signup(input: SignupInput, client: ClientContext) {
+    const [emailTaken, phoneTaken] = await Promise.all([
+      this.prisma.user.findFirst({
+        where: { email: { equals: input.email, mode: 'insensitive' } },
+        select: { id: true },
+      }),
+      this.prisma.user.findFirst({
+        where: { phone: input.phoneNumber },
+        select: { id: true },
+      }),
+    ]);
+
+    if (emailTaken || phoneTaken) {
+      throw new ConflictException(
+        // For Showing a message
+        signupConflictMessage(Boolean(emailTaken), Boolean(phoneTaken)),
+      );
+    }
+
+    const passwordHash = await this.passwords.hash(input.password);
+    let created;
+    try {
+      created = await this.prisma.user.create({
+        data: {
+          email: input.email,
+          phone: input.phoneNumber,
+          passwordHash,
+          role: Role.INVESTOR,
+          lastLoginAt: new Date(),
+        },
+        select: { ...PUBLIC_USER_SELECT, tokenVersion: true },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        const fields = uniqueTargetFields(error);
+        throw new ConflictException(
+          signupConflictMessage(
+            fields.includes('email'),
+            fields.includes('phone'),
+          ),
+        );
+      }
+      throw error;
+    }
+
+    const { tokenVersion, ...user } = created;
+    const tokens = await this.tokens.issueForNewSession(
+      { id: user.id, role: user.role, tokenVersion },
+      client,
+    );
+
+    // Audit-Log
+
+    return { user, tokens };
+  }
 
   async login(input: LoginInput, client: ClientContext) {
     const identifier = normalizeIdentifier(input.identifier);
@@ -131,7 +195,10 @@ export class AuthService {
     });
 
     const tokens = await this.tokens.issueForNewSession(user, client);
-    await this.auditAdmin(user, AuditAction.admin_login, client);
+
+    if (user.role !== Role.INVESTOR) {
+      await this.auditAdmin(user, AuditAction.admin_login, client);
+    }
 
     return { user: updated, tokens };
   }
@@ -359,8 +426,9 @@ export class AuthService {
 
 // Emails lowercased so "A@x.com" and "a@x.com" share one lockout counter
 // (the DB lookup itself is case-insensitive). Phones are stored as
-// +8801XXXXXXXXX (BD_PHONE_REGEX); investors naturally type "017â€¦" or
-// "88017â€¦", with spaces/dashes, so those are folded into that format.
+// 01XXXXXXXXX (see phoneNumberSchema in @investment-platform/contracts);
+// investors naturally type "+88017…", "88017…", or "017…", with
+// spaces/dashes/parens, so those are folded into that format.
 function whereIdentifier(identifier: string) {
   return identifier.includes('@')
     ? { email: { equals: identifier, mode: 'insensitive' as const } }
@@ -369,10 +437,44 @@ function whereIdentifier(identifier: string) {
 
 function normalizeIdentifier(raw: string): string {
   const trimmed = raw.trim();
+
+  // Email
   if (trimmed.includes('@')) return trimmed.toLowerCase();
 
-  const digits = trimmed.replace(/[\s-]/g, '');
-  if (/^01\d{9}$/.test(digits)) return `+88${digits}`;
-  if (/^8801\d{9}$/.test(digits)) return `+${digits}`;
-  return digits;
+  // Phone
+  // Remove spaces, -, \, and ()
+  const cleaned = trimmed.replace(/[\s\-()]/g, '');
+  // +8801712345678
+  if (/^\+8801\d{9}$/.test(cleaned)) return `0${cleaned.slice(4)}`;
+  // 8801712345678
+  if (/^8801\d{9}$/.test(cleaned)) return `0${cleaned.slice(3)}`;
+  // 01712345678
+  if (/^01\d{9}$/.test(cleaned)) return cleaned;
+  return cleaned;
+}
+
+function signupConflictMessage(emailTaken: boolean, phoneTaken: boolean): string {
+  if (emailTaken && phoneTaken) {
+    return 'This email and phone number are already in use';
+  }
+  if (emailTaken) {
+    return 'An account with this email already exists';
+  }
+  if (phoneTaken) {
+    return 'An account with this phone number already exists';
+  }
+  return 'An account with this email or phone number already exists';
+}
+
+function uniqueTargetFields(
+  error: Prisma.PrismaClientKnownRequestError,
+): string[] {
+  const target = error.meta?.target;
+  if (Array.isArray(target)) {
+    return target.filter((field): field is string => typeof field === 'string');
+  }
+  if (typeof target === 'string') {
+    return [target];
+  }
+  return [];
 }
