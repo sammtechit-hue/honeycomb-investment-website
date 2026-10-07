@@ -700,6 +700,9 @@ model IncomingPayment {
     investmentId String     @map("investment_id") @db.Uuid
     investment   Investment @relation(fields: [investmentId], references: [id])
 
+    createdAt DateTime @default(now()) @map("created_at")
+    updatedAt DateTime @updatedAt
+
     @@index([investmentId])
     @@index([status])
     @@map("incoming_payments")

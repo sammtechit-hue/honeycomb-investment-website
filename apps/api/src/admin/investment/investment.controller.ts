@@ -7,9 +7,14 @@ import {
   Patch,
   Post,
   Query,
+  UseGuards,
   UsePipes,
 } from '@nestjs/common';
 import { ZodValidationPipe } from 'nestjs-zod';
+import { Role } from '@investment-platform/db';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../auth/guards/roles.guard';
+import { Roles } from '../../auth/decorators/roles.decorator';
 import { CreateInvestmentDto } from './dto/create-investment.dto';
 import { UpdateInvestmentDto } from './dto/update-investment.dto';
 import { InvestmentQueryDto } from './dto/query-investment.dto';
@@ -17,8 +22,11 @@ import { InvestmentService } from './investment.service';
 
 // Admin investment endpoints — full visibility plus approval-side fields
 // (status, rate, agreement fields, physical-item tracking flags).
+// Restricted to ADMIN and MODERATOR staff; SUPER_ADMIN passes via RolesGuard.
 @Controller('admin/investment')
 @UsePipes(ZodValidationPipe)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(Role.ADMIN, Role.MODERATOR)
 export class InvestmentController {
   constructor(private readonly investmentService: InvestmentService) {}
 
