@@ -1,0 +1,46 @@
+# Render Blueprint for the NestJS API (free tier, staging/demo only — see
+# the deployment notes: free instances sleep after 15 min idle, so
+# @nestjs/schedule jobs don't run reliably). Create it from the Render
+# dashboard: New → Blueprint → this repo.
+services:
+  - type: web
+    name: honeycomb-api
+    runtime: node
+    plan: free
+    # Same region as the Supabase project (ap-southeast-1).
+    region: singapore
+    # Built from the repo root: the API depends on packages/contracts and
+    # packages/db. turbo builds contracts (dist/) before the API.
+    # --prod=false: NODE_ENV=production would otherwise skip devDependencies
+    # (Nest CLI, TypeScript) that the build needs.
+    buildCommand: >-
+      corepack enable pnpm &&
+      pnpm install --frozen-lockfile --prod=false &&
+      pnpm --filter @investment-platform/db generate &&
+      pnpm turbo run build --filter=api
+    startCommand: pnpm --filter api start:prod
+    healthCheckPath: /api
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "24"
+      # Render terminates TLS in front of the app: one proxy hop.
+      - key: TRUST_PROXY_HOPS
+        value: "1"
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      # Values below are entered in the dashboard when the Blueprint is
+      # created (sync: false = never stored in this file).
+      - key: DATABASE_URL # Supabase transaction pooler, :6543, ?pgbouncer=true
+        sync: false
+      - key: DIRECT_URL # Supabase session pooler, :5432
+        sync: false
+      - key: CORS_ORIGINS # secure-web's Vercel URL, e.g. https://xxx.vercel.app
+        sync: false
+      - key: APP_URL # same secure-web URL; emailed links point here
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: MAIL_FROM # e.g. "HoneyComb <onboarding@resend.dev>" until a domain is verified
+        sync: false
