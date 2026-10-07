@@ -84,11 +84,11 @@ export class InvestmentService {
       );
     }
 
-    if (investor.status != InvestorStatus.active ) {
-      throw new ForbiddenException(
-        'Only investors who have uploaded KYC can create an investment.',
-      );
-    }
+    // if (investor.status != InvestorStatus.active ) {
+    //   throw new ForbiddenException(
+    //     'Only investors who have uploaded KYC can create an investment.',
+    //   );
+    // }
 
     if (!project) {
       throw new NotFoundException('Project not found');
