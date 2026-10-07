@@ -13,18 +13,24 @@ services:
     # packages/db. turbo builds contracts (dist/) before the API.
     # --prod=false: NODE_ENV=production would otherwise skip devDependencies
     # (Nest CLI, TypeScript) that the build needs.
+    # `corepack pnpm` runs the pnpm version pinned in package.json
+    # (packageManager) without `corepack enable`, which fails on Render:
+    # /usr/bin is read-only.
     buildCommand: >-
-      corepack enable pnpm &&
-      pnpm install --frozen-lockfile --prod=false &&
-      pnpm --filter @investment-platform/db generate &&
-      pnpm turbo run build --filter=api
-    startCommand: pnpm --filter api start:prod
+      corepack pnpm install --frozen-lockfile --prod=false &&
+      corepack pnpm --filter @investment-platform/db generate &&
+      corepack pnpm turbo run build --filter=api
+    # Same as the api's start:prod script, without needing pnpm at runtime.
+    startCommand: cd apps/api && node dist/main
     healthCheckPath: /api
     envVars:
       - key: NODE_ENV
         value: production
       - key: NODE_VERSION
         value: "24"
+      # Let corepack download the pinned pnpm without an interactive prompt.
+      - key: COREPACK_ENABLE_DOWNLOAD_PROMPT
+        value: "0"
       # Render terminates TLS in front of the app: one proxy hop.
       - key: TRUST_PROXY_HOPS
         value: "1"
