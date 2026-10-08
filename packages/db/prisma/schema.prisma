@@ -514,6 +514,8 @@ model Investment {
     isCertificateApplicable Boolean            @default(true) @map("is_certificate_applicable")
     status                  InvestmentStatus   @default(pending)
 
+    remarks String? @db.VarChar(255)
+
     createdAt DateTime @default(now()) @map("created_at")
     updatedAt DateTime @updatedAt
 
