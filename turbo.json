@@ -5,7 +5,11 @@
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**"]
+      // Read at build time: secure-web's /api rewrite (API_URL) and values
+      // Next inlines into client code (NEXT_PUBLIC_*). Turbo hides any env
+      // var not listed here from the build.
+      "env": ["API_URL", "NEXT_PUBLIC_*"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**", "!.next/dev/**"]
     },
     "lint": {
       "dependsOn": ["^lint"]
@@ -14,6 +18,7 @@
       "dependsOn": ["^check-types"]
     },
     "dev": {
+      "dependsOn": ["^build"],
       "cache": false,
       "persistent": true
     }

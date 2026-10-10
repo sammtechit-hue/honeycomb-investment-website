@@ -1,0 +1,53 @@
+# Render Blueprint for the NestJS API (free tier, staging/demo only — see
+# the deployment notes: free instances sleep after 15 min idle, so
+# @nestjs/schedule jobs don't run reliably). Create it from the Render
+# dashboard: New → Blueprint → this repo.
+services:
+  - type: web
+    name: honeycomb-api
+    runtime: node
+    plan: free
+    # Same region as the Supabase project (ap-southeast-1).
+    region: singapore
+    # Built from the repo root: the API depends on packages/contracts and
+    # packages/db. turbo builds contracts (dist/) before the API.
+    # NODE_ENV=development for the install step only: with the service's
+    # NODE_ENV=production, pnpm skips devDependencies (Nest CLI, TypeScript)
+    # that the build needs, and pnpm 12 has no flag to override that.
+    # `corepack pnpm` runs the pnpm version pinned in package.json
+    # (packageManager) without `corepack enable`, which fails on Render:
+    # /usr/bin is read-only.
+    buildCommand: >-
+      NODE_ENV=development corepack pnpm install --frozen-lockfile &&
+      corepack pnpm --filter @investment-platform/db generate &&
+      corepack pnpm turbo run build --filter=api
+    # Same as the api's start:prod script, without needing pnpm at runtime.
+    startCommand: cd apps/api && node dist/main
+    healthCheckPath: /api
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "24"
+      # Let corepack download the pinned pnpm without an interactive prompt.
+      - key: COREPACK_ENABLE_DOWNLOAD_PROMPT
+        value: "0"
+      # Render terminates TLS in front of the app: one proxy hop.
+      - key: TRUST_PROXY_HOPS
+        value: "1"
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      # Values below are entered in the dashboard when the Blueprint is
+      # created (sync: false = never stored in this file).
+      - key: DATABASE_URL # Supabase transaction pooler, :6543, ?pgbouncer=true
+        sync: false
+      - key: DIRECT_URL # Supabase session pooler, :5432
+        sync: false
+      - key: CORS_ORIGINS # secure-web's Vercel URL, e.g. https://xxx.vercel.app
+        sync: false
+      - key: APP_URL # same secure-web URL; emailed links point here
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: MAIL_FROM # e.g. "HoneyComb <onboarding@resend.dev>" until a domain is verified
+        sync: false

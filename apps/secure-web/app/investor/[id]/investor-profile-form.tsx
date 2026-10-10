@@ -55,14 +55,6 @@ export function InvestorProfileForm({ investorId, defaultValues }: Props) {
       </label>
 
       <label className="flex flex-col gap-1">
-        <span className="text-sm font-medium">Email</span>
-        <input {...register('email')} className="rounded border px-3 py-2" />
-        {errors.email && (
-          <span className="text-sm text-red-600">{errors.email.message}</span>
-        )}
-      </label>
-
-      <label className="flex flex-col gap-1">
         <span className="text-sm font-medium">Address</span>
         <input {...register('address')} className="rounded border px-3 py-2" />
       </label>
