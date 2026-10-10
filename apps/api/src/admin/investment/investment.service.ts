@@ -1,6 +1,18 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@investment-platform/db';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import {
+  AuditAction,
+  LogModule,
+  LogSeverity,
+  LogStatus,
+  Prisma,
+} from '@investment-platform/db';
 import { PrismaService } from '../../prisma/prisma.service';
+import { RequestAuditContext } from '../../utils/common types';
 import { CreateInvestmentDto } from './dto/create-investment.dto';
 import { UpdateInvestmentDto } from './dto/update-investment.dto';
 import { InvestmentQueryDto } from './dto/query-investment.dto';
@@ -201,11 +213,210 @@ export class InvestmentService {
         };
     }
 
-    // For updating Investment Information
-    async update(id: string, updateInvestmentDto: UpdateInvestmentDto){
-        return {
-            message: 'Investment Updated Successfully'
+    // For updating Investment Information — PATCH /api/admin/investment/:id.
+    async update(
+        id: string,
+        updateInvestmentDto: UpdateInvestmentDto,
+        userId?: string,
+        context?: RequestAuditContext,
+    ) {
+        const {
+            projectId, investmentDate, amount, investmentType,
+            investmentPeriodMonths, disbursementPeriod, status, rate,
+            agreementEndDate, agreementPlace, deedOffical, deedGoverment,
+            chequeGiven, cashVoucharGiven, souvenirGiven,
+            isSouvenirApplicable, certificateGiven,
+            isCertificateApplicable, specialInstruction,
+        } = updateInvestmentDto;
+
+        // Prisma skips undefined keys, so only sent fields are written.
+        const data: Prisma.InvestmentUpdateInput = {
+            ...(projectId !== undefined && { project: { connect: { id: projectId } } }),
+            ...(investmentDate !== undefined && { investmentDate }),
+            ...(amount !== undefined && { amount: new Prisma.Decimal(amount) }),
+            ...(investmentType !== undefined && { investmentType }),
+            ...(investmentPeriodMonths !== undefined && { investmentPeriodMonths }),
+            ...(disbursementPeriod !== undefined && { disbursementPeriod }),
+            ...(status !== undefined && { status }),
+            ...(rate !== undefined && { rate: new Prisma.Decimal(rate) }),
+            ...(agreementEndDate !== undefined && { agreementEndDate }),
+            ...(agreementPlace !== undefined && { agreementPlace }),
+            ...(deedOffical !== undefined && { deedOffical }),
+            ...(deedGoverment !== undefined && { deedGoverment }),
+            ...(chequeGiven !== undefined && { chequeGiven }),
+            ...(cashVoucharGiven !== undefined && { cashVoucharGiven }),
+            ...(souvenirGiven !== undefined && { souvenirGiven }),
+            ...(isSouvenirApplicable !== undefined && { isSouvenirApplicable }),
+            ...(certificateGiven !== undefined && { certificateGiven }),
+            ...(isCertificateApplicable !== undefined && { isCertificateApplicable }),
+            ...(specialInstruction !== undefined && { specialInstruction }),
+        };
+
+        if (Object.values(data).every((v) => v === undefined)) {
+            throw new BadRequestException('No fields provided to update');
+        }
+
+        // Independent lookups outside the tx to keep the row lock short.
+        const [existing, admin] = await Promise.all([
+            this.prisma.investment.findUnique({ where: { id } }),
+            userId
+                ? this.prisma.adminProfile.findUnique({
+                    where: { userId },
+                    select: { id: true, name: true },
+                })
+                : null,
+        ]);
+
+        if (!existing) {
+            throw new NotFoundException(`Investment with id ${id} not found`);
+        }
+
+        // New project must exist when retargeting. P2003 below is the backstop.
+        if (projectId !== undefined && projectId !== existing.projectId) {
+            const project = await this.prisma.project.findUnique({
+                where: { id: projectId },
+                select: { id: true },
+            });
+            if (!project) {
+                throw new BadRequestException('Project not found');
+            }
+        }
+
+        const amountDelta =
+            amount !== undefined
+                ? new Prisma.Decimal(amount).sub(existing.amount)
+                : null;
+        const projectChanged =
+            projectId !== undefined && projectId !== existing.projectId;
+
+        try {
+            await this.prisma.$transaction(async (tx) => {
+                let updated;
+                try {
+                    updated = await tx.investment.update({
+                        where: { id, updatedAt: existing.updatedAt },
+                        data,
+                    });
+                } catch (e) {
+                    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
+                        throw new ConflictException(
+                            'Investment was modified by someone else. Reload and try again.',
+                        );
+                    }
+                    throw e;
+                }
+
+                // Keep cached aggregates consistent atomically.
+                if (amountDelta !== null && !amountDelta.isZero()) {
+                    const targetProjectId = projectChanged
+                        ? (projectId as string)
+                        : existing.projectId;
+                    await tx.project.update({
+                        where: { id: targetProjectId },
+                        data: { totalInvestedAmount: { increment: amountDelta } },
+                    });
+                    await tx.investor.update({
+                        where: { id: existing.investorId },
+                        data: { totalInvestmentAmount: { increment: amountDelta } },
+                    });
+                } else if (projectChanged) {
+                    await tx.project.update({
+                        where: { id: existing.projectId },
+                        data: { totalInvestedAmount: { decrement: existing.amount } },
+                    });
+                    await tx.project.update({
+                        where: { id: projectId as string },
+                        data: { totalInvestedAmount: { increment: existing.amount } },
+                    });
+                }
+
+                await tx.auditLog.create({
+                    data: {
+                        adminName: admin?.name ?? 'Admin',
+                        adminProfileId: admin?.id ?? null,
+                        action: AuditAction.investment_status_changed,
+                        module: LogModule.INVESTMENT,
+                        severity: LogSeverity.INFO,
+                        status: LogStatus.SUCCESS,
+                        targetLabel: `Investment Updated: ${updated.id}`,
+                        targetTable: 'investments',
+                        targetId: updated.id,
+                        oldValue: toInvestmentSnapshot(existing) as unknown as Prisma.InputJsonValue,
+                        newValue: toInvestmentSnapshot(updated) as unknown as Prisma.InputJsonValue,
+                        ipAddress: context?.ipAddress ?? null,
+                        userAgent: context?.userAgent ?? null,
+                        sessionId: context?.sessionId ?? null,
+                    },
+                });
+            });
+
+            return { message: 'Investment Updated Successfully', success: true };
+        } catch (err) {
+            if (err instanceof Prisma.PrismaClientKnownRequestError) {
+                if (err.code === 'P2003') {
+                    throw new BadRequestException(
+                        'One or more referenced records do not exist.',
+                    );
+                }
+                if (err.code === 'P2000') {
+                    throw new BadRequestException(
+                        'One of the provided values is too long for its field.',
+                    );
+                }
+            }
+            throw err;
         }
     }
+}
 
+// Shape an Investment row for audit oldValue / newValue JSON columns.
+// Decimal -> number and Date -> ISO string keep the snapshot JSON-safe.
+function toInvestmentSnapshot(investment: {
+    projectId: string;
+    investorId: string;
+    investmentDate: Date | null;
+    amount: Prisma.Decimal;
+    investmentType: string;
+    rate: Prisma.Decimal | null;
+    investmentPeriodMonths: number | null;
+    disbursementPeriod: string;
+    agreementPlace: string | null;
+    agreementEndDate: Date | null;
+    status: string;
+    deedOffical: string | null;
+    deedGoverment: string | null;
+    chequeGiven: boolean;
+    cashVoucharGiven: boolean;
+    specialInstruction: string | null;
+    souvenirGiven: boolean;
+    isSouvenirApplicable: boolean;
+    certificateGiven: boolean;
+    isCertificateApplicable: boolean;
+}) {
+    return {
+        projectId: investment.projectId,
+        investorId: investment.investorId,
+        investmentDate: investment.investmentDate
+            ? investment.investmentDate.toISOString()
+            : null,
+        amount: Number(investment.amount),
+        investmentType: investment.investmentType,
+        rate: investment.rate != null ? Number(investment.rate) : null,
+        investmentPeriodMonths: investment.investmentPeriodMonths,
+        disbursementPeriod: investment.disbursementPeriod,
+        agreementPlace: investment.agreementPlace,
+        agreementEndDate: investment.agreementEndDate
+            ? investment.agreementEndDate.toISOString()
+            : null,
+        status: investment.status,
+        deedOffical: investment.deedOffical,
+        deedGoverment: investment.deedGoverment,
+        chequeGiven: investment.chequeGiven,
+        cashVoucharGiven: investment.cashVoucharGiven,
+        specialInstruction: investment.specialInstruction,
+        souvenirGiven: investment.souvenirGiven,
+        isSouvenirApplicable: investment.isSouvenirApplicable,
+        certificateGiven: investment.certificateGiven,
+        isCertificateApplicable: investment.isCertificateApplicable,
+    };
 }
