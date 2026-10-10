@@ -29,6 +29,7 @@ enum AuditAction {
     investor_status_changed // e.g. investor approved/suspended
     investor_verified // shortcut for status -> active, if you want it separate from the generic one above
     investor_information_updated
+    incoming_payment_updated // any admin edit to an incoming-payment record (fields only; status flows via confirm)
     investment_created
     investment_status_changed
     monthly_rate_set

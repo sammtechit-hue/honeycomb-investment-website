@@ -3,18 +3,26 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
+  Ip,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
   Query,
+  UseGuards,
   UsePipes,
 } from '@nestjs/common';
 import { ZodValidationPipe } from 'nestjs-zod';
+import { Role } from '@investment-platform/db';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../auth/guards/roles.guard';
+import { Roles } from '../../auth/decorators/roles.decorator';
+import { CurrentUser } from '../../auth/decorators/current-user.decorator';
+import type { AuthenticatedUser } from '../../auth/types/jwt-payload.interface';
 import { CreateIncomingPaymentDto } from './dto/create-incoming-payment.dto';
 import { UpdateIncomingPaymentDto } from './dto/update-incoming-payment.dto';
 import { IncomingPaymentQueryDto } from './dto/query-incoming-payment.dto';
-import { ConfirmIncomingPaymentDto } from './dto/confirm-incoming-payment.dto';
 import { IncomingPaymentService } from './incoming-payment.service';
 
 // Admin incoming payment endpoints — list/filter, confirm or reject
@@ -49,11 +57,29 @@ export class IncomingPaymentController {
     // PATCH /admin/incoming-payment/:id — only the fields provided in the
     // request will be updated.
     @Patch(':id')
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles(Role.ADMIN, Role.MODERATOR)
     update(
         @Param('id', ParseUUIDPipe) id: string,
         @Body() updateIncomingPaymentDto: UpdateIncomingPaymentDto,
+        @CurrentUser() user: AuthenticatedUser,
+        @Ip() ip?: string,
+        @Headers('user-agent') userAgent?: string,
+        @Headers('x-session-id') sessionId?: string,
     ) {
-        return this.incomingPaymentService.update(id, updateIncomingPaymentDto);
+        const context = {
+            ipAddress: ip,
+            userAgent: userAgent,
+            sessionId: sessionId,
+        };
+
+        // user.userId is the User.id attached by JwtAuthGuard/JwtStrategy.
+        return this.incomingPaymentService.update(
+            id,
+            updateIncomingPaymentDto,
+            user?.userId,
+            context,
+        );
     }
 
     // DELETE /admin/incoming-payment/:id
@@ -61,16 +87,5 @@ export class IncomingPaymentController {
     remove(@Param('id', ParseUUIDPipe) id: string) {
         // Delete an incoming payment by id
         return this.incomingPaymentService.remove(id);
-    }
-
-    // POST /admin/incoming-payment/:id/confirm — admin confirms or marks a
-    // payment overdue. Body is validated by incomingPaymentConfirmSchema;
-    // the id in the body must match the :id route param (the route param wins).
-    @Post(':id/confirm')
-    confirm(
-        @Param('id', ParseUUIDPipe) id: string,
-        @Body() confirmIncomingPaymentDto: ConfirmIncomingPaymentDto,
-    ) {
-        return this.incomingPaymentService.confirm(id, confirmIncomingPaymentDto.status);
     }
 }

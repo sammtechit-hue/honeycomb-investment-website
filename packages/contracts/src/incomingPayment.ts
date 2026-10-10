@@ -37,22 +37,13 @@ export const incomingPaymentCreateSchema = z.object({
 
 export type IncomingPaymentCreateInput = z.infer<typeof incomingPaymentCreateSchema>;
 
-
-// For admin
-export const incomingPaymentConfirmSchema = z
-  .object({
-    id: uuidSchema,
-    status: IncomingPaymentStatusEnum,
-  })
-
-export type IncomingPaymentConfirmInput = z.infer<
-  typeof incomingPaymentConfirmSchema
->;
-
-
-// For admin
 export const incomingPaymentUpdateSchema = incomingPaymentCreateSchema
+  .omit({ investmentId: true })
   .partial()
+  .extend({
+      status: IncomingPaymentStatusEnum.optional(),
+    });
+
 
 export type IncomingPaymentUpdateInput = z.infer<
   typeof incomingPaymentUpdateSchema
