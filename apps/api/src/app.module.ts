@@ -10,7 +10,6 @@ import { MailModule } from './mail/mail.module';
 import { AdminModule } from './admin/admin.module';
 import { InvestorModule } from './investor/investor.module';
 import { InvestmentModule } from './investment/investment.module';
-import { AuditLogModule } from './audit-log/audit-log.module';
 import { NotificationModule } from './notification/notification.module';
 import { ProjectModule } from './project/project.module';
 import { NomineeModule } from './nominee/nominee.module';
@@ -25,7 +24,6 @@ import { RoiCalculatorLeadModule } from './roi-calculator-lead/roi-calculator-le
 import { RefferalCodeModule } from './refferal-code/refferal-code.module';
 import { InvestmentDocumentModule } from './investment-document/investment-document.module';
 import { MonthlyProfitLedgerModule } from './monthly-profit-ledger/monthly-profit-ledger.module';
-import { AdminNotificationModule } from './admin-notification/admin-notification.module';
 
 @Module({
   imports: [
@@ -46,7 +44,6 @@ import { AdminNotificationModule } from './admin-notification/admin-notification
     AdminModule,
     InvestorModule,
     InvestmentModule,
-    AuditLogModule,
     NotificationModule,
     ProjectModule,
     NomineeModule,
@@ -61,7 +58,6 @@ import { AdminNotificationModule } from './admin-notification/admin-notification
     RefferalCodeModule,
     InvestmentDocumentModule,
     MonthlyProfitLedgerModule,
-    AdminNotificationModule,
   ],
   controllers: [AppController],
   providers: [AppService],
