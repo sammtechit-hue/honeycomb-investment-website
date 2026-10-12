@@ -15,9 +15,10 @@ import { InvestorKycDocumentModule } from './investor-kyc-document/investor-kyc-
 import { MonthlyProfitLedgerModule } from './monthly-profit-ledger/monthly-profit-ledger.module';
 import { AdminAccountModule } from './admin-account/admin-account.module';
 import { RoiCalculatorLeadModule } from './roi-calculator-lead/roi-calculator-lead.module';
+import { AdminNotificationModule } from './admin-notification/admin-notification.module';
 
 @Module({
-  imports: [AdminAccountModule, InvestorModule, InvestmentModule, MonthlyRateSettingModule, AuditLogModule, DisbursementBatchModule, DisbursementItemModule, IncomingPaymentModule, InvestmentDocumentModule, ProjectModule, WithdrawalRequestModule, InvestorKycDocumentModule, MonthlyProfitLedgerModule],
+  imports: [AdminAccountModule, InvestorModule, InvestmentModule, MonthlyRateSettingModule, AuditLogModule, DisbursementBatchModule, DisbursementItemModule, IncomingPaymentModule, InvestmentDocumentModule, ProjectModule, WithdrawalRequestModule, InvestorKycDocumentModule, MonthlyProfitLedgerModule, AdminNotificationModule],
   controllers: [AdminController],
   providers: [AdminService]
 })
