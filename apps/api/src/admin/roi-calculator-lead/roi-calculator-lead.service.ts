@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { UpdateRoiCalculatorLeadDto } from './dto/update-roi-calculator-lead.dto';
 import { RoiCalculatorLeadQueryDto } from './dto/query-roi-calculator-lead.dto';
 import { Prisma } from '@investment-platform/db';
@@ -9,17 +9,77 @@ export class RoiCalculatorLeadService {
     constructor(private readonly prisma: PrismaService) { }
 
     
-    // For Getting All RoiCalculatorLead's Data with filtering, searching, sorting & pagination
-    // Example: GET /roi-calculator-lead?search=john&status=pending&category=lead&page=1&limit=10&sortBy=createdAt&sortOrder=desc
-    async findAll( query: RoiCalculatorLeadQueryDto ) {
+    // Example: GET /admin/roi-calculator-lead?search=john&minAmount=1000&maxAmount=50000&page=1&limit=10&sortBy=createdAt&sortOrder=desc
+    async findAll(query: RoiCalculatorLeadQueryDto) {
+        const {
+            search,
+            minAmount,
+            maxAmount,
+            page,
+            limit,
+            sortBy,
+            sortOrder,
+        } = query;
+
+        const where: Prisma.RoiCalculatorLeadWhereInput = {
+            ...((minAmount !== undefined || maxAmount !== undefined) && {
+                enteredAmount: {
+                    ...(minAmount !== undefined && { gte: minAmount }),
+                    ...(maxAmount !== undefined && { lte: maxAmount }),
+                },
+            }),
+            ...(search && {
+                OR: [
+                    { name: { contains: search, mode: 'insensitive' } },
+                    { phoneNumber: { contains: search, mode: 'insensitive' } },
+                    { email: { contains: search, mode: 'insensitive' } },
+                ],
+            }),
+        };
+
+        const orderBy: Prisma.RoiCalculatorLeadOrderByWithRelationInput[] = [
+            { [sortBy]: sortOrder },
+            { id: 'asc' as const },
+        ];
+
+        const [leads, total] = await Promise.all([
+            this.prisma.roiCalculatorLead.findMany({
+                where,
+                orderBy,
+                skip: (page - 1) * limit,
+                take: limit,
+            }),
+            this.prisma.roiCalculatorLead.count({ where }),
+        ]);
+
         return {
-            message: "HelloWorld Return all RoiCalculatorLead's data",
+            message: 'ROI calculator leads fetched successfully',
+            success: true,
+            data: leads,
+            meta: {
+                page,
+                limit,
+                total,
+                totalPages: Math.ceil(total / limit),
+            },
         };
     }
 
     // For Getting One RoiCalculatorLead's Data
     async findOne(id: string) {
-        return id + 'This route is for RoiCalculatorLead who will see their necessary data and partially modify data';
+        const lead = await this.prisma.roiCalculatorLead.findUnique({
+            where: { id },
+        });
+
+        if (!lead) {
+            throw new NotFoundException(`ROI calculator lead with id ${id} not found`);
+        }
+
+        return {
+            message: 'ROI calculator lead fetched successfully',
+            success: true,
+            data: lead,
+        };
     }
 
     // For updating followedUp status (admin follow-up tracking)
