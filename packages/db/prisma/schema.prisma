@@ -904,3 +904,6 @@ model AuditLog {
     @@index([createdAt])
     @@index([targetId])
 }
+
+
+// Anouncement for investor
