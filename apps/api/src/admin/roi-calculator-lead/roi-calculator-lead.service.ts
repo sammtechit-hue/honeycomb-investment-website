@@ -84,8 +84,23 @@ export class RoiCalculatorLeadService {
 
     // For updating followedUp status (admin follow-up tracking)
     async update(id: string, dto: UpdateRoiCalculatorLeadDto) {
+        const existing = await this.prisma.roiCalculatorLead.findUnique({
+            where: { id },
+            select: { id: true },
+        });
+
+        if (!existing) {
+            throw new NotFoundException(`ROI calculator lead with id ${id} not found`);
+        }
+
+        await this.prisma.roiCalculatorLead.update({
+            where: { id },
+            data: { followedUp: dto.followedUp },
+        });
+
         return {
             message: 'RoiCalculatorLead followedUp status updated successfully',
+            success: true,
         };
     }
 
