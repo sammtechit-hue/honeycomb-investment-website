@@ -53,18 +53,6 @@ const INVESTMENT_ADMIN_SELECT = {
     },
 } satisfies Prisma.InvestmentSelect;
 
-// Query sort keys that map directly to an Investment column. `paymentMethod`
-// and `paymentStatus` live on the related IncomingPayment rows (one-to-many),
-// which Prisma cannot order by from this side, so they are left out and any
-// such key falls back to createdAt.
-const INVESTMENT_SORTABLE_COLUMNS = [
-    'amount',
-    'rate',
-    'investmentDate',
-    'investmentPeriodMonths',
-    'status',
-    'createdAt',
-] as const;
 
 @Injectable()
 export class InvestmentService {
@@ -148,14 +136,8 @@ export class InvestmentService {
             }),
         };
 
-        // 2. ORDER BY — see INVESTMENT_SORTABLE_COLUMNS for why only some keys
-        //    can be used directly.
-        const canSortByColumn = (
-            INVESTMENT_SORTABLE_COLUMNS as readonly string[]
-        ).includes(sortBy);
-
         const orderBy: Prisma.InvestmentOrderByWithRelationInput[] = [
-            canSortByColumn ? { [sortBy]: sortOrder } : { createdAt: sortOrder },
+            { [sortBy]: sortOrder },
             // Tie-breaker on id keeps pagination deterministic.
             { id: 'asc' as const },
         ];
