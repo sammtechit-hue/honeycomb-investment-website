@@ -46,13 +46,18 @@ const INVESTMENT_ADMIN_SELECT = {
     souvenirGiven: true,
     // One-to-one relation holding the deed / cheque / voucher / certificate files.
     investmentDocuments: true,
-    incomingPayments: {
-        orderBy: [
-            { installmentNumber: 'asc' as const },
-            { createdAt: 'asc' as const },
-        ],
-    },
+    // One-to-one relation: at most one incoming payment per investment.
+    incomingPayments: true,
 } satisfies Prisma.InvestmentSelect;
+
+// `sortBy` values that live on the related IncomingPayment rather than on
+// Investment itself. Query key → actual column (`paymentStatus` is stored as
+// `status`).
+const PAYMENT_SORT_COLUMNS = {
+    paymentMethod: 'paymentMethod',
+    paymentStatus: 'status',
+    paymentAmount: 'amount',
+} as const satisfies Record<string, keyof Prisma.IncomingPaymentOrderByWithRelationInput>;
 
 
 @Injectable()
@@ -104,22 +109,19 @@ export class InvestmentService {
                     ...(toDate !== undefined && { lte: toDate }),
                 },
             }),
-            // Payment filters sit on the related IncomingPayment rows: keep an
-            // investment when it has at least one payment matching every given
-            // condition.
+            // Payment filters sit on the one-to-one IncomingPayment row: keep
+            // an investment when its payment matches every given condition.
             ...((paymentMethod !== undefined ||
                 paymentStatus !== undefined ||
                 paymentAmount !== undefined) && {
                 incomingPayments: {
-                    some: {
-                        ...(paymentMethod !== undefined && { paymentMethod }),
-                        // Query key is `paymentStatus`, the column is `status`.
-                        ...(paymentStatus !== undefined && { status: paymentStatus }),
-                        // Matches payments of at least this amount.
-                        ...(paymentAmount !== undefined && {
-                            amount: { gte: paymentAmount },
-                        }),
-                    },
+                    ...(paymentMethod !== undefined && { paymentMethod }),
+                    // Query key is `paymentStatus`, the column is `status`.
+                    ...(paymentStatus !== undefined && { status: paymentStatus }),
+                    // Matches the payment when it is at least this amount.
+                    ...(paymentAmount !== undefined && {
+                        amount: { gte: paymentAmount },
+                    }),
                 },
             }),
             // Free-text search across the reference fields plus the related
@@ -137,8 +139,23 @@ export class InvestmentService {
             }),
         };
 
+        // Payment sorts are forwarded to the one-to-one relation; every other
+        // `sortBy` value is a plain Investment column.
+        let orderByField: Prisma.InvestmentOrderByWithRelationInput;
+        if (
+            sortBy === 'paymentMethod' ||
+            sortBy === 'paymentStatus' ||
+            sortBy === 'paymentAmount'
+        ) {
+            orderByField = {
+                incomingPayments: { [PAYMENT_SORT_COLUMNS[sortBy]]: sortOrder },
+            };
+        } else {
+            orderByField = { [sortBy]: sortOrder };
+        }
+
         const orderBy: Prisma.InvestmentOrderByWithRelationInput[] = [
-            { [sortBy]: sortOrder },
+            orderByField,
             // Tie-breaker on id keeps pagination deterministic.
             { id: 'desc' as const },
         ];

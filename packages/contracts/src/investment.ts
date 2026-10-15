@@ -130,13 +130,17 @@ export const investmentQuerySchema = z.object({
   limit: limitValidationSchema,
 
   // Sorting
+  // Investors may also sort on their single (one-to-one) incoming payment.
   sortBy: z
-    .enum([                                                   
+    .enum([
       'amount',
       'rate',
       'investmentDate',
       'investmentPeriodMonths',
       'status',
+      'paymentMethod',
+      'paymentStatus',
+      'paymentAmount',
       'createdAt',
     ])
     .default('createdAt'),
