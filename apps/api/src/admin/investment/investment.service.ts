@@ -1,15 +1,15 @@
 import {
-  BadRequestException,
-  ConflictException,
-  Injectable,
-  NotFoundException,
+    BadRequestException,
+    ConflictException,
+    Injectable,
+    NotFoundException,
 } from '@nestjs/common';
 import {
-  AuditAction,
-  LogModule,
-  LogSeverity,
-  LogStatus,
-  Prisma,
+    AuditAction,
+    LogModule,
+    LogSeverity,
+    LogStatus,
+    Prisma,
 } from '@investment-platform/db';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RequestAuditContext } from '../../utils/common types';
@@ -31,6 +31,7 @@ const INVESTMENT_ADMIN_SELECT = {
     agreementEndDate: true,
     status: true,
     investorId: true,
+    investor: { select: { fullname: true } },
     projectId: true,
     createdAt: true,
     updatedAt: true,
@@ -131,7 +132,7 @@ export class InvestmentService {
                     // { deedGoverment: { contains: search, mode: 'insensitive' } },
                     // important field for search
                     { investor: { fullname: { contains: search, mode: 'insensitive' } } },
-                    { project: { name: { contains: search, mode: 'insensitive' } } },
+                    // { project: { name: { contains: search, mode: 'insensitive' } } },
                 ],
             }),
         };
@@ -139,7 +140,7 @@ export class InvestmentService {
         const orderBy: Prisma.InvestmentOrderByWithRelationInput[] = [
             { [sortBy]: sortOrder },
             // Tie-breaker on id keeps pagination deterministic.
-            { id: 'asc' as const },
+            { id: 'desc' as const },
         ];
 
         // 3. Fetch the current page and the total count in parallel.
@@ -185,7 +186,7 @@ export class InvestmentService {
         };
     }
 
-    
+
     // For Creating Investment
     async create(createInvestmentDto: CreateInvestmentDto) {
         const { projectId, amount } = createInvestmentDto;

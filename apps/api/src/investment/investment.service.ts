@@ -99,8 +99,15 @@ export class InvestmentService {
     // Fixed-rate investments carry a default agreed rate from day one;
     // unfixed ones leave `rate` unset so it is driven by the admin / monthly
     // rate settings instead.
-    const rate =
-      dto.investmentType === InvestmentType.fixed ? 2.5 : undefined;
+    // const rate =
+    //   dto.investmentType === InvestmentType.fixed ? 2.5 : undefined;
+
+    const databaseRate = await this.prisma.fixedRate.findFirst({
+      where: { isActive: true },
+    }
+    )
+
+    const rate = databaseRate?.rate || process.env.FIXED_RATE;
 
     try {
       return await this.prisma.$transaction(async (tx) => {
