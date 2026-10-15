@@ -1,15 +1,17 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { Prisma, AdminNotificationType } from '@investment-platform/db';
+import { Prisma, AdminNotificationType, Role } from '@investment-platform/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateInvestorDto } from './dto/create-investor.dto';
 import { UpdateInvestorDto } from './dto/update-investor.dto';
 import { RequestAuditContext } from '../utils/common types';
+import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 
 // The investor's own profile view. An explicit `select` (instead of a bare
 // `include`) keeps this a stable response contract and guarantees we never
@@ -77,22 +79,31 @@ const INVESTOR_PROFILE_SELECT = {
 export class InvestorService {
   constructor(private readonly prisma: PrismaService) { }
 
-  // -----------------------------------------------------------------------
-  // findOwnerUserId — User.id that owns this investor profile, or null if
-  // the profile doesn't exist. Used by the controller's ownership check;
-  // kept separate from findOne so that check never depends on what
-  // findOne's response shape happens to include.
-  // -----------------------------------------------------------------------
-  async findOwnerUserId(id: string): Promise<string | null> {
+  // Only has Access to his own investor profile
+  async findOwnerUserId(
+    investorId: string,
+    user: AuthenticatedUser,
+  ): Promise<string | null> {
     const investor = await this.prisma.investor.findUnique({
-      where: { id },
+      where: { id: investorId },
       select: { userId: true },
     });
-    return investor?.userId ?? null;
+    const ownerUserId = investor?.userId ?? null;
+
+    if (user.role === Role.SUPER_ADMIN) return ownerUserId;
+
+    if (ownerUserId === null || ownerUserId !== user.userId) {
+      throw new ForbiddenException(
+        'investor profile Invalid.',
+      );
+    }
+
+    return ownerUserId;
   }
 
-  // findOne — single investor with full related data
-  async findOne(id: string) {
+  async findOne(id: string, user: AuthenticatedUser) {
+    await this.findOwnerUserId(id, user);
+
     const investor = await this.prisma.investor.findUnique({
       where: { id },
       select: INVESTOR_PROFILE_SELECT,
@@ -120,9 +131,6 @@ export class InvestorService {
     return investor;
   }
 
-  // -----------------------------------------------------------------------
-  // Create service function
-  // -----------------------------------------------------------------------
   async create(dto: CreateInvestorDto, userId: string | undefined, context?: RequestAuditContext) {
     if (!userId) {
       throw new UnauthorizedException('Session is no longer valid');
@@ -244,39 +252,6 @@ export class InvestorService {
           })
         }
 
-        // System Audit Logs using the updated Schema format
-        // const auditPayload = {
-        //   fullName: investor.fullname,
-        //   address: investor.address,
-        //   profession: investor.profession,
-        //   workplace: investor.workplace,
-        //   category: investor.category,
-        //   status: investor.status,
-        // };
-
-        // await tx.auditLog.create({
-        //   data: {
-        //     adminName: 'Self-Registration',  // 
-        //     adminProfileId: null, // Executed by the user, not administrative staff
-        //     action: 'investor_registered',
-        //     module: LogModule.USER,
-        //     severity: LogSeverity.INFO,
-        //     status: LogStatus.SUCCESS,
-        //     targetLabel: `Investor Profile Created: ${investor.fullname}`,
-        //     targetTable: 'investors',
-        //     targetId: investor.id,
-        //     oldValue: Prisma.DbNull, // No previous state on creation
-        //     newValue: auditPayload as unknown as Prisma.InputJsonValue,
-        //     metadata: {
-        //       referralApplied: !!referralCodeRecord,
-        //       referralCodeUsed: dto.referralCode || null,
-        //     } as Prisma.InputJsonValue,
-        //     ipAddress: context?.ipAddress || null,
-        //     userAgent: context?.userAgent || null,
-        //     sessionId: context?.sessionId || null,
-        //   }
-        // })
-
         // Notification
         await tx.adminNotification.create({
           data: {
@@ -310,8 +285,8 @@ export class InvestorService {
   } //end of the Block
 
   // ---------------------------------
-  async update(id: string, dto: UpdateInvestorDto) {
-    const investor = await this.findOne(id);
+  async update(id: string, dto: UpdateInvestorDto, user: AuthenticatedUser) {
+    const investor = await this.findOne(id, user);
     return "Investor Data";
   }
 }

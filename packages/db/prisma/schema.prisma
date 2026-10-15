@@ -29,6 +29,7 @@ enum AuditAction {
     investor_status_changed // e.g. investor approved/suspended
     investor_verified // shortcut for status -> active, if you want it separate from the generic one above
     investor_information_updated
+    incoming_payment_updated // any admin edit to an incoming-payment record (fields only; status flows via confirm)
     investment_created
     investment_status_changed
     monthly_rate_set
@@ -177,6 +178,7 @@ enum AdminNotificationType {
     slot_reminder
     new_investment_request
     disbursement_sent
+    incoming_payments
     company_document_expiring
 }
 
@@ -191,6 +193,38 @@ enum DisbursementSlot {
     slot_2
     slot_3
     slot_4
+}
+
+enum LogModule {
+    AUTH // Login, logout, password resets, role changes
+    USER // User management (Admins, Moderators)
+    INVESTOR // Investor profile lifecycle (status, category, profile updates)
+    KYC // NID, photo verification, compliance approvals/rejections
+    NOMINEE
+    BANK_ACCOUNT // Investor bank account additions, modifications, verifications
+    PROJECT // Projects/ventures creation, targets, status transitions
+    INVESTMENT // Investment commitments, contracts, slot allocations
+    PAYMENT // Incoming payment deposits (bKash, Nagad, Bank Transfer)
+    DISBURSEMENT // Payout batches, export generations (CBL, BEFTN), payout completions
+    WITHDRAWAL // Principal capital withdrawal requests & notice periods
+    PROFIT_LEDGER // Monthly profit rate settings, profit accrual runs
+    REFERRAL // Referral codes generation, bonus tracking
+    DOCUMENT // Company documents, deeds, vouchers, certificates
+    LEAD // ROI Calculator leads & follow-up tracking
+    SYSTEM // System configurations, automated cron jobs, maintenance
+}
+
+enum LogSeverity {
+    INFO
+    WARNING
+    ERROR
+    CRITICAL
+}
+
+enum LogStatus {
+    SUCCESS
+    FAILED
+    PENDING
 }
 
 // ----------------------------------------------------------------------------
@@ -449,7 +483,7 @@ model Project {
 
     status ProjectStatus @default(DRAFT)
 
-    minimumInvestment Decimal  @db.Decimal(18, 2)
+    minimumInvestment Decimal  @default(10000) @db.Decimal(18, 2)
     maximumInvestment Decimal? @db.Decimal(18, 2)
 
     targetAmount        Decimal? @db.Decimal(18, 2)
@@ -526,7 +560,7 @@ model Investment {
     project   Project @relation(fields: [projectId], references: [id])
 
     monthlyProfitLedger MonthlyProfitLedger[]
-    incomingPayments    IncomingPayment[]
+    incomingPayments    IncomingPayment?
     withdrawalRequests  WithdrawalRequest[]
     investmentDocuments InvestmentDocument?
 
@@ -703,8 +737,11 @@ model IncomingPayment {
     confirmedAt       DateTime?             @map("confirmed_at")
     status            IncomingPaymentStatus @default(pending)
 
-    investmentId String     @map("investment_id") @db.Uuid
+    investmentId String     @unique @map("investment_id") @db.Uuid
     investment   Investment @relation(fields: [investmentId], references: [id])
+
+    createdAt DateTime @default(now()) @map("created_at")
+    updatedAt DateTime @updatedAt
 
     @@index([investmentId])
     @@index([status])
@@ -799,7 +836,7 @@ model AdminNotification {
     type        AdminNotificationType
     referenceId String?               @map("reference_id") @db.Uuid
 
-    message   String?  @db.VarChar(255)
+    message   String?  @db.VarChar(500)
     isRead    Boolean  @default(false) @map("is_read")
     createdAt DateTime @default(now()) @map("created_at")
     clickLink String?
@@ -812,55 +849,6 @@ model AdminNotification {
 // ----------------------------------------------------------------------------
 // 20. Audit Log
 // ----------------------------------------------------------------------------
-
-// model AuditLog {
-//     id             String        @id @default(uuid()) @db.Uuid
-//     action         AuditAction // was: String @db.VarChar(100)
-//     targetTable    String        @map("target_table") @db.VarChar(50)
-//     targetId       String        @map("target_id") @db.Uuid
-//     details        Json?
-//     createdAt      DateTime      @default(now()) @map("created_at")
-//     adminName      String?
-
-//     adminProfileId String?       @db.Uuid
-//     adminProfile   AdminProfile? @relation(fields: [adminProfileId], references: [id])
-
-//     @@index([targetTable, targetId])
-//     @@index([createdAt])
-//     @@map("audit_log")
-// }
-
-enum LogModule {
-    AUTH // Login, logout, password resets, role changes
-    USER // User management (Admins, Moderators)
-    INVESTOR // Investor profile lifecycle (status, category, profile updates)
-    KYC // NID, photo verification, compliance approvals/rejections
-    NOMINEE
-    BANK_ACCOUNT // Investor bank account additions, modifications, verifications
-    PROJECT // Projects/ventures creation, targets, status transitions
-    INVESTMENT // Investment commitments, contracts, slot allocations
-    PAYMENT // Incoming payment deposits (bKash, Nagad, Bank Transfer)
-    DISBURSEMENT // Payout batches, export generations (CBL, BEFTN), payout completions
-    WITHDRAWAL // Principal capital withdrawal requests & notice periods
-    PROFIT_LEDGER // Monthly profit rate settings, profit accrual runs
-    REFERRAL // Referral codes generation, bonus tracking
-    DOCUMENT // Company documents, deeds, vouchers, certificates
-    LEAD // ROI Calculator leads & follow-up tracking
-    SYSTEM // System configurations, automated cron jobs, maintenance
-}
-
-enum LogSeverity {
-    INFO
-    WARNING
-    ERROR
-    CRITICAL
-}
-
-enum LogStatus {
-    SUCCESS
-    FAILED
-    PENDING
-}
 
 model AuditLog {
     id        Int     @id @default(autoincrement())
@@ -899,3 +887,25 @@ model AuditLog {
     @@index([createdAt])
     @@index([targetId])
 }
+
+// ----------------------------------------------------------------------------
+// 21. Business Settings
+// ----------------------------------------------------------------------------
+
+// model BusinessSettings {
+//     id        Int      @id @default(autoincrement())
+//     fixedRate Decimal? @db.Decimal(2, 2)
+// }
+
+model FixedRate {
+    id   Int            @id @default(autoincrement())
+    rate Decimal?       @db.Decimal(2, 2)
+
+    label String?       @db.VarChar(200)
+    isActive Boolean    @default(true)
+
+    createdAt DateTime  @default(now())
+    updatedAt DateTime  @updatedAt
+}
+
+// Anouncement for investor

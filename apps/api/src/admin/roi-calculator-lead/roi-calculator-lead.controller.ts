@@ -7,15 +7,22 @@ import {
     ParseUUIDPipe,
     Patch,
     Query,
+    UseGuards,
     UsePipes,
 } from '@nestjs/common';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { UpdateRoiCalculatorLeadDto } from './dto/update-roi-calculator-lead.dto';
 import { RoiCalculatorLeadService } from './roi-calculator-lead.service';
 import { RoiCalculatorLeadQueryDto } from './dto/query-roi-calculator-lead.dto';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../auth/guards/roles.guard';
+import { Role } from '@investment-platform/db';
+import { Roles } from '../../auth/decorators/roles.decorator';
 
 @Controller('admin/roi-calculator-lead')
 @UsePipes(ZodValidationPipe)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(Role.ADMIN, Role.MODERATOR)
 export class RoiCalculatorLeadController {
     constructor(private readonly roiCalculatorLeadService: RoiCalculatorLeadService) { }
 

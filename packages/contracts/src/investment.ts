@@ -131,14 +131,12 @@ export const investmentQuerySchema = z.object({
 
   // Sorting
   sortBy: z
-    .enum([
+    .enum([                                                   
       'amount',
       'rate',
       'investmentDate',
       'investmentPeriodMonths',
       'status',
-      'paymentMethod',
-      'paymentStatus',
       'createdAt',
     ])
     .default('createdAt'),

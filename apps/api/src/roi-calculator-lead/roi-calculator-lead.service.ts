@@ -1,22 +1,28 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@investment-platform/db';
+import { PrismaService } from '../prisma/prisma.service';
 import { CreateRoiCalculatorLeadDto } from './dto/create-roi-calculator-lead.dto';
 
 @Injectable()
 export class RoiCalculatorLeadService {
-  constructor(
-    // PrismaService gives us access to PostgreSQL
-    // through Prisma ORM.
-    // private readonly prisma: PrismaService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  
-
-  // For Creating RoiCalculatorLead
   async create(createRoiCalculatorLeadDto: CreateRoiCalculatorLeadDto) {
-    const { name, phoneNumber, email, enteredAmount } = createRoiCalculatorLeadDto;
+    const { name, phoneNumber, email, enteredAmount } =
+      createRoiCalculatorLeadDto;
+
+    await this.prisma.roiCalculatorLead.create({
+      data: {
+        name,
+        phoneNumber,
+        email,
+        enteredAmount: new Prisma.Decimal(enteredAmount),
+      },
+    });
 
     return {
-      message: 'RoiCalculatorLead Created Successfully',
+      message: 'ROI Calculator Lead created successfully',
+      success: true,
     };
   }
 }

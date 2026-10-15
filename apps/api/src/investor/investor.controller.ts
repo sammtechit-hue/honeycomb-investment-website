@@ -1,7 +1,6 @@
 import {
   Body,
   Controller,
-  ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
@@ -40,8 +39,7 @@ export class InvestorController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    await this.assertOwnInvestorRecord(id, user);
-    return this.investorService.findOne(id);
+    return this.investorService.findOne(id, user);
   }
 
   // POST /api/investor
@@ -69,27 +67,6 @@ export class InvestorController {
     @Body() updateInvestorDto: UpdateInvestorDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    await this.assertOwnInvestorRecord(id, user);
-    return this.investorService.update(id, updateInvestorDto);
-  }
-
-  // Blocks an investor from reading/writing another investor's record by
-  // guessing/enumerating UUIDs (IDOR). SUPER_ADMIN bypasses this — RolesGuard
-  // already lets them past @Roles(Role.INVESTOR) on every route, so this
-  // check has to agree or it'd re-block them right after. A missing record
-  // gets the same 403 as someone else's, so the response can't be used to
-  // probe which investor ids exist.
-  private async assertOwnInvestorRecord(
-    investorId: string,
-    user: AuthenticatedUser,
-  ) {
-    if (user.role === Role.SUPER_ADMIN) return;
-
-    const ownerUserId = await this.investorService.findOwnerUserId(investorId);
-    if (ownerUserId === null || ownerUserId !== user.userId) {
-      throw new ForbiddenException(
-        'You may only access your own investor profile.',
-      );
-    }
+    return this.investorService.update(id, updateInvestorDto, user);
   }
 }

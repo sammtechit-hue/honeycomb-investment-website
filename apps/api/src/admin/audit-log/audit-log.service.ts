@@ -1,25 +1,90 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import type {
     AuditLogCreateInput,
     AuditLogQuery,
     AuditLogUpdateInput,
 } from '@investment-platform/contracts/auditLog';
+import { AuditAction, Prisma } from '@investment-platform/db';
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class AuditLogService {
     constructor(
-        // PrismaService gives us access to PostgreSQL
-        // through Prisma ORM.
-        // private readonly prisma: PrismaService,
+        private readonly prisma: PrismaService,
     ) { }
 
-    // Fetch all audit logs with optional filtering, search, and pagination
-    // Example: GET /admin/audit-log?action=verified_kyc&targetTable=investors&page=1&limit=10
-    // Validated/normalized by AuditLogQueryDto — all fields are typed.
+    // http://localhost:3000/api/admin/audit-log?search=login&action=admin_login&targetTable=users&targetId=11111111-1111-1111-1111-111111111111&adminProfileId=22222222-2222-2222-2222-222222222222&createdFrom=2026-01-01&createdTo=2026-02-01&page=1&limit=10&sortBy=createdAt&sortOrder=desc
     async findAll(query: AuditLogQuery) {
+        const {
+            search,
+            action,
+            targetTable,
+            targetId,
+            adminProfileId,
+            createdFrom,
+            createdTo,
+            page,
+            limit,
+            sortBy,
+            sortOrder,
+        } = query;
+
+        const matchedActions = search
+            ? Object.values(AuditAction).filter((value) =>
+                  value.includes(search.toLowerCase()),
+              )
+            : [];
+
+        // 1. Build the WHERE clause 
+        const where: Prisma.AuditLogWhereInput = {
+            ...(action && { action }),
+            ...(targetTable && { targetTable }),
+            ...(targetId && { targetId }),
+            ...(adminProfileId && { adminProfileId }),
+            ...((createdFrom || createdTo) && {
+                createdAt: {
+                    ...(createdFrom && { gte: createdFrom }),
+                    ...(createdTo && { lte: createdTo }),
+                },
+            }),
+            ...(search && {
+                OR: [
+                    { targetTable: { contains: search, mode: 'insensitive' } },
+                    { adminName: { contains: search, mode: 'insensitive' } },
+                    ...(matchedActions.length
+                        ? [{ action: { in: matchedActions } }]
+                        : []),
+                ],
+            }),
+        };
+
+        const orderBy: Prisma.AuditLogOrderByWithRelationInput[] = [
+            { [sortBy]: sortOrder },
+            { id: 'asc' },
+        ];
+
+        // A separate count() with the same WHERE keeps `total` accurate for
+        // the filtered set rather than only the current page.
+        const [auditLogs, total] = await Promise.all([
+            this.prisma.auditLog.findMany({
+                where,
+                orderBy,
+                skip: (page - 1) * limit,
+                take: limit,
+            }),
+            this.prisma.auditLog.count({ where }),
+        ]);
+
         return {
-            message: "Return all Audit Log data",
-            query,
+            message: 'Audit logs fetched successfully',
+            success: true,
+            data: auditLogs,
+            meta: {
+                page,
+                limit,
+                total,
+                totalPages: Math.ceil(total / limit),
+            },
         };
     }
 
@@ -35,13 +100,25 @@ export class AuditLogService {
     }
 
     // For Getting One Audit Log's Data
-    async findOne(id: string) {
-        return { message: id + " - Return a single audit log entry" };
+    async findOne(id: number) {
+        const auditLog = await this.prisma.auditLog.findUnique({
+            where: { id },
+        });
+
+        if (!auditLog) {
+            throw new NotFoundException('Audit log not found');
+        }
+
+        return {
+            message: 'Audit log fetched successfully',
+            success: true,
+            data: auditLog,
+        };
     }
 
     // For updating Audit Log Information
     // Only correction fields (details/admin) are updatable — see UpdateAuditLogDto.
-    async update(id: string, updateAuditLogDto: AuditLogUpdateInput) {
+    async update(id: number, updateAuditLogDto: AuditLogUpdateInput) {
         return {
             message: 'Audit Log Updated Successfully',
             data: updateAuditLogDto,
