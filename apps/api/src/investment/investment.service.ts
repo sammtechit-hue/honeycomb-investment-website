@@ -31,14 +31,11 @@ const INVESTMENT_CREATE_SELECT = {
   createdAt: true,
 } satisfies Prisma.InvestmentSelect;
 
-// Create is allowed only after KYC documents are uploaded. pending /
-// active / suspended go through other flows.
 
 @Injectable()
 export class InvestmentService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // GET /investment?search=&status=active&investmentType=fixed&page=1&limit=10
   async findAll(query: InvestmentQueryDto) {
     return 'Return all investment List';
   }
@@ -50,7 +47,6 @@ export class InvestmentService {
     );
   }
 
-  // POST /api/investment — investor submits a new commitment.
   async create(dto: CreateInvestmentDto, userId: string | undefined) {
     if (!userId) {
       throw new UnauthorizedException('Session is no longer valid');
