@@ -47,7 +47,7 @@ const projectBaseSchema = z.object({
   status: projectStatusSchema.default('DRAFT'),
 
   // Money fields — Decimal(18, 2) in Prisma
-  minimumInvestment: moneySchema,
+  minimumInvestment: moneySchema.default(10_000),
   maximumInvestment: moneySchema.default(100_000_000), //10 koti,
   targetAmount: moneySchema.optional(),
 
