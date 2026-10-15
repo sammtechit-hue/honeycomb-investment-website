@@ -65,7 +65,7 @@ export class IncomingPaymentService {
     // investment IDs cannot be enumerated.
     if (investment.investor.userId !== userId) {
       throw new ForbiddenException(
-        'You may only submit payments for your own investments.',
+        'Invalid investment!',
       );
     }
 
