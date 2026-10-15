@@ -560,7 +560,7 @@ model Investment {
     project   Project @relation(fields: [projectId], references: [id])
 
     monthlyProfitLedger MonthlyProfitLedger[]
-    incomingPayments    IncomingPayment[]
+    incomingPayments    IncomingPayment?
     withdrawalRequests  WithdrawalRequest[]
     investmentDocuments InvestmentDocument?
 
@@ -737,7 +737,7 @@ model IncomingPayment {
     confirmedAt       DateTime?             @map("confirmed_at")
     status            IncomingPaymentStatus @default(pending)
 
-    investmentId String     @map("investment_id") @db.Uuid
+    investmentId String     @unique @map("investment_id") @db.Uuid
     investment   Investment @relation(fields: [investmentId], references: [id])
 
     createdAt DateTime @default(now()) @map("created_at")
