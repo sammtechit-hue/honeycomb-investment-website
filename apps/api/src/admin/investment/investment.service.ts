@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import {
     AuditAction,
+    InvestmentStatus,
     LogModule,
     LogSeverity,
     LogStatus,
@@ -256,7 +257,6 @@ export class InvestmentService {
             throw new BadRequestException('No fields provided to update');
         }
 
-        // Independent lookups outside the tx to keep the row lock short.
         const [existing, admin] = await Promise.all([
             this.prisma.investment.findUnique({ where: { id } }),
             userId
@@ -282,12 +282,22 @@ export class InvestmentService {
             }
         }
 
-        const amountDelta =
-            amount !== undefined
-                ? new Prisma.Decimal(amount).sub(existing.amount)
-                : null;
-        const projectChanged =
-            projectId !== undefined && projectId !== existing.projectId;
+        // pending → active: নতুন amount project ও investor - এর total - এ যোগ হবে।
+        // active → pending: আগের amount দুটো total থেকে বাদ যাবে।
+        // active → active: amount পরিবর্তন হলে শুধু difference adjust হবে। Project পরিবর্তন হলে পুরোনো project থেকে বাদ দিয়ে নতুন project - এ যোগ হবে।
+        // pending → pending: total - এ কোনো পরিবর্তন হবে না। amount difference adjust হবে না।
+
+        const oldAmount = existing.amount as Prisma.Decimal;
+        const newAmount = amount !== undefined ? new Prisma.Decimal(amount) : oldAmount;
+
+        const oldStatus = existing.status as InvestmentStatus;
+        const newStatus = (status ?? oldStatus) as InvestmentStatus;
+
+        const wasCounted = oldStatus === InvestmentStatus.active;
+        const willBeCounted = newStatus === InvestmentStatus.active;
+
+        const amountDelta = newAmount.sub(oldAmount);
+        const projectChanged = projectId !== undefined && projectId !== existing.projectId;
 
         try {
             await this.prisma.$transaction(async (tx) => {
@@ -306,28 +316,53 @@ export class InvestmentService {
                     throw e;
                 }
 
-                // Keep cached aggregates consistent atomically.
-                if (amountDelta !== null && !amountDelta.isZero()) {
+                if (!wasCounted && willBeCounted) {
                     const targetProjectId = projectChanged
                         ? (projectId as string)
                         : existing.projectId;
                     await tx.project.update({
                         where: { id: targetProjectId },
-                        data: { totalInvestedAmount: { increment: amountDelta } },
+                        data: { totalInvestedAmount: { increment: newAmount } },
                     });
                     await tx.investor.update({
                         where: { id: existing.investorId },
-                        data: { totalInvestmentAmount: { increment: amountDelta } },
+                        data: { totalInvestmentAmount: { increment: newAmount } },
                     });
-                } else if (projectChanged) {
+                } else if (wasCounted && !willBeCounted) {
                     await tx.project.update({
                         where: { id: existing.projectId },
-                        data: { totalInvestedAmount: { decrement: existing.amount } },
+                        data: { totalInvestedAmount: { decrement: oldAmount } },
                     });
-                    await tx.project.update({
-                        where: { id: projectId as string },
-                        data: { totalInvestedAmount: { increment: existing.amount } },
+                    await tx.investor.update({
+                        where: { id: existing.investorId },
+                        data: { totalInvestmentAmount: { decrement: oldAmount } },
                     });
+                } else if (wasCounted && willBeCounted) {
+                    if (projectChanged) {
+                        await tx.project.update({
+                            where: { id: existing.projectId },
+                            data: { totalInvestedAmount: { decrement: oldAmount } },
+                        });
+                        await tx.project.update({
+                            where: { id: projectId as string },
+                            data: { totalInvestedAmount: { increment: newAmount } },
+                        });
+                        if (!amountDelta.isZero()) {
+                            await tx.investor.update({
+                                where: { id: existing.investorId },
+                                data: { totalInvestmentAmount: { increment: amountDelta } },
+                            });
+                        }
+                    } else if (!amountDelta.isZero()) {
+                        await tx.project.update({
+                            where: { id: existing.projectId },
+                            data: { totalInvestedAmount: { increment: amountDelta } },
+                        });
+                        await tx.investor.update({
+                            where: { id: existing.investorId },
+                            data: { totalInvestmentAmount: { increment: amountDelta } },
+                        });
+                    }
                 }
 
                 await tx.auditLog.create({

@@ -64,15 +64,12 @@ export class InvestmentController {
     @Headers('user-agent') userAgent?: string,
     @Headers('x-session-id') sessionId?: string,
   ) {
-    // Only the fields provided in the request
-    // will be updated.
     const context = {
       ipAddress: ip,
       userAgent: userAgent,
       sessionId: sessionId,
     };
 
-    // user.userId is the User.id attached by JwtAuthGuard/JwtStrategy.
     return this.investmentService.update(
       id,
       updateInvestmentDto,

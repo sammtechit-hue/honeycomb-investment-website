@@ -25,13 +25,13 @@ const INVESTMENT_LIST_SELECT = {
   id: true,
   investorId: true,
   projectId: true,
-  project: { select: { id: true, name: true } },
+  project: { select: { name: true } },
   amount: true,
   rate: true,
   investmentType: true,
   investmentPeriodMonths: true,
   disbursementPeriod: true,
-  agreementPlace: true,
+  // agreementPlace: true,
   status: true,
   investmentDate: true,
   agreementEndDate: true,
@@ -45,10 +45,10 @@ const INVESTMENT_LIST_SELECT = {
       status: true,
       dueDate: true,
       confirmedAt: true,
-      createdAt: true,
+      // createdAt: true,
     },
   },
-  createdAt: true,
+  // createdAt: true,
   investmentDocuments: true,
 } satisfies Prisma.InvestmentSelect;
 
@@ -264,8 +264,7 @@ export class InvestmentService {
 
     const databaseRate = await this.prisma.fixedRate.findFirst({
       where: { isActive: true },
-    }
-    )
+    })
 
     const rate = databaseRate?.rate || process.env.FIXED_RATE;
 
@@ -286,17 +285,6 @@ export class InvestmentService {
             project: { connect: { id: project.id } },
           },
           // select: INVESTMENT_CREATE_SELECT,
-        });
-
-        // targetAmount is informational only — overshoot is allowed.
-        await tx.project.update({
-          where: { id: project.id },
-          data: { totalInvestedAmount: { increment: amount } },
-        });
-
-        await tx.investor.update({
-          where: { id: investor.id },
-          data: { totalInvestmentAmount: { increment: amount } },
         });
 
         await tx.adminNotification.create({
@@ -382,16 +370,12 @@ export class InvestmentService {
       throw new NotFoundException('Investment not found!');
     }
 
-    // Editing the terms of an approved investment sends it back for re-review.
-    if (existing.status === InvestmentStatus.active) {
+    const wasActive = existing.status === InvestmentStatus.active;
+    if (wasActive) {
       data.status = InvestmentStatus.pending;
     }
 
-    const amountDelta = newAmount?.sub(existing.amount);
-
     await this.prisma.$transaction(async (tx) => {
-      // Optimistic lock: `updatedAt` guards the status decision and the delta
-      // above. If an admin changed the row since we read it, count is 0.
       const { count } = await tx.investment.updateMany({
         where: { id, updatedAt: existing.updatedAt },
         data,
@@ -399,20 +383,19 @@ export class InvestmentService {
 
       if (count === 0) {
         throw new ConflictException(
-          'Investment was modified by someone else. Reload and try again.',
+          'Investment was modified',
         );
       }
 
-      // Keep the cached aggregates in step with the new amount.
-      if (amountDelta && !amountDelta.isZero()) {
+      if (wasActive) {
         await tx.project.update({
           where: { id: existing.projectId },
-          data: { totalInvestedAmount: { increment: amountDelta } },
+          data: { totalInvestedAmount: { decrement: existing.amount } },
         });
 
         await tx.investor.update({
           where: { id: existing.investorId },
-          data: { totalInvestmentAmount: { increment: amountDelta } },
+          data: { totalInvestmentAmount: { decrement: existing.amount } },
         });
       }
     });
