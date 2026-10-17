@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -7,44 +8,213 @@ import {
 } from '@nestjs/common';
 import {
   AdminNotificationType,
+  InvestmentStatus,
   InvestmentType,
   InvestorStatus,
   Prisma,
   ProjectStatus,
+  Role,
 } from '@investment-platform/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateInvestmentDto } from './dto/create-investment.dto';
 import { UpdateInvestmentDto } from './dto/update-investment.dto';
 import { InvestmentQueryDto } from './dto/query-investment.dto';
+import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 
-// Investor-facing response — no admin-only fields (rate, deed, souvenir
-// flags, etc.). Those are set later on the admin approval path.
-const INVESTMENT_CREATE_SELECT = {
+const INVESTMENT_LIST_SELECT = {
   id: true,
+  investorId: true,
   projectId: true,
+  project: { select: { id: true, name: true } },
   amount: true,
+  rate: true,
   investmentType: true,
   investmentPeriodMonths: true,
   disbursementPeriod: true,
+  agreementPlace: true,
   status: true,
   investmentDate: true,
+  agreementEndDate: true,
+  // One-to-one: the investor's single payment submission for this investment
+  // (null until they submit one)
+  incomingPayments: {
+    select: {
+      id: true,
+      amount: true,
+      paymentMethod: true,
+      status: true,
+      dueDate: true,
+      confirmedAt: true,
+      createdAt: true,
+    },
+  },
   createdAt: true,
+  investmentDocuments: true,
 } satisfies Prisma.InvestmentSelect;
+
+const PAYMENT_SORT_COLUMNS = {
+  paymentMethod: 'paymentMethod',
+  paymentStatus: 'status',
+  paymentAmount: 'amount',
+} as const satisfies Record<string, keyof Prisma.IncomingPaymentOrderByWithRelationInput>;
 
 
 @Injectable()
 export class InvestmentService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
-  async findAll(query: InvestmentQueryDto) {
-    return 'Return all investment List';
+  // Example: GET /api/investment?search=&status=active&investmentType=fixed&page=1&limit=10
+  async findAll(query: InvestmentQueryDto, userId: string | undefined) {
+    if (!userId) {
+      throw new UnauthorizedException('Session is no longer valid');
+    }
+
+    const investor = await this.prisma.investor.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+
+    if (!investor) {
+      throw new ForbiddenException(
+        'Complete your investor profile before viewing investments.',
+      );
+    }
+
+    const {
+      search,
+      status,
+      investmentType,
+      disbursementPeriod,
+      projectId,
+      paymentMethod,
+      paymentStatus,
+      paymentAmount,
+      minAmount,
+      maxAmount,
+      fromDate,
+      toDate,
+      page,
+      limit,
+      sortBy,
+      sortOrder,
+    } = query;
+
+    const where: Prisma.InvestmentWhereInput = {
+      investorId: investor.id,
+      ...(status && { status }),
+      ...(investmentType && { investmentType }),
+      ...(disbursementPeriod && { disbursementPeriod }),
+      ...(projectId && { projectId }),
+      // Investment amount range.
+      ...((minAmount !== undefined || maxAmount !== undefined) && {
+        amount: {
+          ...(minAmount !== undefined && { gte: minAmount }),
+          ...(maxAmount !== undefined && { lte: maxAmount }),
+        },
+      }),
+      // Investment date range (fromDate / toDate).
+      ...((fromDate !== undefined || toDate !== undefined) && {
+        investmentDate: {
+          ...(fromDate !== undefined && { gte: fromDate }),
+          ...(toDate !== undefined && { lte: toDate }),
+        },
+      }),
+      // Payment filters sit on the one-to-one IncomingPayment row: an
+      // investment matches only when its payment satisfies every condition
+      // sent, so investments without a payment are excluded by these filters.
+      ...((paymentMethod !== undefined ||
+        paymentStatus !== undefined ||
+        paymentAmount !== undefined) && {
+        incomingPayments: {
+          ...(paymentMethod !== undefined && { paymentMethod }),
+          // Query key is `paymentStatus`, the column is `status`.
+          ...(paymentStatus !== undefined && { status: paymentStatus }),
+          // Matches the payment when it is at least this amount.
+          ...(paymentAmount !== undefined && { amount: { gte: paymentAmount } }),
+        },
+      }),
+      // Free-text search over the project of the caller's own investments.
+      ...(search && {
+        project: {
+          name: { contains: search, mode: 'insensitive' },
+        },
+      }),
+    };
+
+    // Payment sorts are forwarded to the one-to-one relation; every other
+    // `sortBy` value is a plain Investment column.
+    let orderByField: Prisma.InvestmentOrderByWithRelationInput;
+    if (
+      sortBy === 'paymentMethod' ||
+      sortBy === 'paymentStatus' ||
+      sortBy === 'paymentAmount'
+    ) {
+      orderByField = {
+        incomingPayments: { [PAYMENT_SORT_COLUMNS[sortBy]]: sortOrder },
+      };
+    } else {
+      orderByField = { [sortBy]: sortOrder };
+    }
+
+    const orderBy: Prisma.InvestmentOrderByWithRelationInput[] = [
+      orderByField,
+      // Tie-breaker on id keeps pagination deterministic.
+      { id: 'desc' as const },
+    ];
+
+    // 2. Fetch the current page and the total count in parallel.
+    const [investments, total] = await Promise.all([
+      this.prisma.investment.findMany({
+        where,
+        orderBy,
+        skip: (page - 1) * limit,
+        take: limit,
+        select: INVESTMENT_LIST_SELECT,
+      }),
+      this.prisma.investment.count({ where }),
+    ]);
+
+    return {
+      message: 'Investments fetched successfully',
+      success: true,
+      data: investments,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 
-  async findOne(id: string) {
-    return (
-      id +
-      'This route is for Investment who will see their necessary data and partially modify data'
-    );
+  async findOne(id: string, user: AuthenticatedUser) {
+    if (!user) {
+      throw new UnauthorizedException('Session is no longer valid');
+    }
+
+    const investment = await this.prisma.investment.findUnique({
+      where: { id },
+      select: {
+        ...INVESTMENT_LIST_SELECT,
+        investor: { select: { userId: true } },
+      },
+    });
+
+    if (
+      !investment ||
+      (user.role !== Role.SUPER_ADMIN &&
+        investment.investor.userId !== user.userId)
+    ) {
+      throw new NotFoundException('Invalid investment!');
+    }
+
+    // const { investor, ...data } = investment;
+
+    return {
+      message: 'Investment fetched successfully',
+      success: true,
+      data: investment,
+    };
   }
 
   async create(dto: CreateInvestmentDto, userId: string | undefined) {
@@ -91,12 +261,6 @@ export class InvestmentService {
     }
 
     this.assertProjectAcceptsInvestment(project, amount);
-
-    // Fixed-rate investments carry a default agreed rate from day one;
-    // unfixed ones leave `rate` unset so it is driven by the admin / monthly
-    // rate settings instead.
-    // const rate =
-    //   dto.investmentType === InvestmentType.fixed ? 2.5 : undefined;
 
     const databaseRate = await this.prisma.fixedRate.findFirst({
       where: { isActive: true },
@@ -168,7 +332,91 @@ export class InvestmentService {
     }
   }
 
-  async update(id: string, updateInvestmentDto: UpdateInvestmentDto) {
+  async update(
+    id: string,
+    updateInvestmentDto: UpdateInvestmentDto,
+    userId: string | undefined,
+  ) {
+    if (!userId) {
+      throw new UnauthorizedException('Session is no longer valid');
+    }
+
+    const {
+      amount,
+      investmentType,
+      investmentPeriodMonths,
+      disbursementPeriod,
+    } = updateInvestmentDto;
+
+    const newAmount =
+      amount !== undefined ? new Prisma.Decimal(amount) : undefined;
+
+    const data: Prisma.InvestmentUpdateManyMutationInput = {
+      ...(newAmount !== undefined && { amount: newAmount }),
+      ...(investmentType !== undefined && { investmentType }),
+      ...(investmentPeriodMonths !== undefined && { investmentPeriodMonths }),
+      ...(disbursementPeriod !== undefined && { disbursementPeriod }),
+    };
+
+    if (Object.keys(data).length === 0) {
+      throw new BadRequestException('No fields provided to update');
+    }
+
+    const [investor, existing] = await Promise.all([
+      this.prisma.investor.findUnique({
+        where: { userId },
+        select: { id: true },
+      }),
+      this.prisma.investment.findFirst({
+        where: { id, investor: { userId } },
+      }),
+    ]);
+
+    if (!investor) {
+      throw new ForbiddenException(
+        'Complete your investor profile before updating an investment.',
+      );
+    }
+
+    if (!existing) {
+      throw new NotFoundException('Investment not found!');
+    }
+
+    // Editing the terms of an approved investment sends it back for re-review.
+    if (existing.status === InvestmentStatus.active) {
+      data.status = InvestmentStatus.pending;
+    }
+
+    const amountDelta = newAmount?.sub(existing.amount);
+
+    await this.prisma.$transaction(async (tx) => {
+      // Optimistic lock: `updatedAt` guards the status decision and the delta
+      // above. If an admin changed the row since we read it, count is 0.
+      const { count } = await tx.investment.updateMany({
+        where: { id, updatedAt: existing.updatedAt },
+        data,
+      });
+
+      if (count === 0) {
+        throw new ConflictException(
+          'Investment was modified by someone else. Reload and try again.',
+        );
+      }
+
+      // Keep the cached aggregates in step with the new amount.
+      if (amountDelta && !amountDelta.isZero()) {
+        await tx.project.update({
+          where: { id: existing.projectId },
+          data: { totalInvestedAmount: { increment: amountDelta } },
+        });
+
+        await tx.investor.update({
+          where: { id: existing.investorId },
+          data: { totalInvestmentAmount: { increment: amountDelta } },
+        });
+      }
+    });
+
     return {
       message: 'Investment Updated Successfully',
     };

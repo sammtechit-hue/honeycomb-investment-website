@@ -35,14 +35,20 @@ export class InvestmentController {
 
   // GET /api/investment?search=&status=&investmentType=&page=1&limit=10&sortBy=createdAt&sortOrder=desc
   @Get()
-  findAll(@Query() query: InvestmentQueryDto) {
-    return this.investmentService.findAll(query);
+  findAll(
+    @Query() query: InvestmentQueryDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.investmentService.findAll(query, user?.userId);
   }
 
   // GET /api/investment/:id
   @Get(':id')
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.investmentService.findOne(id);
+  findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.investmentService.findOne(id, user);
   }
 
   // POST /api/investment
@@ -64,15 +70,18 @@ export class InvestmentController {
   }
 
   // PATCH /api/investment/:id
-  // Investors may only adjust investmentPeriodMonths and disbursementPeriod —
-  // all other fields are rejected by investmentUpdateInputSchema.
+  // Investors may only adjust amount, investmentType, investmentPeriodMonths
+  // and disbursementPeriod — all other fields are rejected by
+  // investmentUpdateInputSchema. Editing an active investment resets it to
+  // pending in the service so the admin reviews the new terms.
   @Patch(':id')
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateInvestmentDto: UpdateInvestmentDto,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
     // Only the fields provided in the request
-    // will be updated.
-    return this.investmentService.update(id, updateInvestmentDto);
+    // will be updated, and only on the caller's own investment.
+    return this.investmentService.update(id, updateInvestmentDto, user?.userId);
   }
 }

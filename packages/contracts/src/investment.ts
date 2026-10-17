@@ -98,6 +98,7 @@ export const investmentUpdateInputSchema = investmentCreateInputSchema
     investmentPeriodMonths: true,
     disbursementPeriod: true,
     amount: true,
+    investmentType: true
   })
   .partial();
 
