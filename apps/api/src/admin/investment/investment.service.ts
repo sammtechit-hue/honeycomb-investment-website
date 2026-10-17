@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import {
     AuditAction,
+    IncomingPaymentStatus,
     InvestmentStatus,
     LogModule,
     LogSeverity,
@@ -298,6 +299,24 @@ export class InvestmentService {
 
         const amountDelta = newAmount.sub(oldAmount);
         const projectChanged = projectId !== undefined && projectId !== existing.projectId;
+
+        // Condition for investment active status
+        if (status === InvestmentStatus.active) {
+            const incomingPayment = await this.prisma.incomingPayment.findUnique({
+                where: { investmentId: id },
+                select: { status: true },
+            });
+
+            if (
+                incomingPayment == null ||
+                incomingPayment.status === IncomingPaymentStatus.pending ||
+                incomingPayment.status === IncomingPaymentStatus.overdue
+            ) {
+                throw new BadRequestException(
+                    `Investment cannot be activated due to incomplete payment`,
+                );
+            }
+        }
 
         try {
             await this.prisma.$transaction(async (tx) => {
