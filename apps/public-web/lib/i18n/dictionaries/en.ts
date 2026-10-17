@@ -25,7 +25,7 @@ export const en = {
     methodology: 'How returns work',
     faq: 'FAQ',
     signIn: 'Sign in',
-    calculate: 'Calculate return',
+    calculate: 'Calculate Return',
     getStarted: 'Get started',
     switchLanguage: 'Language',
   },
@@ -45,23 +45,23 @@ export const en = {
   },
 
   steps: {
-    title: 'How it works',
+    title: 'How to invest online',
     items: [
       {
         title: 'Register and verify',
-        body: 'Create an account, then upload your NID, a photo and your trade licence, and add your bank details.',
+        body: "Create an account, then upload your NID and photo plus your nominee's NID and photo, then add your home address and bank account details.",
       },
       {
         title: 'Choose a project and pay',
-        body: 'Pick a project and pay by bKash or bank transfer, in instalments if you need to. We confirm every payment.',
+        body: 'Pick a project and pay by bank transfer or bKash. bKash charges apply to bKash payments. We confirm every payment.',
       },
       {
         title: 'Profit is worked out monthly',
         body: "Each month, that month's rate is applied to your original amount. Every rate is kept on record.",
       },
       {
-        title: 'Paid to your bank',
-        body: 'Monthly, quarterly or yearly, by direct bank transfer. We tell you when your payment has been sent.',
+        title: 'Profit paid to your bank',
+        body: 'Your profit is sent by direct bank transfer. We tell you when your payment has been sent.',
       },
     ],
   },
@@ -150,21 +150,13 @@ export const en = {
     legal: 'Legal',
     projects: 'Projects',
     howItWorks: 'How it works',
-    calculator: 'ROI calculator',
+    calculator: 'Return on Investment Calculator',
     faq: 'FAQ',
     methodology: 'Calculation methodology',
     risk: 'Risk disclosure',
     terms: 'Terms of participation',
     privacy: 'Privacy',
     copyright: '© {year} HoneyComb Inc. Figures shown on this site are projections, not guaranteed returns.',
-  },
-
-  periods: {
-    monthly: 'Monthly',
-    quarterly: 'Quarterly',
-    half_yearly: 'Half-yearly',
-    yearly: 'Yearly',
-    or: ' or ',
   },
 
   projectCard: {
@@ -178,17 +170,16 @@ export const en = {
     variable: 'Variable · {minRate}–{maxRate} / month',
     minimum: 'Minimum amount',
     type: 'Investment type',
-    frequency: 'Payout frequency',
     term: 'Term',
     useOfFunds: 'Use of funds',
     documents: 'Documents',
     documentsNote: 'Shared with registered Investors.',
-    calculate: 'Calculate return',
+    calculate: 'Calculate Return',
     getStarted: 'Get started',
   },
 
   calculator: {
-    title: 'ROI calculator',
+    title: 'Return on Investment Calculator',
     intro: 'See a projection of your returns. No account needed.',
     amount: 'Amount to invest',
     amountRequired: 'Enter the amount you would like to put in.',
@@ -251,7 +242,7 @@ export const en = {
     },
     submitting: 'Preparing your projection…',
     submit: 'Show my projection',
-    privacy: 'We use these details only to follow up about HoneyComb projects. No account is created.',
+    privacy: 'We use these details only to follow up about HoneyComb projects.',
   },
 
   // Messages returned by the submitRoiLead server action.
@@ -274,7 +265,7 @@ export const en = {
         id: 'risk',
         title: 'Risk disclosure',
         points: [
-          'Figures from the ROI calculator and project listings are projections, not guaranteed returns.',
+          'Figures from the Return on Investment Calculator and project listings are projections, not guaranteed returns.',
           'Variable-type projects have a rate set each month between {minRate} and {maxRate}, which can change from month to month. Fixed-type rates can be adjusted by HoneyComb.',
           'Profit depends on the rate in effect each month and the terms of your shareholder agreement.',
         ],
@@ -292,7 +283,7 @@ export const en = {
         id: 'privacy',
         title: 'Privacy',
         points: [
-          'Details entered in the ROI calculator (name, mobile number and optional email) are used only to follow up with you about HoneyComb projects.',
+          'Details entered in the Return on Investment Calculator (name, mobile number and optional email) are used only to follow up with you about HoneyComb projects.',
           'Verification documents and bank details are stored encrypted on our secure server and are never shared through public links.',
         ],
       },
