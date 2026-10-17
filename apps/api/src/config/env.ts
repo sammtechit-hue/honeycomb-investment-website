@@ -46,6 +46,10 @@ const envSchema = z.object({
   // /api to this server on the same host (host-only cookie is strictest).
   COOKIE_DOMAIN: z.string().min(1).optional(),
 
+  // Fallback fixed rate (percent) used to create an investment when no active
+  // FixedRate row exists. Matches the public site's FIXED_RATE_BPS / 100.
+  FIXED_RATE: z.coerce.number().positive().default(2.5),
+
   // Number of reverse proxies in front of the API (nginx = 1). Required for
   // req.ip to be the real client IP, which the admin IP allowlist and rate
   // limiting depend on. 0 = connect directly (dev).

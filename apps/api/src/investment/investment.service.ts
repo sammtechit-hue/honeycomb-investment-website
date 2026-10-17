@@ -15,11 +15,13 @@ import {
   ProjectStatus,
   Role,
 } from '@investment-platform/db';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateInvestmentDto } from './dto/create-investment.dto';
 import { UpdateInvestmentDto } from './dto/update-investment.dto';
 import { InvestmentQueryDto } from './dto/query-investment.dto';
 import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
+import { Env } from '../config/env';
 
 const INVESTMENT_LIST_SELECT = {
   id: true,
@@ -61,7 +63,10 @@ const PAYMENT_SORT_COLUMNS = {
 
 @Injectable()
 export class InvestmentService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService<Env, true>,
+  ) { }
 
   // Example: GET /api/investment?search=&status=active&investmentType=fixed&page=1&limit=10
   async findAll(query: InvestmentQueryDto, userId: string | undefined) {
@@ -266,7 +271,9 @@ export class InvestmentService {
       where: { isActive: true },
     })
 
-    const rate = databaseRate?.rate || process.env.FIXED_RATE;
+    const rate =
+      databaseRate?.rate ??
+      new Prisma.Decimal(this.config.get('FIXED_RATE', { infer: true }));
 
     try {
       return await this.prisma.$transaction(async (tx) => {
