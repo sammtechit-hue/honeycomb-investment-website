@@ -1,7 +1,7 @@
 import type { Locale } from '@/lib/i18n/config';
 import type { Dictionary } from '@/lib/i18n/dictionaries/en';
 import { createFormat, fill } from '@/lib/i18n/format';
-import { formatPeriods, type PublicProject } from '@/lib/projects';
+import type { PublicProject } from '@/lib/projects';
 import { FIXED_RATE_BPS, VARIABLE_RATE_MAX_BPS, VARIABLE_RATE_MIN_BPS } from '@/lib/roi';
 import { REGISTER_URL } from '@/lib/site';
 import { CalculateProjectButton } from './calculate-project-button';
@@ -49,7 +49,6 @@ export function ProjectCard({
       <dl className="mt-4 divide-y divide-zinc-100 text-sm">
         <Fact label={t.minimum} value={f.taka(project.minimumInvestment)} />
         <Fact label={t.type} value={typeLabel} />
-        <Fact label={t.frequency} value={formatPeriods(project.payoutFrequencies, dict.periods)} />
         <Fact label={t.term} value={f.term(project.termMonths)} />
       </dl>
 

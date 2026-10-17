@@ -1,12 +1,10 @@
 'use client';
 
-import type { PayoutFrequency } from '@/lib/roi';
 import type { PublicProject } from '@/lib/projects';
 import { ROI_PREFILL_EVENT, type RoiPrefill } from './roi-calculator';
 
-const CALCULATOR_FREQUENCIES: PayoutFrequency[] = ['monthly', 'quarterly', 'yearly'];
-
 // Loads this project's terms into the hero calculator and scrolls to it.
+// Payout frequency isn't a project term — the visitor keeps their own choice.
 export function CalculateProjectButton({
   project,
   label,
@@ -14,15 +12,9 @@ export function CalculateProjectButton({
   project: PublicProject;
   label: string;
 }) {
-  const frequency =
-    project.payoutFrequencies.find((period): period is PayoutFrequency =>
-      CALCULATOR_FREQUENCIES.includes(period as PayoutFrequency),
-    ) ?? 'monthly';
-
   const prefill: RoiPrefill = {
     amount: project.minimumInvestment,
     investmentType: project.investmentType,
-    frequency,
     termMonths: project.termMonths,
   };
 

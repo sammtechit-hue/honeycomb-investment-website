@@ -16,7 +16,7 @@ export function Logo({ locale }: { locale: Locale }) {
   );
 }
 
-// Sticky, so "Calculate return" and "Get started" stay one click away on
+// Sticky, so "Calculate Return" and "Get started" stay one click away on
 // desktop. On mobile the bottom bar (StickyCta) carries them instead.
 export function SiteHeader({ locale, dict }: { locale: Locale; dict: Dictionary }) {
   const navLinks = [

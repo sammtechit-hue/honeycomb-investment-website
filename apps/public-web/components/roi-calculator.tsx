@@ -25,7 +25,6 @@ export const ROI_PREFILL_EVENT = 'roi:prefill';
 export type RoiPrefill = {
   amount: number;
   investmentType: InvestmentType;
-  frequency: PayoutFrequency;
   termMonths: number;
 };
 
@@ -75,7 +74,6 @@ export function RoiCalculator({ locale, dict }: { locale: Locale; dict: RoiCalcu
       const detail = (event as CustomEvent<RoiPrefill>).detail;
       setAmount(detail.amount);
       setInvestmentType(detail.investmentType);
-      setFrequency(detail.frequency);
       setTermMonths(detail.termMonths);
     };
     window.addEventListener(ROI_PREFILL_EVENT, onPrefill);
