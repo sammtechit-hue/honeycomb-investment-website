@@ -9,9 +9,8 @@ import { REGISTER_URL } from '@/lib/site';
 import {
   MAX_AMOUNT,
   TERM_OPTIONS_MONTHS,
-  VARIABLE_RATE_MAX_BPS,
-  VARIABLE_RATE_MIN_BPS,
-  FIXED_RATE_BPS,
+  DEFAULT_RATES,
+  type PublicRates,
   project,
   type InvestmentType,
   type PayoutFrequency,
@@ -54,7 +53,15 @@ function writeLeadFlag() {
 
 const subscribeNoop = () => () => {};
 
-export function RoiCalculator({ locale, dict }: { locale: Locale; dict: RoiCalculatorDict }) {
+export function RoiCalculator({
+  locale,
+  dict,
+  rates = DEFAULT_RATES,
+}: {
+  locale: Locale;
+  dict: RoiCalculatorDict;
+  rates?: PublicRates;
+}) {
   const t = dict.calculator;
   const f = useMemo(() => createFormat(locale, dict.units), [locale, dict.units]);
 
@@ -138,12 +145,12 @@ export function RoiCalculator({ locale, dict }: { locale: Locale; dict: RoiCalcu
           value={investmentType}
           onChange={setInvestmentType}
           options={[
-            { value: 'fixed', label: t.fixed, hint: fill(t.perMonth, { rate: f.rate(FIXED_RATE_BPS) }) },
+            { value: 'fixed', label: t.fixed, hint: fill(t.perMonth, { rate: f.rate(rates.fixedRateBps) }) },
             {
               value: 'unfixed',
               label: t.variable,
               hint: fill(t.perMonth, {
-                rate: `${f.rate(VARIABLE_RATE_MIN_BPS)}–${f.rate(VARIABLE_RATE_MAX_BPS)}`,
+                rate: `${f.rate(rates.variableRateMinBps)}–${f.rate(rates.variableRateMaxBps)}`,
               }),
             },
           ]}
@@ -181,6 +188,7 @@ export function RoiCalculator({ locale, dict }: { locale: Locale; dict: RoiCalcu
               investmentType={investmentType}
               frequency={frequency}
               termMonths={termMonths}
+              rates={rates}
             />
           )
         ) : (
@@ -211,6 +219,7 @@ function ProjectionResult({
   investmentType,
   frequency,
   termMonths,
+  rates,
 }: {
   locale: Locale;
   t: Dictionary['calculator'];
@@ -219,8 +228,9 @@ function ProjectionResult({
   investmentType: InvestmentType;
   frequency: PayoutFrequency;
   termMonths: number;
+  rates: PublicRates;
 }) {
-  const result = project(amount, investmentType, frequency, termMonths);
+  const result = project(amount, investmentType, frequency, termMonths, rates);
   const isVariable = investmentType === 'unfixed';
   const term = f.term(termMonths);
   const rate = f.range(result.rateBps, f.rate);
@@ -274,8 +284,8 @@ function ProjectionResult({
       {isVariable && (
         <p className="text-xs text-zinc-600">
           {fill(t.variableNote, {
-            minRate: f.rate(VARIABLE_RATE_MIN_BPS),
-            maxRate: f.rate(VARIABLE_RATE_MAX_BPS),
+            minRate: f.rate(rates.variableRateMinBps),
+            maxRate: f.rate(rates.variableRateMaxBps),
           })}
         </p>
       )}
