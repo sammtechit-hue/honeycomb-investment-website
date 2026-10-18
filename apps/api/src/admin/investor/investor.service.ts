@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import {
   AuditAction,
+  InvestmentStatus,
   InvestorStatus,
   LogModule,
   LogSeverity,
@@ -152,7 +153,7 @@ export class InvestorService {
   // PATCH /api/admin/investor/:id — any provided investor / nested / contact
   // field is written. approvedAt / approvedBy are system-stamped from the
   // acting admin's session whenever the status transitions to `active`.
-  async update(
+  async updateInvestor(
     id: string,
     dto: UpdateInvestorDto,
     userId: string | undefined,
@@ -208,6 +209,25 @@ export class InvestorService {
       throw new NotFoundException(`Investor with id ${id} not found`);
     }
 
+    // An investor can't be suspended while any of their investments are still
+    // running — all investments must be closed first (see InvestorStatus.suspended).
+    const becomingSuspended =
+      status === InvestorStatus.suspended &&
+      existing.status !== InvestorStatus.suspended;
+
+    if (becomingSuspended) {
+      const activeInvestments = await this.prisma.investment.count({
+        where: { investorId: id, status: InvestmentStatus.active },
+      });
+
+      if (activeInvestments > 0) {
+        throw new BadRequestException(
+          'Investor cannot be suspended while they have active investments. Close all active investments first.',
+        );
+      }
+    }
+
+    // for approvedat in 241 line
     const becomingActive =
       status === InvestorStatus.active && existing.status !== InvestorStatus.active;
 
@@ -218,9 +238,6 @@ export class InvestorService {
       workplace,
       status,
       category,
-      // System-stamped on ANY transition to `active` (e.g. kyc_uploaded ->
-      // active approval, or suspended -> active re-approval): time = now,
-      // approver = the acting admin. Non-active transitions leave both untouched.
       ...(becomingActive && { approvedAt: new Date(), approvedBy: userId }),
       ...this.nomineeNestedWrite(existing, nominee),
       ...this.kycNestedWrite(existing, kycDocuments),
