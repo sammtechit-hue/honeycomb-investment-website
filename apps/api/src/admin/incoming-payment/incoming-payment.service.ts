@@ -1,48 +1,168 @@
 import {
-  BadRequestException,
-  ConflictException,
-  Injectable,
-  NotFoundException,
+    BadRequestException,
+    ConflictException,
+    Injectable,
+    NotFoundException,
 } from '@nestjs/common';
 import { CreateIncomingPaymentDto } from './dto/create-incoming-payment.dto';
 import { UpdateIncomingPaymentDto } from './dto/update-incoming-payment.dto';
 import { IncomingPaymentQueryDto } from './dto/query-incoming-payment.dto';
 import { RequestAuditContext } from '../../utils/common types';
 import {
-  AuditAction,
-  LogModule,
-  LogSeverity,
-  LogStatus,
-  Prisma,
+    AuditAction,
+    LogModule,
+    LogSeverity,
+    LogStatus,
+    Prisma,
 } from '@investment-platform/db';
 import { PrismaService } from '../../prisma/prisma.service';
+
+// Selected Field
+const INCOMING_PAYMENT_ADMIN_SELECT = {
+    id: true,
+    amount: true,
+    paymentMethod: true,
+    screenshotUrl: true,
+    senderAccountInfo: true,
+    installmentNumber: true,
+    dueDate: true,
+    confirmedAt: true,
+    status: true,
+
+    createdAt: true,
+    updatedAt: true,
+
+    investmentId: true,
+    investment: {
+        select: {
+            amount: true,
+            status: true,
+            investorId: true,
+            investor: { select: { fullname: true } },
+            projectId: true,
+            project: { select: { name: true } },
+        },
+    },
+} satisfies Prisma.IncomingPaymentSelect;
 
 @Injectable()
 export class IncomingPaymentService {
     constructor(private readonly prisma: PrismaService) { }
 
-    // For Getting All IncomingPayment's Data with filtering, searching, sorting & pagination
     // Example: GET /admin/incoming-payment?status=pending&page=1&limit=20&sortBy=dueDate&sortOrder=desc
-    async findAll(query: IncomingPaymentQueryDto) {
+    async findAllIncomingPayment(query: IncomingPaymentQueryDto) {
+        const {
+            page,
+            limit,
+            sortBy,
+            sortOrder,
+            investmentId,
+            investorId,
+            status,
+            paymentMethod,
+            minAmount,
+            maxAmount,
+            dueDateFrom,
+            dueDateTo,
+            search,
+        } = query;
+
+        // Only the filters the caller actually sent are applied; omitted keys are
+        // skipped so an absent filter never matches on `null`.
+        const where: Prisma.IncomingPaymentWhereInput = {
+            ...(investmentId && { investmentId }),
+            // investorId lives on the owning investment (one-to-one).
+            ...(investorId && { investment: { investorId } }),
+            ...(status && { status }),
+            ...(paymentMethod && { paymentMethod }),
+            // Payment amount range.
+            ...((minAmount !== undefined || maxAmount !== undefined) && {
+                amount: {
+                    ...(minAmount !== undefined && { gte: minAmount }),
+                    ...(maxAmount !== undefined && { lte: maxAmount }),
+                },
+            }),
+            // Installment due-date range.
+            ...((dueDateFrom !== undefined || dueDateTo !== undefined) && {
+                dueDate: {
+                    ...(dueDateFrom !== undefined && { gte: dueDateFrom }),
+                    ...(dueDateTo !== undefined && { lte: dueDateTo }),
+                },
+            }),
+            // Free-text search across the sender account info plus the owning
+            // investor's name (reached through the one-to-one investment).
+            ...(search && {
+                OR: [
+                    { senderAccountInfo: { contains: search, mode: 'insensitive' } },
+                    {
+                        investment: {
+                            investor: {
+                                fullname: { contains: search, mode: 'insensitive' },
+                            },
+                        },
+                    },
+                ],
+            }),
+        };
+
+        // `sortBy` is a per-resource allowlist (see incomingPaymentSortByEnum);
+        // the id tie-breaker keeps pagination deterministic.
+        const orderBy: Prisma.IncomingPaymentOrderByWithRelationInput[] = [
+            { [sortBy]: sortOrder },
+            { id: 'asc' },
+        ];
+
+        const [payments, total] = await Promise.all([
+            this.prisma.incomingPayment.findMany({
+                where,
+                orderBy,
+                skip: (page - 1) * limit,
+                take: limit,
+                select: INCOMING_PAYMENT_ADMIN_SELECT,
+            }),
+            this.prisma.incomingPayment.count({ where }),
+        ]);
+
         return {
-            message: "HelloWorld Return all IncomingPayment's data",
+            message: 'Incoming payments fetched successfully',
+            success: true,
+            data: payments,
+            meta: {
+                page,
+                limit,
+                total,
+                totalPages: Math.ceil(total / limit),
+            },
         };
     }
 
     // For Getting One IncomingPayment's Data
-    async findOne(id: string) {
-        return id + 'This route is for IncomingPayment who will see their necessary data and partially modify data';
+    async findOneIncomingPayment(id: string) {
+        const payment = await this.prisma.incomingPayment.findUnique({
+            where: { id },
+            select: INCOMING_PAYMENT_ADMIN_SELECT,
+        });
+
+        if (!payment) {
+            throw new NotFoundException(`IncomingPayment with id ${id} not found`);
+        }
+
+        return {
+            message: 'Incoming payment fetched successfully',
+            success: true,
+            data: payment,
+        };
     }
 
     // For Creating IncomingPayment
-    async create(createIncomingPaymentDto: CreateIncomingPaymentDto) {
+    async createIncomingPayment(createIncomingPaymentDto: CreateIncomingPaymentDto) {
         return {
             message: 'IncomingPayment Created Successfully',
         };
     }
 
 
-    async update(
+    async updateIncomingPayment(
         id: string,
         updateIncomingPaymentDto: UpdateIncomingPaymentDto,
         userId?: string,
@@ -154,7 +274,7 @@ export class IncomingPaymentService {
     }
 
     // For deleting IncomingPayment
-    async remove(id: string) {
+    async removeIncomingPayment(id: string) {
         return {
             message: 'IncomingPayment Deleted Successfully',
         };
