@@ -61,7 +61,7 @@ enum InvestorStatus {
     pending
     uploaded_kyc
     active
-    suspended
+    suspended //cant suspended until all investment closed
 }
 
 enum KycDocType {
@@ -88,7 +88,7 @@ enum BankSelected {
 
 enum ProjectStatus {
     DRAFT
-    OPEN
+    OPEN 
     FULL
     PAUSED
     COMPLETED
@@ -117,6 +117,8 @@ enum DisbursementPeriod {
 enum InvestmentStatus {
     pending
     active
+    rejected
+    closed
 }
 
 enum PayoutStatus {
@@ -357,7 +359,8 @@ model Investor {
     id                    String           @id @default(uuid()) @db.Uuid
     fullname              String           @map("name") @db.VarChar(150)
     totalInvestmentAmount Decimal          @default(0) @map("total_investment_amount") @db.Decimal(18, 2)
-    address               String?
+    totalActiveInvestmentAmout              Decimal          @default(0) @db.Decimal(18, 2)
+    address               String?           
     profession            String?          @db.VarChar(150)
     workplace             String?          @db.VarChar(150)
     // Every investor always has a category and status; defaults cover the unset case.
@@ -488,6 +491,7 @@ model Project {
 
     targetAmount        Decimal? @db.Decimal(18, 2)
     totalInvestedAmount Decimal  @default(0) @db.Decimal(18, 2)
+    totalActiveInvestmentAmout   Decimal  @default(0) @db.Decimal(18, 2)
 
     startDate DateTime
     endDate   DateTime?
