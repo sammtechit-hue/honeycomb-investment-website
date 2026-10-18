@@ -3,8 +3,17 @@ import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { ProjectQueryDto } from './dto/query-project.dto';
 import { RequestAuditContext } from '../../utils/common types';
-import { Prisma, LogModule, LogSeverity, LogStatus, AuditAction } from '@investment-platform/db';
+import { Prisma, LogModule, LogSeverity, LogStatus, AuditAction, InvestmentStatus, ProjectStatus } from '@investment-platform/db';
 import { PrismaService } from '../../prisma/prisma.service';
+
+// A project with money actively running can't be wound down until those
+// investments are closed, otherwise payouts would point at a dead project.
+const STATUSES_BLOCKED_BY_ACTIVE_INVESTMENTS: ProjectStatus[] = [
+    ProjectStatus.DRAFT,
+    ProjectStatus.PAUSED,
+    ProjectStatus.COMPLETED,
+    ProjectStatus.CANCELLED,
+];
 
 
 @Injectable()
@@ -217,6 +226,25 @@ export class ProjectService {
         const existing = await this.prisma.project.findUnique({ where: { id } });
         if (!existing) {
             throw new NotFoundException(`Project with id ${id} not found`);
+        }
+
+        // An admin can't move a project to DRAFT/PAUSED/COMPLETED/CANCELLED while
+        // it still has active investments. Close those investments first.
+        const becomingBlockedStatus =
+            status !== undefined &&
+            status !== existing.status &&
+            STATUSES_BLOCKED_BY_ACTIVE_INVESTMENTS.includes(status);
+
+        if (becomingBlockedStatus) {
+            const activeInvestments = await this.prisma.investment.count({
+                where: { projectId: id, status: InvestmentStatus.active },
+            });
+
+            if (activeInvestments > 0) {
+                throw new BadRequestException(
+                    `Project status cannot be changed to ${status} while it has active investments.`,
+                );
+            }
         }
 
         const effectiveMinimum = minimumInvestment ?? Number(existing.minimumInvestment);

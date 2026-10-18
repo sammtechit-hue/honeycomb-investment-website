@@ -53,7 +53,7 @@ export type IncomingPaymentUpdateInput = z.infer<
 // For query
 export const incomingPaymentSortByEnum = z.enum([
   "amount",
-  "amount",
+  "createdAt",
   "dueDate",
   "confirmedAt",
   "installmentNumber",
