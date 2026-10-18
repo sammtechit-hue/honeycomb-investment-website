@@ -68,7 +68,7 @@ export class InvestorController {
       userAgent: userAgent,
       sessionId: sessionId,
     };
-    return this.investorService.update(
+    return this.investorService.updateInvestor(
       id,
       updateInvestorDto,
       user.userId,
