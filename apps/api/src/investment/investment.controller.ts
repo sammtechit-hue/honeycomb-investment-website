@@ -74,14 +74,14 @@ export class InvestmentController {
   // and disbursementPeriod — all other fields are rejected by
   // investmentUpdateInputSchema. Editing an active investment resets it to
   // pending in the service so the admin reviews the new terms.
-  @Patch(':id')
-  update(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() updateInvestmentDto: UpdateInvestmentDto,
-    @CurrentUser() user: AuthenticatedUser,
-  ) {
-    // Only the fields provided in the request
-    // will be updated, and only on the caller's own investment.
-    return this.investmentService.update(id, updateInvestmentDto, user?.userId);
-  }
+  // @Patch(':id')
+  // update(
+  //   @Param('id', ParseUUIDPipe) id: string,
+  //   @Body() updateInvestmentDto: UpdateInvestmentDto,
+  //   @CurrentUser() user: AuthenticatedUser,
+  // ) {
+  //   // Only the fields provided in the request
+  //   // will be updated, and only on the caller's own investment.
+  //   return this.investmentService.update(id, updateInvestmentDto, user?.userId);
+  // }
 }

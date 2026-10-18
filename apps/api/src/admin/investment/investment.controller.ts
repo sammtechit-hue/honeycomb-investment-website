@@ -70,7 +70,7 @@ export class InvestmentController {
       sessionId: sessionId,
     };
 
-    return this.investmentService.update(
+    return this.investmentService.updateInvestment(
       id,
       updateInvestmentDto,
       user?.userId,

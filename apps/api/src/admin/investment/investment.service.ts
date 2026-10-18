@@ -62,6 +62,61 @@ const PAYMENT_SORT_COLUMNS = {
 } as const satisfies Record<string, keyof Prisma.IncomingPaymentOrderByWithRelationInput>;
 
 
+const LIFETIME_STATUSES: ReadonlySet<InvestmentStatus> = new Set([
+    InvestmentStatus.active,
+    InvestmentStatus.closed,
+]);
+
+
+const ALLOWED_STATUS_TRANSITIONS: Record<
+    InvestmentStatus,
+    readonly InvestmentStatus[]
+> = {
+    [InvestmentStatus.pending]: [
+        InvestmentStatus.pending,
+        InvestmentStatus.active,
+        InvestmentStatus.rejected,
+    ],
+    [InvestmentStatus.active]: [
+        InvestmentStatus.active,
+        InvestmentStatus.closed,
+    ],
+    [InvestmentStatus.rejected]: [
+        InvestmentStatus.rejected,
+        InvestmentStatus.active,
+    ],
+    [InvestmentStatus.closed]: [InvestmentStatus.closed],
+};
+
+
+function contributionOf(status: InvestmentStatus, amount: Prisma.Decimal) {
+    return {
+        total: LIFETIME_STATUSES.has(status) ? amount : new Prisma.Decimal(0),
+        active:
+            status === InvestmentStatus.active
+                ? amount
+                : new Prisma.Decimal(0),
+    };
+}
+
+// Human-readable reason for a forbidden transition (cases 3 and 5).
+function statusTransitionError(
+    from: InvestmentStatus,
+    to: InvestmentStatus,
+): string {
+    if (from === InvestmentStatus.active) {
+        return 'An active investment can only be moved to closed';
+    }
+    if (from === InvestmentStatus.closed) {
+        return 'A closed investment is final; its status cannot be changed';
+    }
+    if (from === InvestmentStatus.pending && to === InvestmentStatus.closed) {
+        return 'A pending investment cannot be closed; activate or reject it first';
+    }
+    return `Investment status cannot be changed from ${from} to ${to}`;
+}
+
+
 @Injectable()
 export class InvestmentService {
     constructor(private readonly prisma: PrismaService) { }
@@ -215,8 +270,8 @@ export class InvestmentService {
         };
     }
 
-    // For updating Investment Information — PATCH /api/admin/investment/:id.
-    async update(
+    
+    async updateInvestment(
         id: string,
         updateInvestmentDto: UpdateInvestmentDto,
         userId?: string,
@@ -258,131 +313,140 @@ export class InvestmentService {
             throw new BadRequestException('No fields provided to update');
         }
 
-        const [existing, admin] = await Promise.all([
-            this.prisma.investment.findUnique({ where: { id } }),
+        const [existingInvestment, admin, targetProject] = await Promise.all([
+            this.prisma.investment.findUnique({
+                where: { id },
+                include: { incomingPayments: { select: { status: true } } },
+            }),
             userId
                 ? this.prisma.adminProfile.findUnique({
                     where: { userId },
                     select: { id: true, name: true },
                 })
-                : null,
+                : Promise.resolve(null),
+            projectId !== undefined
+                ? this.prisma.project.findUnique({
+                    where: { id: projectId },
+                    select: { id: true },
+                })
+                : Promise.resolve(null),
         ]);
 
-        if (!existing) {
+        if (!existingInvestment) {
             throw new NotFoundException(`Investment with id ${id} not found`);
         }
 
-        // New project must exist when retargeting. P2003 below is the backstop.
-        if (projectId !== undefined && projectId !== existing.projectId) {
-            const project = await this.prisma.project.findUnique({
-                where: { id: projectId },
-                select: { id: true },
-            });
-            if (!project) {
-                throw new BadRequestException('Project not found');
-            }
+        const projectChanged =
+            projectId !== undefined && projectId !== existingInvestment.projectId;
+
+        if (projectChanged && !targetProject) {
+            throw new BadRequestException('Project not found');
         }
 
-        // pending → active: নতুন amount project ও investor - এর total - এ যোগ হবে।
-        // active → pending: আগের amount দুটো total থেকে বাদ যাবে।
-        // active → active: amount পরিবর্তন হলে শুধু difference adjust হবে। Project পরিবর্তন হলে পুরোনো project থেকে বাদ দিয়ে নতুন project - এ যোগ হবে।
-        // pending → pending: total - এ কোনো পরিবর্তন হবে না। amount difference adjust হবে না।
-
-        const oldAmount = existing.amount as Prisma.Decimal;
+        const oldAmount = existingInvestment.amount;
         const newAmount = amount !== undefined ? new Prisma.Decimal(amount) : oldAmount;
 
-        const oldStatus = existing.status as InvestmentStatus;
-        const newStatus = (status ?? oldStatus) as InvestmentStatus;
+        const oldStatus = existingInvestment.status;
+        const newStatus = status ?? oldStatus;
 
-        const wasCounted = oldStatus === InvestmentStatus.active;
-        const willBeCounted = newStatus === InvestmentStatus.active;
-
-        const amountDelta = newAmount.sub(oldAmount);
-        const projectChanged = projectId !== undefined && projectId !== existing.projectId;
-
-        // Condition for investment active status
-        if (status === InvestmentStatus.active) {
-            const incomingPayment = await this.prisma.incomingPayment.findUnique({
-                where: { investmentId: id },
-                select: { status: true },
-            });
-
-            if (
-                incomingPayment == null ||
-                incomingPayment.status === IncomingPaymentStatus.pending ||
-                incomingPayment.status === IncomingPaymentStatus.overdue
-            ) {
-                throw new BadRequestException(
-                    `Investment cannot be activated due to incomplete payment`,
-                );
-            }
+        
+        if (!ALLOWED_STATUS_TRANSITIONS[oldStatus].includes(newStatus)) {
+            throw new BadRequestException(
+                statusTransitionError(oldStatus, newStatus),
+            );
         }
 
+        // The amount of a closed investment cannot be changed
+        if (
+            oldStatus === InvestmentStatus.closed &&
+            amount !== undefined &&
+            !newAmount.equals(oldAmount)
+        ) {
+            throw new BadRequestException(
+                'The amount of a closed investment cannot be changed',
+            );
+        }
+
+        if (
+            oldStatus === InvestmentStatus.active &&
+            newStatus === InvestmentStatus.closed &&
+            amount !== undefined &&
+            !newAmount.equals(oldAmount)
+        ) {
+            throw new BadRequestException(
+                'The amount of an active investment cannot be changed while closing it',
+            );
+        }
+
+        // Activating money requires a confirmed incoming payment.
+        if (
+            newStatus === InvestmentStatus.active &&
+            oldStatus !== InvestmentStatus.active &&
+            existingInvestment.incomingPayments?.status !==
+                IncomingPaymentStatus.confirmed
+        ) {
+            throw new BadRequestException(
+                'Investment cannot be activated due to incomplete payment',
+            );
+        }
+
+        
+        const oldContribution = contributionOf(oldStatus, oldAmount);
+        const newContribution = contributionOf(newStatus, newAmount);
+
+        const investorTotalDelta = newContribution.total.sub(
+            oldContribution.total,
+        );
+        const investorActiveDelta = newContribution.active.sub(
+            oldContribution.active,
+        );
+
         try {
-            await this.prisma.$transaction(async (tx) => {
-                let updated;
-                try {
-                    updated = await tx.investment.update({
-                        where: { id, updatedAt: existing.updatedAt },
+            const updated = await this.prisma.$transaction(async (tx) => {
+                const updatedRow = await tx.investment
+                    .update({
+                        where: { id, updatedAt: existingInvestment.updatedAt },
                         data,
+                        select: INVESTMENT_ADMIN_SELECT,
+                    })
+                    .catch((e: unknown) => {
+                        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
+                            throw new ConflictException(
+                                'Investment was modified by someone else. Reload and try again.',
+                            );
+                        }
+                        throw e;
                     });
-                } catch (e) {
-                    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
-                        throw new ConflictException(
-                            'Investment was modified by someone else. Reload and try again.',
-                        );
-                    }
-                    throw e;
+
+                if (projectChanged) {
+                    await applyProjectTotals(
+                        tx,
+                        existingInvestment.projectId,
+                        oldContribution.total.neg(),
+                        oldContribution.active.neg(),
+                    );
+                    await applyProjectTotals(
+                        tx,
+                        projectId as string,
+                        newContribution.total,
+                        newContribution.active,
+                    );
+                } else {
+                    await applyProjectTotals(
+                        tx,
+                        existingInvestment.projectId,
+                        investorTotalDelta,
+                        investorActiveDelta,
+                    );
                 }
 
-                if (!wasCounted && willBeCounted) {
-                    const targetProjectId = projectChanged
-                        ? (projectId as string)
-                        : existing.projectId;
-                    await tx.project.update({
-                        where: { id: targetProjectId },
-                        data: { totalInvestedAmount: { increment: newAmount } },
-                    });
-                    await tx.investor.update({
-                        where: { id: existing.investorId },
-                        data: { totalInvestmentAmount: { increment: newAmount } },
-                    });
-                } else if (wasCounted && !willBeCounted) {
-                    await tx.project.update({
-                        where: { id: existing.projectId },
-                        data: { totalInvestedAmount: { decrement: oldAmount } },
-                    });
-                    await tx.investor.update({
-                        where: { id: existing.investorId },
-                        data: { totalInvestmentAmount: { decrement: oldAmount } },
-                    });
-                } else if (wasCounted && willBeCounted) {
-                    if (projectChanged) {
-                        await tx.project.update({
-                            where: { id: existing.projectId },
-                            data: { totalInvestedAmount: { decrement: oldAmount } },
-                        });
-                        await tx.project.update({
-                            where: { id: projectId as string },
-                            data: { totalInvestedAmount: { increment: newAmount } },
-                        });
-                        if (!amountDelta.isZero()) {
-                            await tx.investor.update({
-                                where: { id: existing.investorId },
-                                data: { totalInvestmentAmount: { increment: amountDelta } },
-                            });
-                        }
-                    } else if (!amountDelta.isZero()) {
-                        await tx.project.update({
-                            where: { id: existing.projectId },
-                            data: { totalInvestedAmount: { increment: amountDelta } },
-                        });
-                        await tx.investor.update({
-                            where: { id: existing.investorId },
-                            data: { totalInvestmentAmount: { increment: amountDelta } },
-                        });
-                    }
-                }
+                
+                await applyInvestorTotals(
+                    tx,
+                    existingInvestment.investorId,
+                    investorTotalDelta,
+                    investorActiveDelta,
+                );
 
                 await tx.auditLog.create({
                     data: {
@@ -392,19 +456,21 @@ export class InvestmentService {
                         module: LogModule.INVESTMENT,
                         severity: LogSeverity.INFO,
                         status: LogStatus.SUCCESS,
-                        targetLabel: `Investment Updated: ${updated.id}`,
+                        targetLabel: `Investment Updated: ${updatedRow.id}`,
                         targetTable: 'investments',
-                        targetId: updated.id,
-                        oldValue: toInvestmentSnapshot(existing) as unknown as Prisma.InputJsonValue,
-                        newValue: toInvestmentSnapshot(updated) as unknown as Prisma.InputJsonValue,
+                        targetId: updatedRow.id,
+                        oldValue: toInvestmentSnapshot(existingInvestment) as unknown as Prisma.InputJsonValue,
+                        newValue: toInvestmentSnapshot(updatedRow) as unknown as Prisma.InputJsonValue,
                         ipAddress: context?.ipAddress ?? null,
                         userAgent: context?.userAgent ?? null,
                         sessionId: context?.sessionId ?? null,
                     },
                 });
+
+                return updatedRow;
             });
 
-            return { message: 'Investment Updated Successfully', success: true };
+            return { message: 'Investment Updated Successfully', success: true, data: updated };
         } catch (err) {
             if (err instanceof Prisma.PrismaClientKnownRequestError) {
                 if (err.code === 'P2003') {
@@ -473,4 +539,48 @@ function toInvestmentSnapshot(investment: {
         certificateGiven: investment.certificateGiven,
         isCertificateApplicable: investment.isCertificateApplicable,
     };
+}
+
+// Apply aggregate deltas to a project. Negative deltas decrement via Prisma's
+// `increment` operator; zero deltas are dropped so a no-op edit never rewrites
+// the row (and never bumps anything unintentionally).
+async function applyProjectTotals(
+    tx: Prisma.TransactionClient,
+    projectId: string,
+    totalDelta: Prisma.Decimal,
+    activeDelta: Prisma.Decimal,
+) {
+    const data = {
+        ...(!totalDelta.isZero() && {
+            totalInvestedAmount: { increment: totalDelta },
+        }),
+        ...(!activeDelta.isZero() && {
+            totalActiveInvestmentAmout: { increment: activeDelta },
+        }),
+    };
+
+    if (Object.keys(data).length === 0) return;
+
+    await tx.project.update({ where: { id: projectId }, data });
+}
+
+// Same idea for the investor's lifetime / active aggregates.
+async function applyInvestorTotals(
+    tx: Prisma.TransactionClient,
+    investorId: string,
+    totalDelta: Prisma.Decimal,
+    activeDelta: Prisma.Decimal,
+) {
+    const data = {
+        ...(!totalDelta.isZero() && {
+            totalInvestmentAmount: { increment: totalDelta },
+        }),
+        ...(!activeDelta.isZero() && {
+            totalActiveInvestmentAmout: { increment: activeDelta },
+        }),
+    };
+
+    if (Object.keys(data).length === 0) return;
+
+    await tx.investor.update({ where: { id: investorId }, data });
 }

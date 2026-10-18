@@ -48,7 +48,7 @@ const projectBaseSchema = z.object({
 
   // Money fields — Decimal(18, 2) in Prisma
   minimumInvestment: moneySchema.default(10_000),
-  maximumInvestment: moneySchema.default(100_000_000), //10 koti,
+  maximumInvestment: moneySchema.optional(),
   targetAmount: moneySchema.optional(),
 
   startDate: dateSchema,

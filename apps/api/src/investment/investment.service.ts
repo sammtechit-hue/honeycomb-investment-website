@@ -327,90 +327,98 @@ export class InvestmentService {
     }
   }
 
-  async update(
-    id: string,
-    updateInvestmentDto: UpdateInvestmentDto,
-    userId: string | undefined,
-  ) {
-    if (!userId) {
-      throw new UnauthorizedException('Session is no longer valid');
-    }
+  // async update(
+  //   id: string,
+  //   updateInvestmentDto: UpdateInvestmentDto,
+  //   userId: string | undefined,
+  // ) {
+  //   if (!userId) {
+  //     throw new UnauthorizedException('Session is no longer valid');
+  //   }
 
-    const {
-      amount,
-      investmentType,
-      investmentPeriodMonths,
-      disbursementPeriod,
-    } = updateInvestmentDto;
+  //   const {
+  //     amount,
+  //     investmentType,
+  //     investmentPeriodMonths,
+  //     // disbursementPeriod,
+  //   } = updateInvestmentDto;
 
-    const newAmount =
-      amount !== undefined ? new Prisma.Decimal(amount) : undefined;
+  //   const newAmount =
+  //     amount !== undefined ? new Prisma.Decimal(amount) : undefined;
 
-    const data: Prisma.InvestmentUpdateManyMutationInput = {
-      ...(newAmount !== undefined && { amount: newAmount }),
-      ...(investmentType !== undefined && { investmentType }),
-      ...(investmentPeriodMonths !== undefined && { investmentPeriodMonths }),
-      ...(disbursementPeriod !== undefined && { disbursementPeriod }),
-    };
+  //   const data: Prisma.InvestmentUpdateInput = {
+  //     ...(newAmount !== undefined && { amount: newAmount }),
+  //     ...(investmentType !== undefined && { investmentType }),
+  //     ...(investmentPeriodMonths !== undefined && { investmentPeriodMonths }),
+  //     // ...(disbursementPeriod !== undefined && { disbursementPeriod }),
+  //   };
 
-    if (Object.keys(data).length === 0) {
-      throw new BadRequestException('No fields provided to update');
-    }
+  //   if (Object.keys(data).length === 0) {
+  //     throw new BadRequestException('No fields provided to update');
+  //   }
 
-    const [investor, existing] = await Promise.all([
-      this.prisma.investor.findUnique({
-        where: { userId },
-        select: { id: true },
-      }),
-      this.prisma.investment.findFirst({
-        where: { id, investor: { userId } },
-      }),
-    ]);
+  //   const [investor, existing] = await Promise.all([
+  //     this.prisma.investor.findUnique({
+  //       where: { userId },
+  //       select: { id: true },
+  //     }),
+  //     this.prisma.investment.findFirst({
+  //       where: { id, investor: { userId } },
+  //     }),
+  //   ]);
 
-    if (!investor) {
-      throw new ForbiddenException(
-        'Complete your investor profile before updating an investment.',
-      );
-    }
+  //   if (!investor || !existing) {
+  //     throw new ForbiddenException(
+  //       'Invalid investor profile or investment!',
+  //     );
+  //   }
 
-    if (!existing) {
-      throw new NotFoundException('Investment not found!');
-    }
+  //   const wasActive = existing.status === InvestmentStatus.active;
+  //   if (wasActive) {
+  //     data.status = InvestmentStatus.pending;
+  //   }
 
-    const wasActive = existing.status === InvestmentStatus.active;
-    if (wasActive) {
-      data.status = InvestmentStatus.pending;
-    }
+  //   const updated = await this.prisma.$transaction(async (tx) => {
+  //     let updatedInvestment;
+  //     try {
+  //       updatedInvestment = await tx.investment.update({
+  //         where: { id, updatedAt: existing.updatedAt },
+  //         data,
+  //         select: INVESTMENT_LIST_SELECT,
+  //       });
+  //     } catch (e) {
+  //       if (
+  //         e instanceof Prisma.PrismaClientKnownRequestError &&
+  //         e.code === 'P2025'
+  //       ) {
+  //         throw new ConflictException(
+  //           'Investment was modified by someone else. Reload and try again.',
+  //         );
+  //       }
+  //       throw e;
+  //     }
 
-    await this.prisma.$transaction(async (tx) => {
-      const { count } = await tx.investment.updateMany({
-        where: { id, updatedAt: existing.updatedAt },
-        data,
-      });
+  //     if (wasActive) {
+  //       await tx.project.update({
+  //         where: { id: existing.projectId },
+  //         data: { totalInvestedAmount: { decrement: existing.amount } },
+  //       });
 
-      if (count === 0) {
-        throw new ConflictException(
-          'Investment was modified',
-        );
-      }
+  //       await tx.investor.update({
+  //         where: { id: existing.investorId },
+  //         data: { totalInvestmentAmount: { decrement: existing.amount } },
+  //       });
+  //     }
 
-      if (wasActive) {
-        await tx.project.update({
-          where: { id: existing.projectId },
-          data: { totalInvestedAmount: { decrement: existing.amount } },
-        });
+  //     return updatedInvestment;
+  //   });
 
-        await tx.investor.update({
-          where: { id: existing.investorId },
-          data: { totalInvestmentAmount: { decrement: existing.amount } },
-        });
-      }
-    });
-
-    return {
-      message: 'Investment Updated Successfully',
-    };
-  }
+  //   return {
+  //     message: 'Investment Updated Successfully',
+  //     success: true,
+  //     data: updated,
+  //   };
+  // }
 
   private assertProjectAcceptsInvestment(
     project: {
