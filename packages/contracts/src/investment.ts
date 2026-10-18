@@ -29,7 +29,12 @@ export const investmentTypeSchema = z.enum(
   },
 );
 // Mirrors Prisma `InvestmentStatus` enum
-export const investmentStatusSchema = z.enum(['pending', 'active']);
+export const investmentStatusSchema = z.enum([
+  'pending',
+  'active',
+  'rejected',
+  'closed',
+]);
 
 export const disbursementPeriodSchema = z.enum(
   ['monthly', 'quarterly', 'half_yearly', 'yearly'],
@@ -96,8 +101,9 @@ export type InvestmentAdminUpdateInputSchema = z.infer<typeof investmentAdminUpd
 export const investmentUpdateInputSchema = investmentCreateInputSchema
   .pick({
     investmentPeriodMonths: true,
-    disbursementPeriod: true,
+    // disbursementPeriod: true,
     amount: true,
+    investmentType: true
   })
   .partial();
 
@@ -130,13 +136,17 @@ export const investmentQuerySchema = z.object({
   limit: limitValidationSchema,
 
   // Sorting
+  // Investors may also sort on their single (one-to-one) incoming payment.
   sortBy: z
-    .enum([                                                   
+    .enum([
       'amount',
       'rate',
       'investmentDate',
       'investmentPeriodMonths',
       'status',
+      'paymentMethod',
+      'paymentStatus',
+      'paymentAmount',
       'createdAt',
     ])
     .default('createdAt'),
