@@ -8,6 +8,7 @@ import {
     AuditAction,
     IncomingPaymentStatus,
     InvestmentStatus,
+    InvestorStatus,
     LogModule,
     LogSeverity,
     LogStatus,
@@ -316,7 +317,10 @@ export class InvestmentService {
         const [existingInvestment, admin, targetProject] = await Promise.all([
             this.prisma.investment.findUnique({
                 where: { id },
-                include: { incomingPayments: { select: { status: true } } },
+                include: {
+                    incomingPayments: { select: { status: true } },
+                    investor: { select: { status: true } },
+                },
             }),
             userId
                 ? this.prisma.adminProfile.findUnique({
@@ -387,6 +391,18 @@ export class InvestmentService {
         ) {
             throw new BadRequestException(
                 'Investment cannot be activated due to incomplete payment',
+            );
+        }
+
+        // ...and an investor who is themselves active. Suspended, deactivated,
+        // or not-yet-approved investors must not have money activated.
+        if (
+            newStatus === InvestmentStatus.active &&
+            oldStatus !== InvestmentStatus.active &&
+            existingInvestment.investor?.status !== InvestorStatus.active
+        ) {
+            throw new BadRequestException(
+                'Investment cannot be activated because the investor is not active',
             );
         }
 

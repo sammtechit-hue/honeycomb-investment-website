@@ -62,6 +62,7 @@ enum InvestorStatus {
     uploaded_kyc
     active
     suspended //cant suspended until all investment closed
+    deactivated
 }
 
 enum KycDocType {
