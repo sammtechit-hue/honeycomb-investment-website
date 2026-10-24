@@ -25,7 +25,7 @@ const INVESTOR_UPDATE_INCLUDE = {
   nominee: true,
   kycDocuments: true,
   bankAccount: true,
-  user: { select: { id: true, email: true, phone: true } },
+  user: { select: { email: true, phone: true } },
 } satisfies Prisma.InvestorInclude;
 
 type InvestorWithRelations = Prisma.InvestorGetPayload<{
@@ -150,9 +150,7 @@ export class InvestorService {
     return 'Investor Data';
   }
 
-  // PATCH /api/admin/investor/:id — any provided investor / nested / contact
-  // field is written. approvedAt / approvedBy are system-stamped from the
-  // acting admin's session whenever the status transitions to `active`.
+
   async updateInvestor(
     id: string,
     dto: UpdateInvestorDto,
@@ -193,6 +191,25 @@ export class InvestorService {
       throw new BadRequestException('No fields provided to update');
     }
 
+    // "Other information" is anything besides the status field itself.
+    const hasOtherFields =
+      fullName !== undefined ||
+      address !== undefined ||
+      profession !== undefined ||
+      workplace !== undefined ||
+      category !== undefined ||
+      email !== undefined ||
+      phone !== undefined ||
+      nominee !== undefined ||
+      kycDocuments !== undefined;
+
+    // A suspension request must carry status only — no other field may be
+    if (status === InvestorStatus.suspended && hasOtherFields) {
+      throw new BadRequestException(
+        'Cannot change other information while suspending an investor',
+      );
+    }
+
     // Independent lookups, run in parallel
     const [existing, admin] = await Promise.all([
       this.prisma.investor.findUnique({
@@ -204,9 +221,35 @@ export class InvestorService {
         select: { id: true, name: true },
       }),
     ]);
-    
+
     if (!existing) {
       throw new NotFoundException(`Investor with id ${id} not found`);
+    }
+
+    // An active investor can't revert to an earlier onboarding stage — the
+    // only permitted status change from active is suspension.
+    if (
+      existing.status === InvestorStatus.active &&
+      (status === InvestorStatus.pending ||
+        status === InvestorStatus.uploaded_kyc)
+    ) {
+      throw new BadRequestException(
+        'An active investor cannot go back to pending or uploaded_kyc. The only permitted status change is suspension.',
+      );
+    }
+
+    // if (existing.status === InvestorStatus.suspended && hasOtherFields) {
+    //   throw new BadRequestException(
+    //     'Investor is suspended, so their information cannot be changed',
+    //   );
+    // }
+
+    // Deactivation is a final state: nothing but the status column may be
+    // touched on a deactivated investor.
+    if (existing.status === InvestorStatus.deactivated && hasOtherFields) {
+      throw new BadRequestException(
+        'Investor is deactivated, so their information cannot be changed',
+      );
     }
 
     // An investor can't be suspended while any of their investments are still
@@ -227,7 +270,7 @@ export class InvestorService {
       }
     }
 
-    // for approvedat in 241 line
+    // for approvedate
     const becomingActive =
       status === InvestorStatus.active && existing.status !== InvestorStatus.active;
 
@@ -244,7 +287,7 @@ export class InvestorService {
     };
 
     try {
-      await this.prisma.$transaction(async (tx) => {
+      const updated = await this.prisma.$transaction(async (tx) => {
         let updated: InvestorWithRelations;
         try {
           updated = await tx.investor.update({
@@ -294,9 +337,15 @@ export class InvestorService {
             sessionId: context?.sessionId ?? null,
           },
         });
+
+        return updated;
       });
 
-      return { message: 'Investor Updated Successfully', success: true };
+      return {
+        message: 'Investor Updated Successfully',
+        success: true,
+        data: updated,
+      };
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError) {
         if (err.code === 'P2002') {
@@ -319,8 +368,121 @@ export class InvestorService {
     }
   }
 
-  async remove(id: string) {
-    return { message: 'Investor has been suspended successfully' };
+  // PATCH /api/admin/investor/:id/deactivate
+  async deactiveInvestor(
+    id: string,
+    userId: string | undefined,
+    context?: RequestAuditContext,
+  ) {
+    if (!userId) {
+      throw new UnauthorizedException('Session is no longer valid');
+    }
+
+    // Independent lookups, run in parallel
+    const [existing, admin] = await Promise.all([
+      this.prisma.investor.findUnique({
+        where: { id },
+        include: INVESTOR_UPDATE_INCLUDE,
+      }),
+      this.prisma.adminProfile.findUnique({
+        where: { userId },
+        select: { id: true, name: true },
+      }),
+    ]);
+
+    if (!existing) {
+      throw new NotFoundException(`Investor with id ${id} not found`);
+    }
+
+    if (existing.status === InvestorStatus.deactivated) {
+      throw new BadRequestException('Investor is already deactivated');
+    }
+
+    if (
+      existing.status !== InvestorStatus.active &&
+      existing.status !== InvestorStatus.suspended
+    ) {
+      throw new BadRequestException(
+        'Only an active or suspended investor can be deactivated',
+      );
+    }
+
+    // Money still running with the investor blocks deactivation, exactly like
+    // suspension — every active investment must be closed first.
+    const activeInvestments = await this.prisma.investment.count({
+      where: { investorId: id, status: InvestmentStatus.active },
+    });
+
+    if (activeInvestments > 0) {
+      throw new BadRequestException(
+        'Investor cannot be deactivated while they have active investments. Close all active investments first.',
+      );
+    }
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        let updated: InvestorWithRelations;
+        try {
+          // Only the status column is written, so deactivation cannot change
+          // any other information on the investor.
+          updated = await tx.investor.update({
+            where: { id, updatedAt: existing.updatedAt },
+            data: { status: InvestorStatus.deactivated },
+            include: INVESTOR_UPDATE_INCLUDE,
+          });
+        } catch (e) {
+          if (
+            e instanceof Prisma.PrismaClientKnownRequestError &&
+            e.code === 'P2025'
+          ) {
+            throw new ConflictException(
+              'Investor was modified by someone else. Reload and try again.',
+            );
+          }
+          throw e;
+        }
+
+        await tx.auditLog.create({
+          data: {
+            adminName: admin?.name ?? 'Admin',
+            adminProfileId: admin?.id ?? null,
+            action: AuditAction.investor_status_changed,
+            module: LogModule.INVESTOR,
+            severity: LogSeverity.INFO,
+            status: LogStatus.SUCCESS,
+            targetLabel: `Investor Deactivated: ${updated.fullname}`,
+            targetTable: 'investors',
+            targetId: updated.id,
+            oldValue: toInvestorSnapshot(existing) as unknown as Prisma.InputJsonValue,
+            newValue: toInvestorSnapshot(updated) as unknown as Prisma.InputJsonValue,
+            ipAddress: context?.ipAddress ?? null,
+            userAgent: context?.userAgent ?? null,
+            sessionId: context?.sessionId ?? null,
+          },
+        });
+
+        return updated;
+      });
+
+      return {
+        message: 'Investor has been deactivated successfully',
+        success: true,
+      };
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError) {
+        if (err.code === 'P2000') {
+          throw new BadRequestException(
+            'One of the provided values is too long for its field.',
+          );
+        }
+        if (err.code === 'P2003') {
+          throw new BadRequestException(
+            'One or more referenced records do not exist.',
+          );
+        }
+      }
+      throw err;
+    }
   }
 
   private nomineeNestedWrite(

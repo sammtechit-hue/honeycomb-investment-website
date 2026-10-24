@@ -76,9 +76,21 @@ export class InvestorController {
     );
   }
 
-  // DELETE /api/admin/investor/:id  (soft delete — sets status to 'suspended')
-  @Delete(':id')
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.investorService.remove(id);
+  // PATCH /api/admin/investor/:id/deactivate  (sets status to 'deactivated')
+  @Patch(':id/deactivate')
+  @HttpCode(HttpStatus.OK)
+  deactive(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Ip() ip?: string,
+    @Headers('user-agent') userAgent?: string,
+    @Headers('x-session-id') sessionId?: string,
+  ) {
+    const context = {
+      ipAddress: ip,
+      userAgent: userAgent,
+      sessionId: sessionId,
+    };
+    return this.investorService.deactiveInvestor(id, user.userId, context);
   }
 }
