@@ -60,8 +60,8 @@ export class InvestorController {
     return this.investorService.createInvestor(createInvestorDto, user?.userId, context);
   }
 
-  // PATCH /api/investor/:id
-  @Post('update/:id')
+  // PATCH /api/investor/:id/update
+  @Post(':id/update')
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateInvestorDto: UpdateInvestorDto,

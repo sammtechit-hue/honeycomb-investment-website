@@ -195,7 +195,7 @@ export class ProjectService {
 
 
     // PATCH /api/admin/project/:id — partial update. Only fields present in
-    async updateInvestor(
+    async updateInvestor( 
         id: string,
         dto: UpdateProjectDto,
         userId: string,

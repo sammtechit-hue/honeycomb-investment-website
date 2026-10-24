@@ -411,6 +411,12 @@ export class InvestorService {
           })
         }
 
+        // Reset investor status to pending so staff re-review after any
+        await tx.investor.update({
+          where: { id: investor.id },
+          data: { status: 'pending' as InvestorStatus },
+        });
+
         const changedSections = [
           profileChanges && 'profile',
           nomineeChanges && 'nominee',
@@ -434,6 +440,7 @@ export class InvestorService {
 
         return changes;
       })
+
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError) {
         if (err.code === 'P2000') {
