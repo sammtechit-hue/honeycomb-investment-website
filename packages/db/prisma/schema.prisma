@@ -33,6 +33,7 @@ enum AuditAction {
     investment_created
     investment_status_changed
     monthly_rate_set
+    monthly_rate_updated // any admin edit to an existing monthly rate setting (rate, active flag, period)
     disbursement_batch_created
     disbursement_batch_exported
     disbursement_batch_confirmed
@@ -89,7 +90,7 @@ enum BankSelected {
 
 enum ProjectStatus {
     DRAFT
-    OPEN 
+    OPEN
     FULL
     PAUSED
     COMPLETED
@@ -180,6 +181,7 @@ enum AdminNotificationType {
     upcoming_payout
     slot_reminder
     new_investment_request
+    investor_action
     disbursement_sent
     incoming_payments
     company_document_expiring
@@ -352,33 +354,101 @@ model LoginAttempt {
     @@map("login_attempts")
 }
 
+model EditableInvestor {
+    id         String  @id @default(uuid()) @db.Uuid
+    address    String?
+    profession String? @db.VarChar(150)
+    workplace  String? @db.VarChar(150)
+
+    isActivated Boolean   @default(false)
+    activatedAt DateTime?
+    createdAt   DateTime  @default(now())
+
+    investorId String   @map("investor_id") @db.Uuid
+    investor   Investor @relation(fields: [investorId], references: [id])
+}
+
+model EditableInvestorKycDocuments {
+    id       String @id @default(uuid()) @db.Uuid
+    nidFront String?
+    nidBack  String?
+    photo    String?
+
+    isActivated Boolean   @default(false)
+    activatedAt DateTime?
+    createdAt   DateTime  @default(now())
+
+    investorId String   @map("investor_id") @db.Uuid
+    investor   Investor @relation(fields: [investorId], references: [id])
+}
+
+model EditableNominee {
+    id              String  @id @default(uuid()) @db.Uuid
+    nomineeName     String?  @map("nominee_name") @db.VarChar(150)
+    nomineeNidFront String? @db.VarChar(500)
+    nomineeNidBack  String? @db.VarChar(500)
+    nomineePhoto    String? @map("nominee_photo")
+    nomineePhone    String?  @map("nominee_phone") @db.VarChar(20)
+    relation        String?  @db.VarChar(50)
+
+    isActivated Boolean   @default(false)
+    activatedAt DateTime?
+    createdAt   DateTime  @default(now())
+
+    investorId String   @map("investor_id") @db.Uuid
+    investor   Investor @relation(fields: [investorId], references: [id])
+}
+
+// Staged contact changes. Email/phone are intentionally NOT unique here: this
+// table keeps a history of edit requests, so the same address can appear on
+// several rows (and may match the live User row until the request is applied).
+model EditableUser {
+    id           String  @id @default(uuid()) @db.Uuid
+    email        String?  @db.VarChar(150)
+    phone        String? @db.VarChar(20)
+    passwordHash String?  @map("password_hash") @db.VarChar(255)
+
+    isActivated Boolean   @default(false)
+    activatedAt DateTime?
+    createdAt   DateTime  @default(now())
+
+    investorId String   @map("investor_id") @db.Uuid
+    investor   Investor @relation(fields: [investorId], references: [id])
+}
+
 // ----------------------------------------------------------------------------
 // 1. Investor profile (1:1 with User where role = INVESTOR)
 // ----------------------------------------------------------------------------
 
 model Investor {
-    id                    String           @id @default(uuid()) @db.Uuid
-    fullname              String           @map("name") @db.VarChar(150)
-    totalInvestmentAmount Decimal          @default(0) @map("total_investment_amount") @db.Decimal(18, 2)
-    totalActiveInvestmentAmout              Decimal          @default(0) @db.Decimal(18, 2)
-    address               String?           
-    profession            String?          @db.VarChar(150)
-    workplace             String?          @db.VarChar(150)
+    id                         String           @id @default(uuid()) @db.Uuid
+    fullname                   String           @map("name") @db.VarChar(150)
+    totalInvestmentAmount      Decimal          @default(0) @map("total_investment_amount") @db.Decimal(18, 2)
+    totalActiveInvestmentAmout Decimal          @default(0) @db.Decimal(18, 2)
+    address                    String?
+    profession                 String?          @db.VarChar(150)
+    workplace                  String?          @db.VarChar(150)
     // Every investor always has a category and status; defaults cover the unset case.
-    category              InvestorCategory @default(bronze)
-    status                InvestorStatus   @default(pending)
-    approvedAt            DateTime?        @map("approved_at")
-    approvedBy            String?          @db.Uuid // UserId from User Model who is admin. Dont need adminprofileId
-    createdAt             DateTime         @default(now()) @map("created_at")
-    updatedAt             DateTime         @updatedAt @map("updated_at")
+    category                   InvestorCategory @default(bronze)
+    status                     InvestorStatus   @default(pending)
+    approvedAt                 DateTime?        @map("approved_at") // At the firstDay of activation of this investor
+    approvedBy                 String?          @db.Uuid // UserId from User Model who is admin. Dont need adminprofileId
+    createdAt                  DateTime         @default(now()) @map("created_at")
+    updatedAt                  DateTime         @updatedAt @map("updated_at")
 
     userId String @unique @map("user_id") @db.Uuid
     user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
     kycDocuments InvestorKycDocument?
-    bankAccount  InvestorBankAccount[]
     nominee      Nominee?
+    bankAccount  InvestorBankAccount[]
     investments  Investment[]
+
+    // For Editing field
+    editableInvestor    EditableInvestor[]
+    editableKycDocument EditableInvestorKycDocuments[]
+    editableNominee     EditableNominee[]
+    editableUser        EditableUser[]
 
     disbursementItems DisbursementItem[]
 
@@ -490,9 +560,9 @@ model Project {
     minimumInvestment Decimal  @default(10000) @db.Decimal(18, 2)
     maximumInvestment Decimal? @db.Decimal(18, 2)
 
-    targetAmount        Decimal? @db.Decimal(18, 2)
-    totalInvestedAmount Decimal  @default(0) @db.Decimal(18, 2)
-    totalActiveInvestmentAmout   Decimal  @default(0) @db.Decimal(18, 2)
+    targetAmount               Decimal? @db.Decimal(18, 2)
+    totalInvestedAmount        Decimal  @default(0) @db.Decimal(18, 2)
+    totalActiveInvestmentAmout Decimal  @default(0) @db.Decimal(18, 2)
 
     startDate DateTime
     endDate   DateTime?
@@ -533,7 +603,7 @@ model CompanyDocument {
 
 model Investment {
     id                     String         @id @default(uuid()) @db.Uuid
-    investmentDate         DateTime?      @map("investment_date")
+    investmentDate         DateTime?      @map("investment_date") @db.Date
     amount                 Decimal        @db.Decimal(14, 2)
     investmentType         InvestmentType @map("investment_type")
     rate                   Decimal?       @db.Decimal(5, 2)
@@ -614,6 +684,7 @@ model MonthlyRateSetting {
     id          String   @id @default(uuid()) @db.Uuid
     periodMonth DateTime @unique @map("period_month") @db.Date
     ratePercent Decimal  @map("rate_percent") @db.Decimal(5, 2)
+    isActive    Boolean @default(true)
     setAt       DateTime @default(now()) @map("set_at")
 
     @@map("monthly_rate_settings")
@@ -624,9 +695,13 @@ model MonthlyRateSetting {
 // ----------------------------------------------------------------------------
 
 model MonthlyProfitLedger {
-    id           String       @id @default(uuid()) @db.Uuid
-    periodMonth  DateTime     @map("period_month") @db.Date
-    rateApplied  Decimal      @map("rate_applied") @db.Decimal(5, 2)
+    id String @id @default(uuid()) @db.Uuid
+
+    cycleStart  DateTime @map("cycle_start") @db.Date 
+    cycleEnd    DateTime @map("cycle_end") @db.Date 
+    daysCounted Int      @map("days_counted") 
+
+    rateApplied  Decimal      @map("rate_applied") @db.Decimal(5, 2) 
     profitAmount Decimal      @map("profit_amount") @db.Decimal(14, 2)
     payoutStatus PayoutStatus @default(accrued) @map("payout_status")
 
@@ -636,8 +711,11 @@ model MonthlyProfitLedger {
     disbursementItemId String?           @map("disbursement_item_id") @db.Uuid
     disbursementItem   DisbursementItem? @relation(fields: [disbursementItemId], references: [id])
 
-    @@unique([investmentId, periodMonth])
-    @@index([periodMonth])
+    createdAt DateTime @default(now()) @map("created_at")
+
+    // One row per investment per cycle; stops a double-run job from creating duplicates.
+    @@unique([investmentId, cycleStart])
+    @@index([cycleEnd])
     @@index([payoutStatus])
     @@map("monthly_profit_ledger")
 }
@@ -903,14 +981,14 @@ model AuditLog {
 // }
 
 model FixedRate {
-    id   Int            @id @default(autoincrement())
-    rate Decimal?       @db.Decimal(2, 2)
+    id   Int      @id @default(autoincrement())
+    rate Decimal? @db.Decimal(2, 2)
 
-    label String?       @db.VarChar(200)
-    isActive Boolean    @default(true)
+    label    String? @db.VarChar(200)
+    isActive Boolean @default(true)
 
-    createdAt DateTime  @default(now())
-    updatedAt DateTime  @updatedAt
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
 }
 
 // Anouncement for investor

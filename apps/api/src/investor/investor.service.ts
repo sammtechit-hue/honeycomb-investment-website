@@ -6,17 +6,21 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { Prisma, AdminNotificationType, Role } from '@investment-platform/db';
+import {
+  Prisma,
+  AdminNotificationType,
+  InvestorStatus,
+  Role,
+} from '@investment-platform/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateInvestorDto } from './dto/create-investor.dto';
 import { UpdateInvestorDto } from './dto/update-investor.dto';
 import { RequestAuditContext } from '../utils/common types';
 import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
+import * as bcrypt from 'bcrypt';
+import { BCRYPT_ROUNDS } from '../auth/auth.constants';
 
-// The investor's own profile view. An explicit `select` (instead of a bare
-// `include`) keeps this a stable response contract and guarantees we never
-// leak the related User's credentials — `passwordHash` / `tokenVersion`
-// simply aren't part of the selection.
+// Selected Field for investor can see
 const INVESTOR_PROFILE_SELECT = {
   id: true,
   fullname: true,
@@ -79,66 +83,54 @@ const INVESTOR_PROFILE_SELECT = {
 export class InvestorService {
   constructor(private readonly prisma: PrismaService) { }
 
-  // Only has Access to his own investor profile
-  async findOwnerUserId(
-    investorId: string,
+  // Only has Access to his own investor profile. SUPER_ADMIN bypasses;
+  // a missing row or a foreign userId is Forbidden so IDs can't be probed.
+  private assertOwnership(
+    investor: { userId: string | null } | null,
     user: AuthenticatedUser,
-  ): Promise<string | null> {
-    const investor = await this.prisma.investor.findUnique({
-      where: { id: investorId },
-      select: { userId: true },
-    });
-    const ownerUserId = investor?.userId ?? null;
+  ): void {
+    if (user.role === Role.SUPER_ADMIN) return;
 
-    if (user.role === Role.SUPER_ADMIN) return ownerUserId;
-
-    if (ownerUserId === null || ownerUserId !== user.userId) {
+    if (!investor || investor.userId !== user.userId) {
       throw new ForbiddenException(
         'investor profile Invalid.',
       );
     }
-
-    return ownerUserId;
   }
 
   async findOne(id: string, user: AuthenticatedUser) {
-    await this.findOwnerUserId(id, user);
-
+    // One fetch: `userId` rides along for the ownership check only.
     const investor = await this.prisma.investor.findUnique({
       where: { id },
-      select: INVESTOR_PROFILE_SELECT,
+      select: { ...INVESTOR_PROFILE_SELECT, userId: true },
     });
+
+    this.assertOwnership(investor, user);
 
     if (!investor) {
       throw new NotFoundException(`Investor with ID "${id}" not found`);
     }
 
-    // const { fullname, user, ...profile } = investor;
-    // return {
-    //   ...profile,
-    //   fullName: fullname,
-    //   email: user.email,
-    //   phone: user.phone,
-    // };
+    // `userId` was fetched for the ownership check; don't return it.
+    const { userId: _ownerUserId, ...profile } = investor;
 
     // Don't expose category until investor is beyond the initial KYC stages
-    if (investor.status === 'pending' || investor.status === 'uploaded_kyc') {
-      const { category, ...profile } = investor;
+    if (profile.status === 'pending' || profile.status === 'uploaded_kyc') {
+      const { category, ...publicProfile } = profile;
 
-      return profile;
+      return publicProfile;
     }
 
-    return investor;
+    return profile;
   }
 
-  async create(dto: CreateInvestorDto, userId: string | undefined, context?: RequestAuditContext) {
+  async createInvestor(dto: CreateInvestorDto, userId: string | undefined, context?: RequestAuditContext) {
     if (!userId) {
       throw new UnauthorizedException('Session is no longer valid');
     }
 
     const referralCode = dto.referralCode?.trim() || undefined;
 
-    // Verify User exists
     const [user, existingInvestor, referralCodeRecord] = await Promise.all([
       this.prisma.user.findUnique({ where: { id: userId } }),
       this.prisma.investor.findUnique({ where: { userId } }),
@@ -146,12 +138,15 @@ export class InvestorService {
       referralCode ? this.prisma.referralCode.findUnique({ where: { code: referralCode } }) : Promise.resolve(null),
     ]);
 
+    // Verify User exists
     if (!user) {
       throw new NotFoundException(`User with ID "${userId}" not found`);
     }
     if (existingInvestor) {
       throw new ConflictException('An Investor profile already exists for this user account.');
     }
+
+    // If referralCode is given
     if (referralCode) {
       if (!referralCodeRecord) {
         throw new BadRequestException('The provided referral code is invalid');
@@ -163,6 +158,18 @@ export class InvestorService {
         throw new BadRequestException('This referral code has already been used');
       }
     }
+
+    // Check that kyc file are given and set status kyc_uploaded if not, set status pending.
+    const kycInput = dto.kycDocuments
+    const hasKycDocuments =
+      !!kycInput?.nidFront &&
+      !!kycInput?.nidBack &&
+      !!kycInput?.photo;
+
+    const investorStatus: InvestorStatus = hasKycDocuments
+      ? 'uploaded_kyc'
+      : 'pending';
+
     try {
       return await this.prisma.$transaction(async (tx) => {
         // Create Investor profile & relations
@@ -172,7 +179,7 @@ export class InvestorService {
             address: dto.address,
             profession: dto.profession,
             workplace: dto.workplace,
-            status: 'pending',
+            status: investorStatus,
             category: 'bronze',
             user: {
               connect: { id: userId },
@@ -201,14 +208,16 @@ export class InvestorService {
                 relation: dto.nominee.relation,
               },
             },
-            kycDocuments: {
-              create: {
-                nidFront: dto.kycDocuments.nidFront,
-                nidBack: dto.kycDocuments.nidBack,
-                photo: dto.kycDocuments.photo,
-                verificationStatus: 'pending',
-              },
-            },
+            kycDocuments: hasKycDocuments
+              ? {
+                create: {
+                  nidFront: kycInput?.nidFront,
+                  nidBack: kycInput?.nidBack,
+                  photo: kycInput?.photo,
+                  verificationStatus: 'pending',
+                },
+              }
+              : undefined,
           },
           include: {
             bankAccount: true,
@@ -257,7 +266,7 @@ export class InvestorService {
           data: {
             type: 'new_investment_request' as AdminNotificationType,
             referenceId: investor.id,
-            message: `New profile registration: ${investor.fullname} (Status: pending) has uploaded KYC documents and is waiting for your manual review.`,
+            message: `New profile registration: ${investor.fullname} (Status: ${investor.status})${hasKycDocuments ? ' has uploaded KYC documents and is waiting for your manual review.' : ' registered without KYC documents.'}`,
             isRead: false,
             clickLink: `/admin/investors/${investor.id}`,
           },
@@ -269,24 +278,173 @@ export class InvestorService {
         };
       })
     } catch (err) {
-      // Backstop for the duplicate-investor race: DB unique constraint on
-      // Investor.userId turns a rare concurrent double-submit into a clean 409
       // instead of a raw Prisma error.
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
         throw new ConflictException('An Investor profile already exists for this user account.');
       }
-      // P2000 = value too long for column (e.g. a URL longer than its
       // VARCHAR). Surface as 400 with an actionable message instead of 500.
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2000') {
         throw new BadRequestException('One of the provided values is too long for its field.');
       }
       throw err;
     }
-  } //end of the Block
+  }
 
-  // ---------------------------------
-  async update(id: string, dto: UpdateInvestorDto, user: AuthenticatedUser) {
-    const investor = await this.findOne(id, user);
-    return "Investor Data";
+  async updateInvestor(id: string, dto: UpdateInvestorDto, user: AuthenticatedUser) {
+    const investor = await this.prisma.investor.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        fullname: true,
+        userId: true,
+        user: { select: { passwordHash: true } },
+      },
+    });
+
+    this.assertOwnership(investor, user);
+
+    if (!investor) {
+      throw new NotFoundException(`Invalid Investor!`);
+    }
+
+    const profileChanges = !!dto.address || !!dto.profession || !!dto.workplace;
+    const nomineeChanges = !!dto.nominee;
+    const kycChanges = !!dto.kycDocuments;
+    const userChanges = !!dto.email || !!dto.phone || !!dto.password;
+
+    if (!profileChanges && !nomineeChanges && !kycChanges && !userChanges) {
+      throw new BadRequestException('No changes detected');
+    }
+
+    if (userChanges) {
+      const clash = await this.prisma.user.findFirst({
+        where: {
+          id: { not: investor.userId }, // Find a matching user whose ID is not the current investor's user ID.
+          OR: [
+            ...(dto.email ? [{ email: dto.email }] : []),
+            ...(dto.phone ? [{ phone: dto.phone }] : []),
+          ],
+        },
+        select: { id: true },
+      });
+      if (clash) throw new ConflictException('Email or phone is already in use');
+    }
+
+     const passwordHash = dto.password
+      ? await bcrypt.hash(dto.password, BCRYPT_ROUNDS)
+      : undefined;
+
+    // Check for password if dto.password and current password same
+    if (dto.password) {
+      const isSame = await bcrypt.compare(dto.password, investor.user.passwordHash)
+      if (isSame) {
+        throw new BadRequestException('New password must be different from the current password');
+      }
+    }
+    
+    let stagedChanges: {
+      editableInvestor?: Prisma.EditableInvestorGetPayload<{}>;
+      editableNominee?: Prisma.EditableNomineeGetPayload<{}>;
+      editableInvestorKycDocuments?: Prisma.EditableInvestorKycDocumentsGetPayload<{}>;
+      editableUser?: Prisma.EditableUserGetPayload<{}>;
+    };
+
+    try {
+      stagedChanges = await this.prisma.$transaction(async (tx) => {
+        const changes: typeof stagedChanges = {};
+
+        if (profileChanges) {
+          changes.editableInvestor = await tx.editableInvestor.create({
+            data: {
+              address: dto.address,
+              profession: dto.profession,
+              workplace: dto.workplace,
+              investorId: investor.id
+            }
+          })
+        }
+
+        if (nomineeChanges) {
+          changes.editableNominee = await tx.editableNominee.create({
+            data: {
+              nomineeName: dto.nominee?.nomineeName,
+              nomineeNidFront: dto.nominee?.nomineeNidFront,
+              nomineeNidBack: dto.nominee?.nomineeNidBack,
+              nomineePhoto: dto.nominee?.nomineePhoto,
+              nomineePhone: dto.nominee?.nomineePhone,
+              relation: dto.nominee?.relation,
+              investorId: investor.id,
+            }
+          })
+        }
+
+        if (kycChanges) {
+          changes.editableInvestorKycDocuments = await tx.editableInvestorKycDocuments.create({
+            data: {
+              nidFront: dto.kycDocuments?.nidFront,
+              nidBack: dto.kycDocuments?.nidBack,
+              photo: dto.kycDocuments?.photo,
+              investorId: investor.id,
+            }
+          })
+        }
+
+        if (userChanges) {
+          changes.editableUser = await tx.editableUser.create({
+            data: {
+              email: dto.email,
+              phone: dto.phone,
+              passwordHash: passwordHash,
+              investorId: investor.id,
+            }
+          })
+        }
+
+        // Reset investor status to pending so staff re-review after any
+        await tx.investor.update({
+          where: { id: investor.id },
+          data: { status: 'pending' as InvestorStatus },
+        });
+
+        const changedSections = [
+          profileChanges && 'profile',
+          nomineeChanges && 'nominee',
+          kycChanges && 'KYC documents',
+          userChanges && 'contact details',
+        ]
+          .filter(Boolean) //removes falsy values
+          .join(', ');
+
+        // Admin review queue: the live records aren't touched until staff
+        // apply the staged Editable* rows.
+        await tx.adminNotification.create({
+          data: {
+            type: 'investor_action' as AdminNotificationType,
+            referenceId: investor.id,
+            message: `${investor.fullname} submitted ${changedSections} changes and is waiting for your review.`,
+            isRead: false,
+            clickLink: `/admin/investors/${investor.id}`,
+          },
+        });
+
+        return changes;
+      })
+
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError) {
+        if (err.code === 'P2000') {
+          throw new BadRequestException(
+            'One of the provided values is too long for its field.',
+          );
+        }
+      }
+      throw err;
+    }
+
+    return {
+      message: 'Profile changes submitted for review',
+      success: true,
+      data: stagedChanges,
+    };
   }
 }

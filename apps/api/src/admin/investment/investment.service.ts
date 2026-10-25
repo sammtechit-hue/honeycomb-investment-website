@@ -347,6 +347,16 @@ export class InvestmentService {
             throw new BadRequestException('Project not found');
         }
 
+        // An active investment's date cannot be changed once set.
+        if (
+            existingInvestment.status === InvestmentStatus.active &&
+            investmentDate !== undefined
+        ) {
+            throw new BadRequestException(
+                'The investment date of an active investment cannot be changed',
+            );
+        }
+
         const oldAmount = existingInvestment.amount;
         const newAmount = amount !== undefined ? new Prisma.Decimal(amount) : oldAmount;
 

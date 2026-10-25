@@ -57,16 +57,16 @@ export class InvestorController {
       userAgent: userAgent,
       sessionId: sessionId,
     };
-    return this.investorService.create(createInvestorDto, user?.userId, context);
+    return this.investorService.createInvestor(createInvestorDto, user?.userId, context);
   }
 
-  // PATCH /api/investor/:id
-  @Patch(':id')
+  // PATCH /api/investor/:id/update
+  @Post(':id/update')
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateInvestorDto: UpdateInvestorDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.investorService.update(id, updateInvestorDto, user);
+    return this.investorService.updateInvestor(id, updateInvestorDto, user);
   }
 }
