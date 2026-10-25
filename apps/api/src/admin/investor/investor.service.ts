@@ -246,11 +246,11 @@ export class InvestorService {
 
     // Deactivation is a final state: nothing but the status column may be
     // touched on a deactivated investor.
-    if (existing.status === InvestorStatus.deactivated && hasOtherFields) {
-      throw new BadRequestException(
-        'Investor is deactivated, so their information cannot be changed',
-      );
-    }
+    // if (existing.status === InvestorStatus.deactivated && hasOtherFields) {
+    //   throw new BadRequestException(
+    //     'Investor is deactivated, so their information cannot be changed',
+    //   );
+    // }
 
     // An investor can't be suspended while any of their investments are still
     // running — all investments must be closed first (see InvestorStatus.suspended).
