@@ -83,56 +83,45 @@ const INVESTOR_PROFILE_SELECT = {
 export class InvestorService {
   constructor(private readonly prisma: PrismaService) { }
 
-  // Only has Access to his own investor profile
-  private async findOwnerUserId(
-    investorId: string,
+  // Only has Access to his own investor profile. SUPER_ADMIN bypasses;
+  // a missing row or a foreign userId is Forbidden so IDs can't be probed.
+  private assertOwnership(
+    investor: { userId: string | null } | null,
     user: AuthenticatedUser,
-  ): Promise<string | null> {
-    const investor = await this.prisma.investor.findUnique({
-      where: { id: investorId },
-      select: { userId: true },
-    });
-    const ownerUserId = investor?.userId ?? null;
+  ): void {
+    if (user.role === Role.SUPER_ADMIN) return;
 
-    if (user.role === Role.SUPER_ADMIN) return ownerUserId;
-
-    if (ownerUserId === null || ownerUserId !== user.userId) {
+    if (!investor || investor.userId !== user.userId) {
       throw new ForbiddenException(
         'investor profile Invalid.',
       );
     }
-
-    return ownerUserId;
   }
 
   async findOne(id: string, user: AuthenticatedUser) {
-    await this.findOwnerUserId(id, user);
-
+    // One fetch: `userId` rides along for the ownership check only.
     const investor = await this.prisma.investor.findUnique({
       where: { id },
-      select: INVESTOR_PROFILE_SELECT,
+      select: { ...INVESTOR_PROFILE_SELECT, userId: true },
     });
+
+    this.assertOwnership(investor, user);
 
     if (!investor) {
       throw new NotFoundException(`Investor with ID "${id}" not found`);
     }
 
-    // const { fullname, user, ...profile } = investor;
-    // return {
-    //   ...profile,
-    //   fullName: fullname,
-    //   email: user.email,
-    //   phone: user.phone,
-    // };
+    // `userId` was fetched for the ownership check; don't return it.
+    const { userId: _ownerUserId, ...profile } = investor;
 
     // Don't expose category until investor is beyond the initial KYC stages
-    if (investor.status === 'pending' || investor.status === 'uploaded_kyc') {
-      const { category, ...profile } = investor;
+    if (profile.status === 'pending' || profile.status === 'uploaded_kyc') {
+      const { category, ...publicProfile } = profile;
 
-      return profile;
+      return publicProfile;
     }
 
-    return investor;
+    return profile;
   }
 
   async createInvestor(dto: CreateInvestorDto, userId: string | undefined, context?: RequestAuditContext) {
@@ -302,17 +291,18 @@ export class InvestorService {
   }
 
   async updateInvestor(id: string, dto: UpdateInvestorDto, user: AuthenticatedUser) {
-    await this.findOwnerUserId(id, user);
-
     const investor = await this.prisma.investor.findUnique({
       where: { id },
       select: {
         id: true,
         fullname: true,
         userId: true,
-        user: { select: { email: true, phone: true, passwordHash: true } },
+        user: { select: { passwordHash: true } },
       },
     });
+
+    this.assertOwnership(investor, user);
+
     if (!investor) {
       throw new NotFoundException(`Invalid Investor!`);
     }
@@ -326,7 +316,6 @@ export class InvestorService {
       throw new BadRequestException('No changes detected');
     }
 
-    // Find a matching user whose ID is not the current investor's user ID.
     if (userChanges) {
       const clash = await this.prisma.user.findFirst({
         where: {
