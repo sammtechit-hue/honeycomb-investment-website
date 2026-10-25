@@ -602,7 +602,7 @@ model CompanyDocument {
 
 model Investment {
     id                     String         @id @default(uuid()) @db.Uuid
-    investmentDate         DateTime?      @map("investment_date")
+    investmentDate         DateTime?      @map("investment_date") @db.Date
     amount                 Decimal        @db.Decimal(14, 2)
     investmentType         InvestmentType @map("investment_type")
     rate                   Decimal?       @db.Decimal(5, 2)
@@ -683,6 +683,7 @@ model MonthlyRateSetting {
     id          String   @id @default(uuid()) @db.Uuid
     periodMonth DateTime @unique @map("period_month") @db.Date
     ratePercent Decimal  @map("rate_percent") @db.Decimal(5, 2)
+    isActive    Boolean @default(true)
     setAt       DateTime @default(now()) @map("set_at")
 
     @@map("monthly_rate_settings")
@@ -693,9 +694,13 @@ model MonthlyRateSetting {
 // ----------------------------------------------------------------------------
 
 model MonthlyProfitLedger {
-    id           String       @id @default(uuid()) @db.Uuid
-    periodMonth  DateTime     @map("period_month") @db.Date
-    rateApplied  Decimal      @map("rate_applied") @db.Decimal(5, 2)
+    id String @id @default(uuid()) @db.Uuid
+
+    cycleStart  DateTime @map("cycle_start") @db.Date 
+    cycleEnd    DateTime @map("cycle_end") @db.Date 
+    daysCounted Int      @map("days_counted") 
+
+    rateApplied  Decimal      @map("rate_applied") @db.Decimal(5, 2) 
     profitAmount Decimal      @map("profit_amount") @db.Decimal(14, 2)
     payoutStatus PayoutStatus @default(accrued) @map("payout_status")
 
@@ -705,8 +710,11 @@ model MonthlyProfitLedger {
     disbursementItemId String?           @map("disbursement_item_id") @db.Uuid
     disbursementItem   DisbursementItem? @relation(fields: [disbursementItemId], references: [id])
 
-    @@unique([investmentId, periodMonth])
-    @@index([periodMonth])
+    createdAt DateTime @default(now()) @map("created_at")
+
+    // One row per investment per cycle; stops a double-run job from creating duplicates.
+    @@unique([investmentId, cycleStart])
+    @@index([cycleEnd])
     @@index([payoutStatus])
     @@map("monthly_profit_ledger")
 }
