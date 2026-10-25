@@ -108,12 +108,12 @@ const SAMPLE_PROJECTS = [
 
 // SAMPLE — confirm names, sectors and years with the client.
 const GROUP_COMPANIES: (Omit<GroupCompany, 'sector'> & { sector: Localized<string> })[] = [
-  { name: 'Tahams', sector: { en: 'Fashion and retail', bn: 'ফ্যাশন ও খুচরা বিক্রয়' }, operatingSince: 2018 },
-  { name: 'Love Life Memories', sector: { en: 'Event management', bn: 'ইভেন্ট ম্যানেজমেন্ট' }, operatingSince: 2019 },
+  { name: 'Tahams', sector: { en: 'Fashion and retail', bn: 'ফ্যাশন ও খুচরা বিক্রয়' }, operatingSince: 2020 },
+  { name: 'Love Life Memories', sector: { en: 'Event management', bn: 'ইভেন্ট ম্যানেজমেন্ট' }, operatingSince: 2016 },
   {
     name: 'SammTech',
     sector: { en: 'Software and digital marketing', bn: 'সফটওয়্যার ও ডিজিটাল মার্কেটিং' },
-    operatingSince: 2020,
+    operatingSince: 2017,
   },
 ];
 

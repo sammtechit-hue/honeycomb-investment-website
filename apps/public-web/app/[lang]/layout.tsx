@@ -3,8 +3,9 @@ import { Geist, Geist_Mono, Noto_Sans_Bengali } from "next/font/google";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { StickyCta } from "@/components/sticky-cta";
-import { LOCALES, localePath } from "@/lib/i18n/config";
-import { getDictionary } from "@/lib/i18n/dictionaries";
+import { LOCALES, hasLocale, localePath, type Locale } from "@/lib/i18n/config";
+import { getLocale } from "@/lib/i18n/dictionaries";
+import { loadDictionary } from "@/lib/i18n/load-dictionary";
 import "../globals.css";
 
 const geistSans = Geist({
@@ -30,8 +31,17 @@ export function generateStaticParams() {
 
 export const dynamicParams = false;
 
-export async function generateMetadata(): Promise<Metadata> {
-  const { locale, dict } = await getDictionary();
+async function resolveLocale(paramsPromise?: Promise<{ lang?: string }>): Promise<Locale> {
+  const resolved = paramsPromise ? await paramsPromise : undefined;
+  if (resolved?.lang && hasLocale(resolved.lang)) {
+    return resolved.lang;
+  }
+  return getLocale();
+}
+
+export async function generateMetadata(props: LayoutProps<"/[lang]">): Promise<Metadata> {
+  const locale = await resolveLocale(props.params);
+  const dict = await loadDictionary(locale);
   return {
     title: dict.meta.title,
     description: dict.meta.description,
@@ -42,17 +52,19 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export default async function RootLayout({ children }: LayoutProps<"/[lang]">) {
-  const { locale, dict } = await getDictionary();
+export default async function RootLayout(props: LayoutProps<"/[lang]">) {
+  const locale = await resolveLocale(props.params);
+  const dict = await loadDictionary(locale);
 
   return (
     <html
       lang={locale}
       className={`${geistSans.variable} ${geistMono.variable} ${notoBengali.variable} h-full scroll-smooth antialiased`}
+      suppressHydrationWarning
     >
       <body className="flex min-h-full flex-col" suppressHydrationWarning>
         <SiteHeader locale={locale} dict={dict} />
-        {children}
+        {props.children}
         <SiteFooter locale={locale} dict={dict} />
         <StickyCta locale={locale} dict={dict} />
       </body>
