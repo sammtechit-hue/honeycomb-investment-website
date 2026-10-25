@@ -33,6 +33,7 @@ enum AuditAction {
     investment_created
     investment_status_changed
     monthly_rate_set
+    monthly_rate_updated // any admin edit to an existing monthly rate setting (rate, active flag, period)
     disbursement_batch_created
     disbursement_batch_exported
     disbursement_batch_confirmed
