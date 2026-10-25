@@ -335,12 +335,12 @@ export class InvestorService {
       : undefined;
 
     // Check for password if dto.password and current password same
-    if (dto.password) {
-      const isSame = await bcrypt.compare(dto.password, investor.user.passwordHash)
-      if (isSame) {
-        throw new BadRequestException('New password must be different from the current password');
-      }
-    }
+    // if (dto.password) {
+    //   const isSame = await bcrypt.compare(dto.password, investor.user.passwordHash)
+    //   if (isSame) {
+    //     throw new BadRequestException('New password must be different from the current password');
+    //   }
+    // }
     
     let stagedChanges: {
       editableInvestor?: Prisma.EditableInvestorGetPayload<{}>;
