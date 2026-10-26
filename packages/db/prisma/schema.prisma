@@ -110,9 +110,9 @@ enum InvestmentType {
 }
 
 enum EditRequestStatus {
-  PENDING
-  APPROVED
-  REJECTED
+    PENDING
+    APPROVED
+    REJECTED
 }
 
 enum DisbursementPeriod {
@@ -370,12 +370,12 @@ model EditableInvestor {
     activatedAt DateTime?
     createdAt   DateTime  @default(now())
 
-    investorId String   @map("investor_id") @db.Uuid
-    investor   Investor @relation(fields: [investorId], references: [id])
+    editRequestId String              @unique @db.Uuid
+    editRequest   InvestorEditRequest @relation(fields: [editRequestId], references: [id], onDelete: Cascade)
 }
 
 model EditableInvestorKycDocuments {
-    id       String @id @default(uuid()) @db.Uuid
+    id       String  @id @default(uuid()) @db.Uuid
     nidFront String?
     nidBack  String?
     photo    String?
@@ -384,42 +384,40 @@ model EditableInvestorKycDocuments {
     activatedAt DateTime?
     createdAt   DateTime  @default(now())
 
-    investorId String   @map("investor_id") @db.Uuid
-    investor   Investor @relation(fields: [investorId], references: [id])
+    editRequestId String              @unique @db.Uuid
+    editRequest   InvestorEditRequest @relation(fields: [editRequestId], references: [id], onDelete: Cascade)
 }
 
 model EditableNominee {
     id              String  @id @default(uuid()) @db.Uuid
-    nomineeName     String?  @map("nominee_name") @db.VarChar(150)
+    nomineeName     String? @map("nominee_name") @db.VarChar(150)
     nomineeNidFront String? @db.VarChar(500)
     nomineeNidBack  String? @db.VarChar(500)
     nomineePhoto    String? @map("nominee_photo")
-    nomineePhone    String?  @map("nominee_phone") @db.VarChar(20)
-    relation        String?  @db.VarChar(50)
+    nomineePhone    String? @map("nominee_phone") @db.VarChar(20)
+    relation        String? @db.VarChar(50)
 
     isActivated Boolean   @default(false)
     activatedAt DateTime?
     createdAt   DateTime  @default(now())
 
-    investorId String   @map("investor_id") @db.Uuid
-    investor   Investor @relation(fields: [investorId], references: [id])
+    editRequestId String              @unique @db.Uuid
+    editRequest   InvestorEditRequest @relation(fields: [editRequestId], references: [id], onDelete: Cascade)
 }
 
-// Staged contact changes. Email/phone are intentionally NOT unique here: this
-// table keeps a history of edit requests, so the same address can appear on
-// several rows (and may match the live User row until the request is applied).
+
 model EditableUser {
     id           String  @id @default(uuid()) @db.Uuid
-    email        String?  @db.VarChar(150)
+    email        String? @db.VarChar(150)
     phone        String? @db.VarChar(20)
-    passwordHash String?  @map("password_hash") @db.VarChar(255)
+    passwordHash String? @map("password_hash") @db.VarChar(255)
 
     isActivated Boolean   @default(false)
     activatedAt DateTime?
     createdAt   DateTime  @default(now())
 
-    investorId String   @map("investor_id") @db.Uuid
-    investor   Investor @relation(fields: [investorId], references: [id])
+    editRequestId String              @unique @db.Uuid
+    editRequest   InvestorEditRequest @relation(fields: [editRequestId], references: [id], onDelete: Cascade)
 }
 
 // ----------------------------------------------------------------------------
@@ -451,11 +449,7 @@ model Investor {
     investments  Investment[]
 
     // For Editing field
-    investorEditRequest            InvestorEditRequest[]
-    editableInvestor               EditableInvestor[]
-    editableKycDocument            EditableInvestorKycDocuments[]
-    editableNominee                EditableNominee[]
-    editableUser                   EditableUser[]
+    investorEditRequest InvestorEditRequest[]
 
     disbursementItems DisbursementItem[]
 
@@ -476,23 +470,26 @@ model Investor {
     @@map("investors")
 }
 
-
-
 model InvestorEditRequest {
-  id             String            @id @default(uuid()) @db.Uuid
-  status         EditRequestStatus @default(PENDING)
+    id     String            @id @default(uuid()) @db.Uuid
+    status EditRequestStatus @default(PENDING)
 
-  reviewedBy     String?           @db.Uuid
-  reviewedAt     DateTime?
-  rejectionReason String?
+    reviewedBy      String?   @db.Uuid
+    reviewedAt      DateTime?
+    rejectionReason String?
 
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
 
-  investorId     String            @db.Uuid
-  investor       Investor          @relation(fields: [investorId], references: [id])
+    editableInvestor    EditableInvestor?
+    editableKycDocument EditableInvestorKycDocuments?
+    editableNominee     EditableNominee?
+    editableUser        EditableUser?
 
-  @@index([investorId, status, createdAt])
+    investorId String   @db.Uuid
+    investor   Investor @relation(fields: [investorId], references: [id])
+
+    @@index([investorId, status, createdAt])
 }
 
 // ----------------------------------------------------------------------------
@@ -710,7 +707,7 @@ model MonthlyRateSetting {
     id          String   @id @default(uuid()) @db.Uuid
     periodMonth DateTime @unique @map("period_month") @db.Date
     ratePercent Decimal  @map("rate_percent") @db.Decimal(5, 2)
-    isActive    Boolean @default(true)
+    isActive    Boolean  @default(true)
     setAt       DateTime @default(now()) @map("set_at")
 
     @@map("monthly_rate_settings")
@@ -723,11 +720,11 @@ model MonthlyRateSetting {
 model MonthlyProfitLedger {
     id String @id @default(uuid()) @db.Uuid
 
-    cycleStart  DateTime @map("cycle_start") @db.Date 
-    cycleEnd    DateTime @map("cycle_end") @db.Date 
-    daysCounted Int      @map("days_counted") 
+    cycleStart  DateTime @map("cycle_start") @db.Date
+    cycleEnd    DateTime @map("cycle_end") @db.Date
+    daysCounted Int      @map("days_counted")
 
-    rateApplied  Decimal      @map("rate_applied") @db.Decimal(5, 2) 
+    rateApplied  Decimal      @map("rate_applied") @db.Decimal(5, 2)
     profitAmount Decimal      @map("profit_amount") @db.Decimal(14, 2)
     payoutStatus PayoutStatus @default(accrued) @map("payout_status")
 
