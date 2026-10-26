@@ -61,12 +61,11 @@ export class InvestorController {
   }
 
   // PATCH /api/investor/:id/update
-  @Post(':id/update')
+  @Post('update')
   async update(
-    @Param('id', ParseUUIDPipe) id: string,
     @Body() updateInvestorDto: UpdateInvestorDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.investorService.updateInvestor(id, updateInvestorDto, user);
+    return this.investorService.updateInvestor(updateInvestorDto, user);
   }
 }

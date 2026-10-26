@@ -83,32 +83,15 @@ const INVESTOR_PROFILE_SELECT = {
 export class InvestorService {
   constructor(private readonly prisma: PrismaService) { }
 
-  // Only has Access to his own investor profile. SUPER_ADMIN bypasses;
-  // a missing row or a foreign userId is Forbidden so IDs can't be probed.
-  private assertOwnership(
-    investor: { userId: string | null } | null,
-    user: AuthenticatedUser,
-  ): void {
-    if (user.role === Role.SUPER_ADMIN) return;
-
-    if (!investor || investor.userId !== user.userId) {
-      throw new ForbiddenException(
-        'investor profile Invalid.',
-      );
-    }
-  }
-
   async findOne(id: string, user: AuthenticatedUser) {
-    // One fetch: `userId` rides along for the ownership check only.
+    // fetech existing investor data using auth userid as given in function param
     const investor = await this.prisma.investor.findUnique({
-      where: { id },
+      where: { userId: user.userId },
       select: { ...INVESTOR_PROFILE_SELECT, userId: true },
     });
 
-    this.assertOwnership(investor, user);
-
     if (!investor) {
-      throw new NotFoundException(`Investor with ID "${id}" not found`);
+      throw new NotFoundException(`No investor profile found for the user`);
     }
 
     // `userId` was fetched for the ownership check; don't return it.
@@ -290,9 +273,11 @@ export class InvestorService {
     }
   }
 
-  async updateInvestor(id: string, dto: UpdateInvestorDto, user: AuthenticatedUser) {
+  async updateInvestor(dto: UpdateInvestorDto, user: AuthenticatedUser) {
+
+    // fetech existing investor data using auth userid as given in function param
     const investor = await this.prisma.investor.findUnique({
-      where: { id },
+      where: { userId: user.userId },
       select: {
         id: true,
         fullname: true,
@@ -300,8 +285,6 @@ export class InvestorService {
         user: { select: { passwordHash: true } },
       },
     });
-
-    this.assertOwnership(investor, user);
 
     if (!investor) {
       throw new NotFoundException(`Invalid Investor!`);
