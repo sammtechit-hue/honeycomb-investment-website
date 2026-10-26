@@ -109,6 +109,12 @@ enum InvestmentType {
     unfixed
 }
 
+enum EditRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum DisbursementPeriod {
     monthly
     quarterly
@@ -445,10 +451,11 @@ model Investor {
     investments  Investment[]
 
     // For Editing field
-    editableInvestor    EditableInvestor[]
-    editableKycDocument EditableInvestorKycDocuments[]
-    editableNominee     EditableNominee[]
-    editableUser        EditableUser[]
+    investorEditRequest            InvestorEditRequest[]
+    editableInvestor               EditableInvestor[]
+    editableKycDocument            EditableInvestorKycDocuments[]
+    editableNominee                EditableNominee[]
+    editableUser                   EditableUser[]
 
     disbursementItems DisbursementItem[]
 
@@ -467,6 +474,25 @@ model Investor {
 
     @@index([status])
     @@map("investors")
+}
+
+
+
+model InvestorEditRequest {
+  id             String            @id @default(uuid()) @db.Uuid
+  status         EditRequestStatus @default(PENDING)
+
+  reviewedBy     String?           @db.Uuid
+  reviewedAt     DateTime?
+  rejectionReason String?
+
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  investorId     String            @db.Uuid
+  investor       Investor          @relation(fields: [investorId], references: [id])
+
+  @@index([investorId, status, createdAt])
 }
 
 // ----------------------------------------------------------------------------
