@@ -398,6 +398,14 @@ export class InvestorService {
           .filter(Boolean) //removes falsy values
           .join(', ');
 
+        // History: record this edit submission so each change request is
+        // tracked/reviewed (status defaults to PENDING).
+        await tx.investorEditRequest.create({
+          data: {
+            investorId: investor.id,
+          },
+        })
+
         // Admin review queue: the live records aren't touched until staff
         // apply the staged Editable* rows.
         await tx.adminNotification.create({
