@@ -20,6 +20,7 @@ import { RequestAuditContext } from '../../utils/common types';
 import { CreateInvestorDto } from './dto/create-investor.dto';
 import { UpdateInvestorDto } from './dto/update-investor.dto';
 import { InvestorQueryDto } from './dto/query-investor.dto';
+import { InvestorEditRequestQueryDto } from './dto/InvestorEditRequest';
 
 const INVESTOR_UPDATE_INCLUDE = {
   nominee: true,
@@ -130,6 +131,7 @@ export class InvestorService {
     };
   }
 
+  // GET /api/admin/investor/:id
   async findOne(id: string) {
     const investor = await this.prisma.investor.findUnique({
       where: { id },
@@ -143,6 +145,155 @@ export class InvestorService {
       message: 'Investor fetched successfully',
       success: true,
       data: investor,
+    };
+  }
+
+  // GET /api/admin/investor/edit-requests
+  async findAllEditRequests(query: InvestorEditRequestQueryDto) {
+    const {
+      search,
+      status,
+      investorId,
+      page,
+      limit,
+      sortBy,
+      sortOrder,
+    } = query;
+
+    const where: Prisma.InvestorEditRequestWhereInput = {
+      ...(status && { status }),
+      ...(investorId && { investorId }),
+      ...(search && {
+        investor: {
+          OR: [
+            { fullname: { contains: search, mode: 'insensitive' } },
+            { user: { email: { contains: search, mode: 'insensitive' } } },
+            { user: { phone: { contains: search, mode: 'insensitive' } } },
+          ],
+        },
+      }),
+    };
+
+    const orderBy: Prisma.InvestorEditRequestOrderByWithRelationInput[] = [
+      sortBy === 'status' ? { status: sortOrder } : { createdAt: sortOrder },
+      // Tie-breaker on id keeps pagination deterministic.
+      { id: 'asc' as const },
+    ];
+
+    const [editRequests, total] = await Promise.all([
+      this.prisma.investorEditRequest.findMany({
+        where,
+        orderBy,
+        skip: (page - 1) * limit,
+        take: limit,
+        // Explicit select so credential fields (passwordHash etc.) never leak.
+        include: {
+          investor: {
+            select: {
+              fullname: true,
+              status: true,
+              user: { select: { email: true, phone: true } },
+            },
+          },
+        },
+      }),
+      this.prisma.investorEditRequest.count({ where }),
+    ]);
+
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      message: 'Investor edit requests fetched successfully',
+      success: true,
+      data: editRequests,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages,
+      },
+    };
+  }
+
+  // GET /api/admin/investor/edit-requests/:id
+  async findInvestorEditRequests(id: string) {
+    const editRequest = await this.prisma.investorEditRequest.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        status: true,
+        reviewedBy: true,
+        reviewedAt: true,
+        rejectionReason: true,
+        createdAt: true,
+        updatedAt: true,
+        investor: {
+          select: {
+            id: true,
+            fullname: true,
+            status: true,
+            user: { select: { email: true, phone: true } },
+          },
+        },
+        editableInvestor: true,
+        editableNominee: true,
+        editableKycDocument: true,
+        editableUser: {
+          select: {
+            id: true,
+            email: true,
+            phone: true,
+            passwordHash: true,
+            isActivated: true,
+            activatedAt: true,
+            createdAt: true,
+            editRequestId: true,
+          },
+        },
+      },
+    });
+
+    if (!editRequest) {
+      throw new NotFoundException(
+        `Investor edit request with id ${id} not found`,
+      );
+    }
+
+    const {
+      investor,
+      editableInvestor,
+      editableNominee,
+      editableKycDocument,
+      editableUser,
+      ...request
+    } = editRequest;
+
+    // Staged contact edits never expose passwordHash — only whether a new
+    // password is waiting for review.
+    let stagedUserEdit = null;
+
+    if (editableUser) {
+      const { passwordHash, ...staged } = editableUser;
+
+      stagedUserEdit = {
+        ...staged,
+        passwordGiven: !!passwordHash,
+      };
+    }
+
+    return {
+      message: 'Investor edit request fetched successfully',
+      success: true,
+      data: {
+        investor,
+        editRequest: request,
+        pendingEdits: {
+          investor: editableInvestor,
+          nominee: editableNominee,
+          kycDocuments: editableKycDocument,
+          user: stagedUserEdit,
+        },
+      },
     };
   }
 

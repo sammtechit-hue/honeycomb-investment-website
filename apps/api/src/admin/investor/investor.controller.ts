@@ -25,6 +25,7 @@ import type { AuthenticatedUser } from '../../auth/types/jwt-payload.interface';
 import { CreateInvestorDto } from './dto/create-investor.dto';
 import { UpdateInvestorDto } from './dto/update-investor.dto';
 import { InvestorQueryDto } from './dto/query-investor.dto';
+import { InvestorEditRequestQueryDto } from './dto/InvestorEditRequest';
 import { InvestorService } from './investor.service';
 
 @Controller('admin/investor')
@@ -38,6 +39,21 @@ export class InvestorController {
   @Get()
   findAll(@Query() query: InvestorQueryDto) {
     return this.investorService.findAll(query);
+  }  // GET /api/admin/investor/edit-requests?search=&status=PENDING&investorId=&page=1&limit=10&sortBy=createdAt&sortOrder=desc
+  // Declared before the :id routes so `edit-requests` is not captured
+  // (and rejected) by the @Get(':id') UUID parse pipe below.
+  @Get('edit-requests')
+  findAllEditRequests(@Query() query: InvestorEditRequestQueryDto) {
+    return this.investorService.findAllEditRequests(query);
+  }
+
+  // GET /api/admin/investor/edit-requests/:id
+  // The :id is an InvestorEditRequest id — its staged (not yet applied)
+  // Editable* rows scoped to that request, plus the owning investor.
+  @Get('edit-requests/:id')
+  @HttpCode(HttpStatus.OK)
+  findInvestorEditRequests(@Param('id', ParseUUIDPipe) id: string) {
+    return this.investorService.findInvestorEditRequests(id);
   }
 
   // GET /api/admin/investor/:id
