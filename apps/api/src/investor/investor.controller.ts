@@ -32,14 +32,12 @@ import { InvestorService } from './investor.service';
 export class InvestorController {
   constructor(private readonly investorService: InvestorService) { }
 
-  // GET /api/investor/:id
-  @Get(':id')
+  @Get()
   @HttpCode(HttpStatus.OK)
   async findOne(
-    @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.investorService.findOne(id, user);
+    return this.investorService.findOne(user);
   }
 
   // POST /api/investor

@@ -9,6 +9,7 @@ import {
 import {
   Prisma,
   AdminNotificationType,
+  EditRequestStatus,
   InvestorStatus,
   Role,
 } from '@investment-platform/db';
@@ -28,7 +29,7 @@ const INVESTOR_PROFILE_SELECT = {
   profession: true,
   workplace: true,
   category: true,
-  status: true,      //pending etc
+  status: true, //pending etc
   totalInvestmentAmount: true,
   approvedAt: true,
   createdAt: true,
@@ -81,9 +82,9 @@ const INVESTOR_PROFILE_SELECT = {
 
 @Injectable()
 export class InvestorService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
-  async findOne(id: string, user: AuthenticatedUser) {
+  async findOne(user: AuthenticatedUser) {
     // fetech existing investor data using auth userid as given in function param
     const investor = await this.prisma.investor.findUnique({
       where: { userId: user.userId },
@@ -107,7 +108,11 @@ export class InvestorService {
     return profile;
   }
 
-  async createInvestor(dto: CreateInvestorDto, userId: string | undefined, context?: RequestAuditContext) {
+  async createInvestor(
+    dto: CreateInvestorDto,
+    userId: string | undefined,
+    context?: RequestAuditContext,
+  ) {
     if (!userId) {
       throw new UnauthorizedException('Session is no longer valid');
     }
@@ -118,7 +123,9 @@ export class InvestorService {
       this.prisma.user.findUnique({ where: { id: userId } }),
       this.prisma.investor.findUnique({ where: { userId } }),
       // Process referral code if provided
-      referralCode ? this.prisma.referralCode.findUnique({ where: { code: referralCode } }) : Promise.resolve(null),
+      referralCode
+        ? this.prisma.referralCode.findUnique({ where: { code: referralCode } })
+        : Promise.resolve(null),
     ]);
 
     // Verify User exists
@@ -126,7 +133,9 @@ export class InvestorService {
       throw new NotFoundException(`User with ID "${userId}" not found`);
     }
     if (existingInvestor) {
-      throw new ConflictException('An Investor profile already exists for this user account.');
+      throw new ConflictException(
+        'An Investor profile already exists for this user account.',
+      );
     }
 
     // If referralCode is given
@@ -134,20 +143,23 @@ export class InvestorService {
       if (!referralCodeRecord) {
         throw new BadRequestException('The provided referral code is invalid');
       }
-      if (referralCodeRecord.expiresAt && referralCodeRecord.expiresAt < new Date()) {
+      if (
+        referralCodeRecord.expiresAt &&
+        referralCodeRecord.expiresAt < new Date()
+      ) {
         throw new BadRequestException('This referral code has expired');
       }
       if (referralCodeRecord.isUsed) {
-        throw new BadRequestException('This referral code has already been used');
+        throw new BadRequestException(
+          'This referral code has already been used',
+        );
       }
     }
 
     // Check that kyc file are given and set status kyc_uploaded if not, set status pending.
-    const kycInput = dto.kycDocuments
+    const kycInput = dto.kycDocuments;
     const hasKycDocuments =
-      !!kycInput?.nidFront &&
-      !!kycInput?.nidBack &&
-      !!kycInput?.photo;
+      !!kycInput?.nidFront && !!kycInput?.nidBack && !!kycInput?.photo;
 
     const investorStatus: InvestorStatus = hasKycDocuments
       ? 'uploaded_kyc'
@@ -193,13 +205,13 @@ export class InvestorService {
             },
             kycDocuments: hasKycDocuments
               ? {
-                create: {
-                  nidFront: kycInput?.nidFront,
-                  nidBack: kycInput?.nidBack,
-                  photo: kycInput?.photo,
-                  verificationStatus: 'pending',
-                },
-              }
+                  create: {
+                    nidFront: kycInput?.nidFront,
+                    nidBack: kycInput?.nidBack,
+                    photo: kycInput?.photo,
+                    verificationStatus: 'pending',
+                  },
+                }
               : undefined,
           },
           include: {
@@ -207,7 +219,7 @@ export class InvestorService {
             nominee: true,
             kycDocuments: true,
           },
-        })
+        });
 
         // Connect and initialize Referral relations if valid referral code used
         if (referralCodeRecord) {
@@ -229,7 +241,9 @@ export class InvestorService {
           });
 
           if (count === 0) {
-            throw new ConflictException('This referral code was just used by someone else. Please retry.');
+            throw new ConflictException(
+              'This referral code was just used by someone else. Please retry.',
+            );
           }
 
           // Record the formal relationship trace
@@ -241,7 +255,7 @@ export class InvestorService {
               bonusPercent: new Prisma.Decimal(1.0), // Standard 1.00% bonus
               // bonus amount will added later by admin
             },
-          })
+          });
         }
 
         // Notification
@@ -259,22 +273,31 @@ export class InvestorService {
           message: 'Investor Registration successful',
           success: true,
         };
-      })
+      });
     } catch (err) {
       // instead of a raw Prisma error.
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-        throw new ConflictException('An Investor profile already exists for this user account.');
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      ) {
+        throw new ConflictException(
+          'An Investor profile already exists for this user account.',
+        );
       }
       // VARCHAR). Surface as 400 with an actionable message instead of 500.
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2000') {
-        throw new BadRequestException('One of the provided values is too long for its field.');
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2000'
+      ) {
+        throw new BadRequestException(
+          'One of the provided values is too long for its field.',
+        );
       }
       throw err;
     }
   }
 
   async updateInvestor(dto: UpdateInvestorDto, user: AuthenticatedUser) {
-
     // fetech existing investor data using auth userid as given in function param
     const investor = await this.prisma.investor.findUnique({
       where: { userId: user.userId },
@@ -310,10 +333,11 @@ export class InvestorService {
         },
         select: { id: true },
       });
-      if (clash) throw new ConflictException('Email or phone is already in use');
+      if (clash)
+        throw new ConflictException('Email or phone is already in use');
     }
 
-     const passwordHash = dto.password
+    const passwordHash = dto.password
       ? await bcrypt.hash(dto.password, BCRYPT_ROUNDS)
       : undefined;
 
@@ -324,7 +348,7 @@ export class InvestorService {
     //     throw new BadRequestException('New password must be different from the current password');
     //   }
     // }
-    
+
     let stagedChanges: {
       editableInvestor?: Prisma.EditableInvestorGetPayload<{}>;
       editableNominee?: Prisma.EditableNomineeGetPayload<{}>;
@@ -332,95 +356,226 @@ export class InvestorService {
       editableUser?: Prisma.EditableUserGetPayload<{}>;
     };
 
+    // Sections whose staged rows got overwritten instead of newly created.
+    let overwrittenSections: string[] = [];
+
     try {
-      stagedChanges = await this.prisma.$transaction(async (tx) => {
-        const changes: typeof stagedChanges = {};
+      ({ changes: stagedChanges, overwritten: overwrittenSections } =
+        await this.prisma.$transaction(async (tx) => {
+          const changes: typeof stagedChanges = {};
+          const overwritten: string[] = [];
+          // Pending requests whose staged rows get re-pointed to the new
+          // request and therefore empty out (see the cleanup below).
+          const orphanedRequestIds: string[] = [];
 
-        if (profileChanges) {
-          changes.editableInvestor = await tx.editableInvestor.create({
+          // Each submission creates one InvestorEditRequest (status defaults to
+          // PENDING); the staged Editable* rows below link to it via editRequestId.
+          const editRequest = await tx.investorEditRequest.create({
             data: {
-              address: dto.address,
-              profession: dto.profession,
-              workplace: dto.workplace,
-              investorId: investor.id
-            }
-          })
-        }
-
-        if (nomineeChanges) {
-          changes.editableNominee = await tx.editableNominee.create({
-            data: {
-              nomineeName: dto.nominee?.nomineeName,
-              nomineeNidFront: dto.nominee?.nomineeNidFront,
-              nomineeNidBack: dto.nominee?.nomineeNidBack,
-              nomineePhoto: dto.nominee?.nomineePhoto,
-              nomineePhone: dto.nominee?.nomineePhone,
-              relation: dto.nominee?.relation,
               investorId: investor.id,
-            }
-          })
-        }
+            },
+          });
 
-        if (kycChanges) {
-          changes.editableInvestorKycDocuments = await tx.editableInvestorKycDocuments.create({
+          if (profileChanges) {
+            // A staged row not yet applied by staff (isActivated false) gets
+            // overwritten instead of stacking a new row; fields this request
+            // omits keep their previously staged values.
+            const pending = await tx.editableInvestor.findFirst({
+              where: {
+                editRequest: { investorId: investor.id },
+                isActivated: false,
+              },
+              orderBy: { createdAt: 'desc' as const },
+            });
+
+            changes.editableInvestor = pending
+              ? await tx.editableInvestor.update({
+                  where: { id: pending.id },
+                  data: {
+                    address: dto.address ?? pending.address,
+                    profession: dto.profession ?? pending.profession,
+                    workplace: dto.workplace ?? pending.workplace,
+                    editRequest: { connect: { id: editRequest.id } },
+                  },
+                })
+              : await tx.editableInvestor.create({
+                  data: {
+                    address: dto.address,
+                    profession: dto.profession,
+                    workplace: dto.workplace,
+                    editRequest: { connect: { id: editRequest.id } },
+                  },
+                });
+
+            if (pending) {
+              overwritten.push('profile');
+              orphanedRequestIds.push(pending.editRequestId);
+            }
+          }
+
+          if (nomineeChanges) {
+            const pending = await tx.editableNominee.findFirst({
+              where: {
+                editRequest: { investorId: investor.id },
+                isActivated: false,
+              },
+              orderBy: { createdAt: 'desc' as const },
+            });
+
+            changes.editableNominee = pending
+              ? await tx.editableNominee.update({
+                  where: { id: pending.id },
+                  data: {
+                    nomineeName:
+                      dto.nominee?.nomineeName ?? pending.nomineeName,
+                    nomineeNidFront:
+                      dto.nominee?.nomineeNidFront ?? pending.nomineeNidFront,
+                    nomineeNidBack:
+                      dto.nominee?.nomineeNidBack ?? pending.nomineeNidBack,
+                    nomineePhoto:
+                      dto.nominee?.nomineePhoto ?? pending.nomineePhoto,
+                    nomineePhone:
+                      dto.nominee?.nomineePhone ?? pending.nomineePhone,
+                    relation: dto.nominee?.relation ?? pending.relation,
+                    editRequest: { connect: { id: editRequest.id } },
+                  },
+                })
+              : await tx.editableNominee.create({
+                  data: {
+                    nomineeName: dto.nominee?.nomineeName,
+                    nomineeNidFront: dto.nominee?.nomineeNidFront,
+                    nomineeNidBack: dto.nominee?.nomineeNidBack,
+                    nomineePhoto: dto.nominee?.nomineePhoto,
+                    nomineePhone: dto.nominee?.nomineePhone,
+                    relation: dto.nominee?.relation,
+                    editRequest: { connect: { id: editRequest.id } },
+                  },
+                });
+
+            if (pending) {
+              overwritten.push('nominee');
+              orphanedRequestIds.push(pending.editRequestId);
+            }
+          }
+
+          if (kycChanges) {
+            const pending = await tx.editableInvestorKycDocuments.findFirst({
+              where: {
+                editRequest: { investorId: investor.id },
+                isActivated: false,
+              },
+              orderBy: { createdAt: 'desc' as const },
+            });
+
+            changes.editableInvestorKycDocuments = pending
+              ? await tx.editableInvestorKycDocuments.update({
+                  where: { id: pending.id },
+                  data: {
+                    nidFront: dto.kycDocuments?.nidFront ?? pending.nidFront,
+                    nidBack: dto.kycDocuments?.nidBack ?? pending.nidBack,
+                    photo: dto.kycDocuments?.photo ?? pending.photo,
+                    editRequest: { connect: { id: editRequest.id } },
+                  },
+                })
+              : await tx.editableInvestorKycDocuments.create({
+                  data: {
+                    nidFront: dto.kycDocuments?.nidFront,
+                    nidBack: dto.kycDocuments?.nidBack,
+                    photo: dto.kycDocuments?.photo,
+                    editRequest: { connect: { id: editRequest.id } },
+                  },
+                });
+
+            if (pending) {
+              overwritten.push('KYC documents');
+              orphanedRequestIds.push(pending.editRequestId);
+            }
+          }
+
+          if (userChanges) {
+            const pending = await tx.editableUser.findFirst({
+              where: {
+                editRequest: { investorId: investor.id },
+                isActivated: false,
+              },
+              orderBy: { createdAt: 'desc' as const },
+            });
+
+            changes.editableUser = pending
+              ? await tx.editableUser.update({
+                  where: { id: pending.id },
+                  data: {
+                    email: dto.email ?? pending.email,
+                    phone: dto.phone ?? pending.phone,
+                    // A previously staged password is kept when this request
+                    // doesn't change it.
+                    passwordHash: passwordHash ?? pending.passwordHash,
+                    editRequest: { connect: { id: editRequest.id } },
+                  },
+                })
+              : await tx.editableUser.create({
+                  data: {
+                    email: dto.email,
+                    phone: dto.phone,
+                    passwordHash: passwordHash,
+                    editRequest: { connect: { id: editRequest.id } },
+                  },
+                });
+
+            if (pending) {
+              overwritten.push('contact details');
+              orphanedRequestIds.push(pending.editRequestId);
+            }
+          }
+
+          // An overwritten staged row is re-pointed (unique editRequestId)
+          // to this new request, which can leave the previous pending
+          // request without a single editable row. Such an emptied request
+          // would otherwise linger in the admin list with every pendingEdits
+          // field null — remove it. Requests that still hold another
+          // section's staged row (a multi-section submission only part of
+          // which was overwritten) stay pending, and APPROVED/REJECTED
+          // history is never touched.
+          if (orphanedRequestIds.length) {
+            await tx.investorEditRequest.deleteMany({
+              where: {
+                id: { in: Array.from(new Set(orphanedRequestIds)) },
+                status: EditRequestStatus.PENDING,
+                editableInvestor: null,
+                editableNominee: null,
+                editableKycDocument: null,
+                editableUser: null,
+              },
+            });
+          }
+
+          const changedSections = [
+            profileChanges && 'profile',
+            nomineeChanges && 'nominee',
+            kycChanges && 'KYC documents',
+            userChanges && 'contact details',
+          ]
+            .filter(Boolean) //removes falsy values
+            .join(', ');
+
+          // Admin review queue: the live records aren't touched until staff
+          // apply the staged Editable* rows.
+          await tx.adminNotification.create({
             data: {
-              nidFront: dto.kycDocuments?.nidFront,
-              nidBack: dto.kycDocuments?.nidBack,
-              photo: dto.kycDocuments?.photo,
-              investorId: investor.id,
-            }
-          })
-        }
+              type: 'investor_action' as AdminNotificationType,
+              referenceId: investor.id,
+              message: `${investor.fullname} submitted ${changedSections} changes and is waiting for your review.${
+                overwritten.length
+                  ? ` Their earlier pending ${overwritten.join(', ')} edits were overwritten by this submission.`
+                  : ''
+              }`,
+              isRead: false,
+              clickLink: `/admin/investors/${investor.id}`,
+            },
+          });
 
-        if (userChanges) {
-          changes.editableUser = await tx.editableUser.create({
-            data: {
-              email: dto.email,
-              phone: dto.phone,
-              passwordHash: passwordHash,
-              investorId: investor.id,
-            }
-          })
-        }
-
-        // Reset investor status to pending so staff re-review after any
-        await tx.investor.update({
-          where: { id: investor.id },
-          data: { status: 'pending' as InvestorStatus },
-        });
-
-        const changedSections = [
-          profileChanges && 'profile',
-          nomineeChanges && 'nominee',
-          kycChanges && 'KYC documents',
-          userChanges && 'contact details',
-        ]
-          .filter(Boolean) //removes falsy values
-          .join(', ');
-
-        // History: record this edit submission so each change request is
-        // tracked/reviewed (status defaults to PENDING).
-        await tx.investorEditRequest.create({
-          data: {
-            investorId: investor.id,
-          },
-        })
-
-        // Admin review queue: the live records aren't touched until staff
-        // apply the staged Editable* rows.
-        await tx.adminNotification.create({
-          data: {
-            type: 'investor_action' as AdminNotificationType,
-            referenceId: investor.id,
-            message: `${investor.fullname} submitted ${changedSections} changes and is waiting for your review.`,
-            isRead: false,
-            clickLink: `/admin/investors/${investor.id}`,
-          },
-        });
-
-        return changes;
-      })
-
+          return { changes, overwritten };
+        }));
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError) {
         if (err.code === 'P2000') {
@@ -433,7 +588,10 @@ export class InvestorService {
     }
 
     return {
-      message: 'Profile changes submitted for review',
+      message: overwrittenSections.length
+      
+        ? 'Your earlier pending changes were overwritten and resubmitted for review'
+        : 'Profile changes submitted for review',
       success: true,
       data: stagedChanges,
     };
