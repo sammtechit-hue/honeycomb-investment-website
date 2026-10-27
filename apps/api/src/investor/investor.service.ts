@@ -377,12 +377,13 @@ export class InvestorService {
           });
 
           if (profileChanges) {
-            // A staged row not yet applied by staff (isActivated false) gets
-            // overwritten instead of stacking a new row; fields this request
-            // omits keep their previously staged values.
+            
             const pending = await tx.editableInvestor.findFirst({
               where: {
-                editRequest: { investorId: investor.id },
+                editRequest: {
+                  investorId: investor.id,
+                  status: EditRequestStatus.PENDING,
+                },
                 isActivated: false,
               },
               orderBy: { createdAt: 'desc' as const },
@@ -416,7 +417,10 @@ export class InvestorService {
           if (nomineeChanges) {
             const pending = await tx.editableNominee.findFirst({
               where: {
-                editRequest: { investorId: investor.id },
+                editRequest: {
+                  investorId: investor.id,
+                  status: EditRequestStatus.PENDING,
+                },
                 isActivated: false,
               },
               orderBy: { createdAt: 'desc' as const },
@@ -461,7 +465,10 @@ export class InvestorService {
           if (kycChanges) {
             const pending = await tx.editableInvestorKycDocuments.findFirst({
               where: {
-                editRequest: { investorId: investor.id },
+                editRequest: {
+                  investorId: investor.id,
+                  status: EditRequestStatus.PENDING,
+                },
                 isActivated: false,
               },
               orderBy: { createdAt: 'desc' as const },
@@ -495,7 +502,10 @@ export class InvestorService {
           if (userChanges) {
             const pending = await tx.editableUser.findFirst({
               where: {
-                editRequest: { investorId: investor.id },
+                editRequest: {
+                  investorId: investor.id,
+                  status: EditRequestStatus.PENDING,
+                },
                 isActivated: false,
               },
               orderBy: { createdAt: 'desc' as const },

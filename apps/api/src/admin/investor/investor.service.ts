@@ -6,7 +6,9 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import {
+  AdminNotificationType,
   AuditAction,
+  EditRequestStatus,
   InvestmentStatus,
   InvestorStatus,
   LogModule,
@@ -20,7 +22,10 @@ import { RequestAuditContext } from '../../utils/common types';
 import { CreateInvestorDto } from './dto/create-investor.dto';
 import { UpdateInvestorDto } from './dto/update-investor.dto';
 import { InvestorQueryDto } from './dto/query-investor.dto';
-import { InvestorEditRequestQueryDto } from './dto/InvestorEditRequest';
+import {
+  InvestorEditRequestQueryDto,
+  InvestorEditRequestReviewDto,
+} from './dto/InvestorEditRequest';
 
 const INVESTOR_UPDATE_INCLUDE = {
   nominee: true,
@@ -31,6 +36,32 @@ const INVESTOR_UPDATE_INCLUDE = {
 
 type InvestorWithRelations = Prisma.InvestorGetPayload<{
   include: typeof INVESTOR_UPDATE_INCLUDE;
+}>;
+
+// Everything the review (merge/reject) flow needs in one read. The staged
+// rows are included bare because their fields are written onto the live
+// records; note the passwordHash on EditableUser is only ever moved into the
+// user row, never returned to a client.
+const REVIEW_EDIT_REQUEST_INCLUDE = {
+  investor: {
+    select: {
+      id: true,
+      userId: true,
+      fullname: true,
+      nominee: { select: { id: true } },
+      kycDocuments: { select: { id: true } },
+    },
+  },
+  editableInvestor: true,
+  editableNominee: true,
+  // Relation key on InvestorEditRequest for the staged KYC row (the
+  // referenced model itself is EditableInvestorKycDocuments).
+  editableKycDocument: true,
+  editableUser: true,
+} satisfies Prisma.InvestorEditRequestInclude;
+
+type ReviewEditRequest = Prisma.InvestorEditRequestGetPayload<{
+  include: typeof REVIEW_EDIT_REQUEST_INCLUDE;
 }>;
 
 @Injectable()
@@ -295,6 +326,279 @@ export class InvestorService {
         },
       },
     };
+  }
+
+  // Merge investor Edit Request
+  // ----------------------------------------------
+  async reviewInvestorEditRequests(
+    id: string,
+    dto: InvestorEditRequestReviewDto,
+    userId: string | undefined,
+    context?: RequestAuditContext,
+  ) {
+    if (!userId) {
+      throw new UnauthorizedException('Session is no longer valid');
+    }
+
+    const admin = await this.prisma.adminProfile.findUnique({
+      where: { userId },
+      select: { id: true, name: true },
+    });
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const request = await tx.investorEditRequest.findUnique({
+          where: { id },
+          include: REVIEW_EDIT_REQUEST_INCLUDE,
+        });
+
+        if (!request) {
+          throw new NotFoundException(
+            `Investor edit request with id ${id} not found`,
+          );
+        }
+
+        // APPROVED / REJECTED are final — a reviewed request cannot be
+        // re-applied (or re-merged) through this route.
+        if (request.status !== EditRequestStatus.PENDING) {
+          throw new ConflictException(
+            `Edit request is already ${request.status} and cannot be applied again`,
+          );
+        }
+
+        const approving = dto.status === EditRequestStatus.APPROVED;
+
+        if (
+          approving &&
+          !request.editableInvestor &&
+          !request.editableNominee &&
+          !request.editableKycDocument &&
+          !request.editableUser
+        ) {
+          throw new BadRequestException(
+            'This edit request has no staged changes to merge',
+          );
+        }
+
+        let applied: Partial<Record<'nominee' | 'kycDocuments' | 'user', true>> = {};
+
+        if (approving) {
+          applied = await this.mergeStagedRows(tx, request);
+        }
+
+        
+        let reviewedReviewColumns;
+        try {
+          reviewedReviewColumns = await tx.investorEditRequest.update({
+            where: { id, status: EditRequestStatus.PENDING },
+            data: {
+              status: dto.status,
+              reviewedBy: userId,
+              reviewedAt: new Date(),
+              ...(dto.rejectionReason !== undefined && {
+                rejectionReason: dto.rejectionReason,
+              }),
+            },
+          });
+        } catch (e) {
+          if (
+            e instanceof Prisma.PrismaClientKnownRequestError &&
+            e.code === 'P2025'
+          ) {
+            throw new ConflictException(
+              'Edit request was reviewed by someone else. Reload and try again.',
+            );
+          }
+          throw e;
+        }
+
+        // Staged rows move to "applied" only on approval. A rejected request
+        // keeps its rows untouched — the investor's next submission
+        // overwrites them anyway.
+        if (approving) {
+          await Promise.all([
+            tx.editableInvestor.updateMany({
+              where: { editRequestId: id },
+              data: { isActivated: true, activatedAt: new Date() },
+            }),
+            tx.editableNominee.updateMany({
+              where: { editRequestId: id },
+              data: { isActivated: true, activatedAt: new Date() },
+            }),
+            tx.editableInvestorKycDocuments.updateMany({
+              where: { editRequestId: id },
+              data: { isActivated: true, activatedAt: new Date() },
+            }),
+            tx.editableUser.updateMany({
+              where: { editRequestId: id },
+              data: { isActivated: true, activatedAt: new Date() },
+            }),
+          ]);
+        }
+
+        await tx.auditLog.create({
+          data: {
+            adminName: admin?.name ?? 'Admin',
+            adminProfileId: admin?.id ?? null,
+            action: AuditAction.investor_information_updated,
+            module: LogModule.INVESTOR,
+            severity: LogSeverity.INFO,
+            status: LogStatus.SUCCESS,
+            targetLabel: `Investor Edit Request ${dto.status}: ${request.investor.fullname}`,
+            targetTable: 'investor_edit_requests',
+            targetId: request.id,
+            oldValue: {
+              status: EditRequestStatus.PENDING,
+              ...toStagedSnapshot(request),
+            } as unknown as Prisma.InputJsonValue,
+            newValue: {
+              status: dto.status,
+              reviewedBy: userId,
+              rejected: !approving,
+              merged: approving ? applied : null,
+              rejectionReason: dto.rejectionReason ?? null,
+            } as unknown as Prisma.InputJsonValue,
+            metadata: {
+              investorId: request.investorId,
+            } as unknown as Prisma.InputJsonValue,
+            ipAddress: context?.ipAddress ?? null,
+            userAgent: context?.userAgent ?? null,
+            sessionId: context?.sessionId ?? null,
+          },
+        });
+
+        await tx.adminNotification.create({
+          data: {
+            type: 'investor_action' as AdminNotificationType,
+            referenceId: request.investorId,
+            message: `${request.investor.fullname}'s edit request was ${dto.status}${
+              approving
+                ? ` and merged (${Object.keys(applied).join(', ') || 'nothing to merge'})`
+                : `: ${dto.rejectionReason}`
+            }`,
+            isRead: false,
+            clickLink: `/admin/investors/${request.investorId}`,
+          },
+        });
+
+        return {
+          message: approving
+            ? 'Investor edit request approved and merged'
+            : 'Investor edit request rejected',
+          success: true,
+          data: {
+            id: reviewedReviewColumns.id,
+            status: reviewedReviewColumns.status,
+            reviewedBy: reviewedReviewColumns.reviewedBy,
+            reviewedAt: reviewedReviewColumns.reviewedAt,
+            rejectionReason: reviewedReviewColumns.rejectionReason,
+            investorId: reviewedReviewColumns.investorId,
+          },
+        };
+      });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError) {
+        if (err.code === 'P2002') {
+          throw new ConflictException(
+            'The staged email or phone is already in use by another account.',
+          );
+        }
+        if (err.code === 'P2000') {
+          throw new BadRequestException(
+            'A staged value is too long for its field.',
+          );
+        }
+        if (err.code === 'P2003') {
+          throw new BadRequestException(
+            'One or more referenced records do not exist.',
+          );
+        }
+      }
+      throw err;
+    }
+  }
+
+  
+  private async mergeStagedRows(
+    tx: Prisma.TransactionClient,
+    request: ReviewEditRequest,
+  ): Promise<Partial<Record<'nominee' | 'kycDocuments' | 'user', true>>> {
+    const {
+      investor,
+      editableInvestor,
+      editableNominee,
+      editableKycDocument,
+      editableUser,
+    } = request;
+    const merged: Partial<Record<'nominee' | 'kycDocuments' | 'user', true>> = {};
+
+    if (editableInvestor) {
+      const fields = stagedFields({
+        address: editableInvestor.address,
+        profession: editableInvestor.profession,
+        workplace: editableInvestor.workplace,
+      });
+
+      if (Object.keys(fields).length) {
+        await tx.investor.update({
+          where: { id: investor.id },
+          data: fields,
+        });
+      }
+    }
+
+    if (editableNominee && investor.nominee) {
+      const fields = stagedFields({
+        nomineeName: editableNominee.nomineeName,
+        nomineePhone: editableNominee.nomineePhone,
+        relation: editableNominee.relation,
+        nomineeNidFront: editableNominee.nomineeNidFront,
+        nomineeNidBack: editableNominee.nomineeNidBack,
+        nomineePhoto: editableNominee.nomineePhoto,
+      });
+
+      if (Object.keys(fields).length) {
+          await tx.nominee.update({
+            where: { id: investor.nominee.id },
+            data: fields,
+          });
+        merged.nominee = true;
+      }
+    }
+
+    if (editableKycDocument && investor.kycDocuments) {
+      const fields = stagedFields({
+        nidFront: editableKycDocument.nidFront,
+        nidBack: editableKycDocument.nidBack,
+        photo: editableKycDocument.photo,
+      });
+
+      if (Object.keys(fields).length) {
+          await tx.investorKycDocument.update({
+            where: { id: investor.kycDocuments.id },
+            data: fields,
+          });
+        merged.kycDocuments = true;
+      }
+    }
+
+    if (editableUser && investor.userId) {
+      const fields = stagedFields({
+        email: editableUser.email,
+        phone: editableUser.phone,
+        passwordHash: editableUser.passwordHash,
+      });
+
+      if (Object.keys(fields).length) {
+        await tx.user.update({
+          where: { id: investor.userId },
+          data: fields,
+        });
+        merged.user = true;
+      }
+    }
+
+    return merged;
   }
 
   async create(dto: CreateInvestorDto) {
@@ -729,6 +1033,61 @@ function pickAuditAction(
     return AuditAction.investor_kyc_status_changed;
   }
   return AuditAction.investor_information_updated;
+}
+
+type StagedFields<T extends object> = {
+  [K in keyof T]?: NonNullable<T[K]>;
+};
+
+//keep fields that have actual values and skip null or undefined.
+function stagedFields<T extends object>(fields: T): StagedFields<T> {
+  const result: StagedFields<T> = {};
+
+  for (const [key, value] of Object.entries(fields)) {
+    if (value !== null && value !== undefined) {
+      (result as Record<string, unknown>)[key] = value;
+    }
+  }
+
+  return result;
+}
+
+function toStagedSnapshot(request: ReviewEditRequest) {
+  const user = request.editableUser;
+
+  return {
+    investor: request.editableInvestor
+      ? {
+        address: request.editableInvestor.address,
+        profession: request.editableInvestor.profession,
+        workplace: request.editableInvestor.workplace,
+      }
+      : null,
+    nominee: request.editableNominee
+      ? {
+        nomineeName: request.editableNominee.nomineeName,
+        nomineePhone: request.editableNominee.nomineePhone,
+        relation: request.editableNominee.relation,
+        nomineeNidFront: request.editableNominee.nomineeNidFront,
+        nomineeNidBack: request.editableNominee.nomineeNidBack,
+        nomineePhoto: request.editableNominee.nomineePhoto,
+      }
+      : null,
+    kycDocuments: request.editableKycDocument
+      ? {
+        nidFront: request.editableKycDocument.nidFront,
+        nidBack: request.editableKycDocument.nidBack,
+        photo: request.editableKycDocument.photo,
+      }
+      : null,
+    user: user
+      ? {
+        email: user.email,
+        phone: user.phone,
+        passwordGiven: !!user.passwordHash,
+      }
+      : null,
+  };
 }
 
 function toInvestorSnapshot(investor: InvestorWithRelations) {
