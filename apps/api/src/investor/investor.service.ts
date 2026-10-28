@@ -16,6 +16,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateInvestorDto } from './dto/create-investor.dto';
 import { UpdateInvestorDto } from './dto/update-investor.dto';
+import { InvestorEditRequestQueryDto } from './dto/investor-edit-request.dto';
 import { RequestAuditContext } from '../utils/common types';
 import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import * as bcrypt from 'bcrypt';
@@ -82,7 +83,7 @@ const INVESTOR_PROFILE_SELECT = {
 
 @Injectable()
 export class InvestorService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async findOne(user: AuthenticatedUser) {
     // fetech existing investor data using auth userid as given in function param
@@ -205,13 +206,13 @@ export class InvestorService {
             },
             kycDocuments: hasKycDocuments
               ? {
-                  create: {
-                    nidFront: kycInput?.nidFront,
-                    nidBack: kycInput?.nidBack,
-                    photo: kycInput?.photo,
-                    verificationStatus: 'pending',
-                  },
-                }
+                create: {
+                  nidFront: kycInput?.nidFront,
+                  nidBack: kycInput?.nidBack,
+                  photo: kycInput?.photo,
+                  verificationStatus: 'pending',
+                },
+              }
               : undefined,
           },
           include: {
@@ -377,7 +378,7 @@ export class InvestorService {
           });
 
           if (profileChanges) {
-            
+
             const pending = await tx.editableInvestor.findFirst({
               where: {
                 editRequest: {
@@ -391,22 +392,22 @@ export class InvestorService {
 
             changes.editableInvestor = pending
               ? await tx.editableInvestor.update({
-                  where: { id: pending.id },
-                  data: {
-                    address: dto.address ?? pending.address,
-                    profession: dto.profession ?? pending.profession,
-                    workplace: dto.workplace ?? pending.workplace,
-                    editRequest: { connect: { id: editRequest.id } },
-                  },
-                })
+                where: { id: pending.id },
+                data: {
+                  address: dto.address ?? pending.address,
+                  profession: dto.profession ?? pending.profession,
+                  workplace: dto.workplace ?? pending.workplace,
+                  editRequest: { connect: { id: editRequest.id } },
+                },
+              })
               : await tx.editableInvestor.create({
-                  data: {
-                    address: dto.address,
-                    profession: dto.profession,
-                    workplace: dto.workplace,
-                    editRequest: { connect: { id: editRequest.id } },
-                  },
-                });
+                data: {
+                  address: dto.address,
+                  profession: dto.profession,
+                  workplace: dto.workplace,
+                  editRequest: { connect: { id: editRequest.id } },
+                },
+              });
 
             if (pending) {
               overwritten.push('profile');
@@ -428,33 +429,33 @@ export class InvestorService {
 
             changes.editableNominee = pending
               ? await tx.editableNominee.update({
-                  where: { id: pending.id },
-                  data: {
-                    nomineeName:
-                      dto.nominee?.nomineeName ?? pending.nomineeName,
-                    nomineeNidFront:
-                      dto.nominee?.nomineeNidFront ?? pending.nomineeNidFront,
-                    nomineeNidBack:
-                      dto.nominee?.nomineeNidBack ?? pending.nomineeNidBack,
-                    nomineePhoto:
-                      dto.nominee?.nomineePhoto ?? pending.nomineePhoto,
-                    nomineePhone:
-                      dto.nominee?.nomineePhone ?? pending.nomineePhone,
-                    relation: dto.nominee?.relation ?? pending.relation,
-                    editRequest: { connect: { id: editRequest.id } },
-                  },
-                })
+                where: { id: pending.id },
+                data: {
+                  nomineeName:
+                    dto.nominee?.nomineeName ?? pending.nomineeName,
+                  nomineeNidFront:
+                    dto.nominee?.nomineeNidFront ?? pending.nomineeNidFront,
+                  nomineeNidBack:
+                    dto.nominee?.nomineeNidBack ?? pending.nomineeNidBack,
+                  nomineePhoto:
+                    dto.nominee?.nomineePhoto ?? pending.nomineePhoto,
+                  nomineePhone:
+                    dto.nominee?.nomineePhone ?? pending.nomineePhone,
+                  relation: dto.nominee?.relation ?? pending.relation,
+                  editRequest: { connect: { id: editRequest.id } },
+                },
+              })
               : await tx.editableNominee.create({
-                  data: {
-                    nomineeName: dto.nominee?.nomineeName,
-                    nomineeNidFront: dto.nominee?.nomineeNidFront,
-                    nomineeNidBack: dto.nominee?.nomineeNidBack,
-                    nomineePhoto: dto.nominee?.nomineePhoto,
-                    nomineePhone: dto.nominee?.nomineePhone,
-                    relation: dto.nominee?.relation,
-                    editRequest: { connect: { id: editRequest.id } },
-                  },
-                });
+                data: {
+                  nomineeName: dto.nominee?.nomineeName,
+                  nomineeNidFront: dto.nominee?.nomineeNidFront,
+                  nomineeNidBack: dto.nominee?.nomineeNidBack,
+                  nomineePhoto: dto.nominee?.nomineePhoto,
+                  nomineePhone: dto.nominee?.nomineePhone,
+                  relation: dto.nominee?.relation,
+                  editRequest: { connect: { id: editRequest.id } },
+                },
+              });
 
             if (pending) {
               overwritten.push('nominee');
@@ -476,22 +477,22 @@ export class InvestorService {
 
             changes.editableInvestorKycDocuments = pending
               ? await tx.editableInvestorKycDocuments.update({
-                  where: { id: pending.id },
-                  data: {
-                    nidFront: dto.kycDocuments?.nidFront ?? pending.nidFront,
-                    nidBack: dto.kycDocuments?.nidBack ?? pending.nidBack,
-                    photo: dto.kycDocuments?.photo ?? pending.photo,
-                    editRequest: { connect: { id: editRequest.id } },
-                  },
-                })
+                where: { id: pending.id },
+                data: {
+                  nidFront: dto.kycDocuments?.nidFront ?? pending.nidFront,
+                  nidBack: dto.kycDocuments?.nidBack ?? pending.nidBack,
+                  photo: dto.kycDocuments?.photo ?? pending.photo,
+                  editRequest: { connect: { id: editRequest.id } },
+                },
+              })
               : await tx.editableInvestorKycDocuments.create({
-                  data: {
-                    nidFront: dto.kycDocuments?.nidFront,
-                    nidBack: dto.kycDocuments?.nidBack,
-                    photo: dto.kycDocuments?.photo,
-                    editRequest: { connect: { id: editRequest.id } },
-                  },
-                });
+                data: {
+                  nidFront: dto.kycDocuments?.nidFront,
+                  nidBack: dto.kycDocuments?.nidBack,
+                  photo: dto.kycDocuments?.photo,
+                  editRequest: { connect: { id: editRequest.id } },
+                },
+              });
 
             if (pending) {
               overwritten.push('KYC documents');
@@ -513,24 +514,24 @@ export class InvestorService {
 
             changes.editableUser = pending
               ? await tx.editableUser.update({
-                  where: { id: pending.id },
-                  data: {
-                    email: dto.email ?? pending.email,
-                    phone: dto.phone ?? pending.phone,
-                    // A previously staged password is kept when this request
-                    // doesn't change it.
-                    passwordHash: passwordHash ?? pending.passwordHash,
-                    editRequest: { connect: { id: editRequest.id } },
-                  },
-                })
+                where: { id: pending.id },
+                data: {
+                  email: dto.email ?? pending.email,
+                  phone: dto.phone ?? pending.phone,
+                  // A previously staged password is kept when this request
+                  // doesn't change it.
+                  passwordHash: passwordHash ?? pending.passwordHash,
+                  editRequest: { connect: { id: editRequest.id } },
+                },
+              })
               : await tx.editableUser.create({
-                  data: {
-                    email: dto.email,
-                    phone: dto.phone,
-                    passwordHash: passwordHash,
-                    editRequest: { connect: { id: editRequest.id } },
-                  },
-                });
+                data: {
+                  email: dto.email,
+                  phone: dto.phone,
+                  passwordHash: passwordHash,
+                  editRequest: { connect: { id: editRequest.id } },
+                },
+              });
 
             if (pending) {
               overwritten.push('contact details');
@@ -574,11 +575,10 @@ export class InvestorService {
             data: {
               type: 'investor_action' as AdminNotificationType,
               referenceId: investor.id,
-              message: `${investor.fullname} submitted ${changedSections} changes and is waiting for your review.${
-                overwritten.length
+              message: `${investor.fullname} submitted ${changedSections} changes and is waiting for your review.${overwritten.length
                   ? ` Their earlier pending ${overwritten.join(', ')} edits were overwritten by this submission.`
                   : ''
-              }`,
+                }`,
               isRead: false,
               clickLink: `/admin/investors/${investor.id}`,
             },
@@ -599,11 +599,109 @@ export class InvestorService {
 
     return {
       message: overwrittenSections.length
-      
+
         ? 'Your earlier pending changes were overwritten and resubmitted for review'
         : 'Profile changes submitted for review',
       success: true,
       data: stagedChanges,
+    };
+  }
+
+  async findMyEditRequests(
+    user: AuthenticatedUser,
+    query: InvestorEditRequestQueryDto,
+  ) {
+    if (!user.userId) {
+      throw new UnauthorizedException('Session is no longer valid');
+    }
+
+    const investor = await this.prisma.investor.findUnique({
+      where: { userId: user.userId },
+      select: { id: true },
+    });
+
+    if (!investor) {
+      throw new NotFoundException(`No investor profile found for the user`);
+    }
+
+    const { search, status, page, limit, sortBy, sortOrder } = query;
+
+    const where: Prisma.InvestorEditRequestWhereInput = {
+      investorId: investor.id,
+      ...(status && { status }),
+      ...(search && {
+        rejectionReason: { contains: search, mode: 'insensitive' },
+      }),
+    };
+
+    const orderBy: Prisma.InvestorEditRequestOrderByWithRelationInput[] = [
+      sortBy === 'status' ? { status: sortOrder } : { createdAt: sortOrder },
+      // Tie-breaker on id keeps pagination deterministic.
+      { id: 'asc' as const },
+    ];
+
+    const [editRequests, total] = await Promise.all([
+      this.prisma.investorEditRequest.findMany({
+        where,
+        orderBy,
+        skip: (page - 1) * limit,
+        take: limit,
+        select: {
+          id: true,
+          status: true,
+          rejectionReason: true,
+          reviewedBy: true,
+          reviewedAt: true,
+          createdAt: true,
+          updatedAt: true,
+          editableInvestor: {
+            select: { address: true, profession: true, workplace: true },
+          },
+          editableNominee: {
+            select: {
+              nomineeName: true,
+              nomineePhone: true,
+              relation: true,
+              nomineeNidFront: true,
+              nomineeNidBack: true,
+              nomineePhoto: true,
+            },
+          },
+          editableKycDocument: {
+            select: { nidFront: true, nidBack: true, photo: true },
+          },
+          editableUser: {
+            select: { email: true, phone: true, passwordHash: true,
+            },
+          },
+        },
+      }),
+      this.prisma.investorEditRequest.count({ where }),
+    ]);
+
+    const data = editRequests.map(({ editableUser, ...request }) => ({
+      ...request,
+      editableUser: editableUser
+        ? {
+          email: editableUser.email,
+          phone: editableUser.phone,
+          passwordGiven: Boolean(editableUser.passwordHash),
+        }
+        : null,
+    }));
+
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      message: 'Your edit requests fetched successfully',
+      success: true,
+      data: data,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages,
+      },
     };
   }
 }

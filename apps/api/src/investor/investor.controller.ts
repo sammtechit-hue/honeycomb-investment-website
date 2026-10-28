@@ -8,6 +8,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   UseGuards,
   UsePipes,
   Ip,
@@ -22,6 +23,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import { CreateInvestorDto } from './dto/create-investor.dto';
 import { UpdateInvestorDto } from './dto/update-investor.dto';
+import { InvestorEditRequestQueryDto } from './dto/investor-edit-request.dto';
 import { InvestorService } from './investor.service';
 
 
@@ -65,5 +67,15 @@ export class InvestorController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.investorService.updateInvestor(updateInvestorDto, user);
+  }
+
+  // GET /api/investor/edit-requests?search=&status=PENDING&page=1&limit=10&sortBy=createdAt&sortOrder=desc
+  @Get('edit-requests')
+  @HttpCode(HttpStatus.OK)
+  async findMyEditRequests(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: InvestorEditRequestQueryDto,
+  ) {
+    return this.investorService.findMyEditRequests(user, query);
   }
 }
