@@ -109,7 +109,7 @@ export const investorBankAccountQuerySchema = z.object({
   // --- Sorting ---
   // The model has no timestamps at all (no createdAt/updatedAt), so sorting
   // stays on stored columns only.
-  sortBy: investorBankAccountSortBySchema.default('bankName'),
+  sortBy: investorBankAccountSortBySchema.default('isActive'),
   sortOrder: sortOrderSchema,
 });
 

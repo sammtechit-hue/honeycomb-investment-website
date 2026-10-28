@@ -8,6 +8,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   UseGuards,
   UsePipes,
   Ip,
@@ -22,6 +23,8 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import { CreateInvestorDto } from './dto/create-investor.dto';
 import { UpdateInvestorDto } from './dto/update-investor.dto';
+import { InvestorEditRequestQueryDto } from './dto/investor-edit-request.dto';
+import { CreateInvestorBankAccountDto } from './dto/create-investor-bank-account.dto';
 import { InvestorService } from './investor.service';
 
 
@@ -32,14 +35,12 @@ import { InvestorService } from './investor.service';
 export class InvestorController {
   constructor(private readonly investorService: InvestorService) { }
 
-  // GET /api/investor/:id
-  @Get(':id')
+  @Get()
   @HttpCode(HttpStatus.OK)
   async findOne(
-    @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.investorService.findOne(id, user);
+    return this.investorService.findOne(user);
   }
 
   // POST /api/investor
@@ -61,12 +62,32 @@ export class InvestorController {
   }
 
   // PATCH /api/investor/:id/update
-  @Post(':id/update')
+  @Post('update')
   async update(
-    @Param('id', ParseUUIDPipe) id: string,
     @Body() updateInvestorDto: UpdateInvestorDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.investorService.updateInvestor(id, updateInvestorDto, user);
+    return this.investorService.updateInvestor(updateInvestorDto, user);
   }
+
+  // POST /api/investor/bank-account
+  @Post('bank-account')
+  @HttpCode(HttpStatus.CREATED)
+  createBankAccount(
+    @Body() createInvestorBankAccountDto: CreateInvestorBankAccountDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.investorService.createBankAccount(createInvestorBankAccountDto, user);
+  }
+
+  // GET /api/investor/edit-requests?search=&status=PENDING&page=1&limit=10&sortBy=createdAt&sortOrder=desc
+  @Get('edit-requests')
+  @HttpCode(HttpStatus.OK)
+  async findMyEditRequests(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: InvestorEditRequestQueryDto,
+  ) {
+    return this.investorService.findMyEditRequests(user, query);
+  }
+
 }
