@@ -459,8 +459,8 @@ export class InvestorService {
               });
 
             if (pending) {
-              overwritten.push('nominee');
-              orphanedRequestIds.push(pending.editRequestId);
+              overwritten.push('nominee'); // for admin notification
+              orphanedRequestIds.push(pending.editRequestId); // for delete
             }
           }
 
@@ -678,7 +678,9 @@ export class InvestorService {
       throw err;
     }
   }
-
+// --------------------------------------------------------
+// ---------------------- INVESTOR -------------------------
+//----------------------------------------------------------
   async findMyEditRequests(
     user: AuthenticatedUser,
     query: InvestorEditRequestQueryDto,
@@ -687,6 +689,7 @@ export class InvestorService {
       throw new UnauthorizedException('Session is no longer valid');
     }
 
+    // for fetching existing investor
     const investor = await this.prisma.investor.findUnique({
       where: { userId: user.userId },
       select: { id: true },

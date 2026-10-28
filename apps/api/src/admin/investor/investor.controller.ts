@@ -25,7 +25,10 @@ import type { AuthenticatedUser } from '../../auth/types/jwt-payload.interface';
 import { CreateInvestorDto } from './dto/create-investor.dto';
 import { UpdateInvestorDto } from './dto/update-investor.dto';
 import { InvestorQueryDto } from './dto/query-investor.dto';
-import { BankAccountQueryDto } from './dto/bankaccount';
+import {
+  BankAccountQueryDto,
+  UpdateInvestorBankAccountDto,
+} from './dto/bankaccount';
 import {
   InvestorEditRequestQueryDto,
   InvestorEditRequestReviewDto,
@@ -66,6 +69,25 @@ export class InvestorController {
     @Query() query: BankAccountQueryDto,
   ) {
     return this.investorService.findInvestorBankAccounts(id, query);
+  }
+
+  // PATCH /api/admin/investor/bank-account/:bankAccountId
+  @Patch('bank-account/:bankAccountId')
+  @HttpCode(HttpStatus.OK)
+  updateInvestorBankAccount(
+    @Param('bankAccountId', ParseUUIDPipe) bankAccountId: string,
+    @Body() dto: UpdateInvestorBankAccountDto,
+    @CurrentUser() user: AuthenticatedUser,
+    @Ip() ip?: string,
+    @Headers('user-agent') userAgent?: string,
+    @Headers('x-session-id') sessionId?: string,
+  ) {
+    return this.investorService.updateInvestorBankAccount(
+      bankAccountId,
+      dto,
+      user.userId,
+      { ipAddress: ip, userAgent, sessionId },
+    );
   }
 
   // GET /api/admin/investor/:id

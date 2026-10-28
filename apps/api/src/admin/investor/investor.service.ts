@@ -26,7 +26,10 @@ import {
   InvestorEditRequestQueryDto,
   InvestorEditRequestReviewDto,
 } from './dto/InvestorEditRequest';
-import { BankAccountQueryDto } from './dto/bankaccount';
+import {
+  BankAccountQueryDto,
+  UpdateInvestorBankAccountDto,
+} from './dto/bankaccount';
 
 const INVESTOR_UPDATE_INCLUDE = {
   nominee: true,
@@ -229,6 +232,117 @@ export class InvestorService {
     };
   }
 
+  // PATCH /api/admin/investor/bank-account/:bankAccountId
+  async updateInvestorBankAccount(
+    bankAccountId: string,
+    dto: UpdateInvestorBankAccountDto,
+    userId: string | undefined,
+    context?: RequestAuditContext,
+  ) {
+    if (!userId) {
+      throw new UnauthorizedException('Session is no longer valid');
+    }
+
+    const fields = {
+      selectedBank: dto.selectedBank,
+      bankName: dto.bankName,
+      accountName: dto.accountName,
+      accountNumber: dto.accountNumber,
+      routingNumber: dto.routingNumber,
+      accountType: dto.accountType,
+      branchName: dto.branchName,
+      isActive: dto.isActive,
+    };
+
+    if (Object.values(fields).every((value) => value === undefined)) {
+      throw new BadRequestException('No fields provided to update');
+    }
+
+    const [existing, admin] = await Promise.all([
+      this.prisma.investorBankAccount.findUnique({
+        where: { id: bankAccountId },
+      }),
+      this.prisma.adminProfile.findUnique({
+        where: { userId },
+        select: { id: true, name: true },
+      }),
+    ]);
+
+    if (!existing) {
+      throw new NotFoundException(
+        `Bank account with id ${bankAccountId} not found`,
+      );
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      if (dto.isActive === true) {
+        await tx.investorBankAccount.updateMany({
+          where: { investorId: existing.investorId, isActive: true, id: { not: bankAccountId } },
+          data: { isActive: false },
+        });
+      }
+
+      const bankAccount = await tx.investorBankAccount.update({
+        where: { id: bankAccountId },
+        data: fields,
+        select: {
+          id: true,
+          selectedBank: true,
+          bankName: true,
+          accountName: true,
+          accountNumber: true,
+          routingNumber: true,
+          accountType: true,
+          branchName: true,
+          isActive: true,
+          investorId: true,
+        },
+      });
+
+      // ---------------------------------------------------------
+      // ---------------------- AUDITLOG -------------------------
+      //----------------------------------------------------------
+
+      await tx.auditLog.create({
+        data: {
+          adminName: admin?.name ?? 'Admin',
+          adminProfileId: admin?.id ?? null,
+          action: AuditAction.investor_information_updated,
+          module: LogModule.INVESTOR,
+          severity: LogSeverity.INFO,
+          status: LogStatus.SUCCESS,
+          targetLabel: `Investor Bank Account Updated: ${bankAccount.accountName}`,
+          targetTable: 'investor_bank_accounts',
+          targetId: bankAccount.id,
+          oldValue: {
+            selectedBank: existing.selectedBank,
+            bankName: existing.bankName,
+            accountName: existing.accountName,
+            accountNumber: existing.accountNumber,
+            routingNumber: existing.routingNumber,
+            accountType: existing.accountType,
+            branchName: existing.branchName,
+            isActive: existing.isActive,
+            investorId: existing.investorId,
+          } as unknown as Prisma.InputJsonValue,
+          newValue: bankAccount as unknown as Prisma.InputJsonValue,
+          metadata: { investorId: existing.investorId } as unknown as Prisma.InputJsonValue,
+          ipAddress: context?.ipAddress ?? null,
+          userAgent: context?.userAgent ?? null,
+          sessionId: context?.sessionId ?? null,
+        },
+      });
+
+      return bankAccount;
+    });
+
+    return {
+      message: 'Investor bank account updated successfully',
+      success: true,
+      data: updated,
+    };
+  }
+
   // GET /api/admin/investor/:id
   async findOne(id: string) {
     const investor = await this.prisma.investor.findUnique({
@@ -403,30 +517,33 @@ export class InvestorService {
     userId: string | undefined,
     context?: RequestAuditContext,
   ) {
+
+    // admin
     if (!userId) {
       throw new UnauthorizedException('Session is no longer valid');
     }
 
-    const admin = await this.prisma.adminProfile.findUnique({
-      where: { userId },
-      select: { id: true, name: true },
-    });
+    // Independent lookups, run in parallel
+    const [request, admin] = await Promise.all([
+      this.prisma.investorEditRequest.findUnique({
+        where: { id },
+        include: REVIEW_EDIT_REQUEST_INCLUDE,
+      }),
+      this.prisma.adminProfile.findUnique({
+        where: { userId },
+        select: { id: true, name: true },
+      }),
+    ]);
+
+    if (!request) {
+      throw new NotFoundException(
+        `Investor edit request with id ${id} not found`,
+      );
+    }
 
     try {
       return await this.prisma.$transaction(async (tx) => {
-        const request = await tx.investorEditRequest.findUnique({
-          where: { id },
-          include: REVIEW_EDIT_REQUEST_INCLUDE,
-        });
 
-        if (!request) {
-          throw new NotFoundException(
-            `Investor edit request with id ${id} not found`,
-          );
-        }
-
-        // APPROVED / REJECTED are final — a reviewed request cannot be
-        // re-applied (or re-merged) through this route.
         if (request.status !== EditRequestStatus.PENDING) {
           throw new ConflictException(
             `Edit request is already ${request.status} and cannot be applied again`,
@@ -453,7 +570,7 @@ export class InvestorService {
           applied = await this.mergeStagedRows(tx, request);
         }
 
-        
+
         let reviewedReviewColumns;
         try {
           reviewedReviewColumns = await tx.investorEditRequest.update({
@@ -571,7 +688,6 @@ export class InvestorService {
     }
   }
 
-  
   private async mergeStagedRows(
     tx: Prisma.TransactionClient,
     request: ReviewEditRequest,
@@ -611,10 +727,10 @@ export class InvestorService {
       });
 
       if (Object.keys(fields).length) {
-          await tx.nominee.update({
-            where: { id: investor.nominee.id },
-            data: fields,
-          });
+        await tx.nominee.update({
+          where: { id: investor.nominee.id },
+          data: fields,
+        });
         merged.nominee = true;
       }
     }
@@ -627,10 +743,10 @@ export class InvestorService {
       });
 
       if (Object.keys(fields).length) {
-          await tx.investorKycDocument.update({
-            where: { id: investor.kycDocuments.id },
-            data: fields,
-          });
+        await tx.investorKycDocument.update({
+          where: { id: investor.kycDocuments.id },
+          data: fields,
+        });
         merged.kycDocuments = true;
       }
     }
@@ -657,7 +773,6 @@ export class InvestorService {
   async create(dto: CreateInvestorDto) {
     return 'Investor Data';
   }
-
 
   async updateInvestor(
     id: string,
