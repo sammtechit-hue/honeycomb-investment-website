@@ -24,6 +24,7 @@ import type { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import { CreateInvestorDto } from './dto/create-investor.dto';
 import { UpdateInvestorDto } from './dto/update-investor.dto';
 import { InvestorEditRequestQueryDto } from './dto/investor-edit-request.dto';
+import { CreateInvestorBankAccountDto } from './dto/create-investor-bank-account.dto';
 import { InvestorService } from './investor.service';
 
 
@@ -69,6 +70,16 @@ export class InvestorController {
     return this.investorService.updateInvestor(updateInvestorDto, user);
   }
 
+  // POST /api/investor/bank-account
+  @Post('bank-account')
+  @HttpCode(HttpStatus.CREATED)
+  createBankAccount(
+    @Body() createInvestorBankAccountDto: CreateInvestorBankAccountDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.investorService.createBankAccount(createInvestorBankAccountDto, user);
+  }
+
   // GET /api/investor/edit-requests?search=&status=PENDING&page=1&limit=10&sortBy=createdAt&sortOrder=desc
   @Get('edit-requests')
   @HttpCode(HttpStatus.OK)
@@ -78,4 +89,5 @@ export class InvestorController {
   ) {
     return this.investorService.findMyEditRequests(user, query);
   }
+
 }

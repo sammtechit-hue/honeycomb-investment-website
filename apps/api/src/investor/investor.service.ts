@@ -17,6 +17,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateInvestorDto } from './dto/create-investor.dto';
 import { UpdateInvestorDto } from './dto/update-investor.dto';
 import { InvestorEditRequestQueryDto } from './dto/investor-edit-request.dto';
+import { CreateInvestorBankAccountDto } from './dto/create-investor-bank-account.dto';
 import { RequestAuditContext } from '../utils/common types';
 import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import * as bcrypt from 'bcrypt';
@@ -605,6 +606,77 @@ export class InvestorService {
       success: true,
       data: stagedChanges,
     };
+  }
+
+  async createBankAccount(
+    dto: CreateInvestorBankAccountDto,
+    user: AuthenticatedUser,
+  ) {
+    if (!user.userId) {
+      throw new UnauthorizedException('Session is no longer valid');
+    }
+
+    const investor = await this.prisma.investor.findUnique({
+      where: { userId: user.userId },
+      select: { id: true, fullname: true },
+    });
+
+    if (!investor) {
+      throw new NotFoundException('No investor profile found for the user');
+    }
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const bankAccount = await tx.investorBankAccount.create({
+          data: {
+            selectedBank: dto.selectedBank,
+            bankName: dto.bankName,
+            accountName: dto.accountName,
+            accountNumber: dto.accountNumber,
+            routingNumber: dto.routingNumber,
+            accountType: dto.accountType,
+            branchName: dto.branchName,
+            investorId: investor.id,
+            isActive: false,
+          },
+        });
+
+        await tx.adminNotification.create({
+          data: {
+            type: 'investor_action' as AdminNotificationType,
+            referenceId: investor.id,
+            message: `${investor.fullname} submitted a new bank account for review.`.slice(
+              0,
+              255,
+            ),
+            isRead: false,
+            clickLink: `/admin/investors/${investor.id}`,
+          },
+        });
+
+        return {
+          message: 'Bank account submitted for review',
+          success: true,
+          data: bankAccount,
+        };
+      });
+    } catch (err) {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2000'
+      ) {
+        throw new BadRequestException(
+          'One of the provided values is too long for its field.',
+        );
+      }
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2003'
+      ) {
+        throw new BadRequestException('The investor profile does not exist.');
+      }
+      throw err;
+    }
   }
 
   async findMyEditRequests(
