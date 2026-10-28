@@ -26,6 +26,7 @@ import {
   InvestorEditRequestQueryDto,
   InvestorEditRequestReviewDto,
 } from './dto/InvestorEditRequest';
+import { BankAccountQueryDto } from './dto/bankaccount';
 
 const INVESTOR_UPDATE_INCLUDE = {
   nominee: true,
@@ -158,6 +159,72 @@ export class InvestorService {
         limit,
         total,
         totalPages,
+      },
+    };
+  }
+
+  // GET /api/admin/investor/:id/bank-account
+  async findInvestorBankAccounts(id: string, query: BankAccountQueryDto) {
+    const investor = await this.prisma.investor.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+
+    if (!investor) {
+      throw new NotFoundException(`Investor with id ${id} not found`);
+    }
+
+    const { search, selectedBank, accountType, isActive, page, limit, sortBy, sortOrder } = query;
+    const where: Prisma.InvestorBankAccountWhereInput = {
+      investorId: investor.id,
+      ...(selectedBank !== undefined && { selectedBank }),
+      ...(accountType !== undefined && { accountType }),
+      ...(isActive !== undefined && { isActive }),
+      ...(search && {
+        OR: [
+          { bankName: { contains: search, mode: 'insensitive' } },
+          { accountName: { contains: search, mode: 'insensitive' } },
+          { accountNumber: { contains: search, mode: 'insensitive' } },
+        ],
+      }),
+    };
+
+    const orderBy: Prisma.InvestorBankAccountOrderByWithRelationInput[] = [
+      { [sortBy]: sortOrder },
+      { id: 'asc' },
+    ];
+
+    const [bankAccounts, total] = await Promise.all([
+      this.prisma.investorBankAccount.findMany({
+        where,
+        orderBy,
+        skip: (page - 1) * limit,
+        take: limit,
+        select: {
+          id: true,
+          selectedBank: true,
+          bankName: true,
+          accountName: true,
+          accountNumber: true,
+          routingNumber: true,
+          accountType: true,
+          branchName: true,
+          isActive: true,
+          investorId: true,
+        },
+      }),
+      this.prisma.investorBankAccount.count({ where }),
+    ]);
+
+    return {
+      message: 'Investor bank accounts fetched successfully',
+      success: true,
+      data: bankAccounts,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
       },
     };
   }
