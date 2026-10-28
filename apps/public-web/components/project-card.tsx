@@ -1,8 +1,8 @@
 import type { Locale } from '@/lib/i18n/config';
 import type { Dictionary } from '@/lib/i18n/dictionaries/en';
 import { createFormat, fill } from '@/lib/i18n/format';
-import { formatPeriods, type PublicProject } from '@/lib/projects';
-import { FIXED_RATE_BPS, VARIABLE_RATE_MAX_BPS, VARIABLE_RATE_MIN_BPS } from '@/lib/roi';
+import type { PublicProject } from '@/lib/projects';
+import { DEFAULT_RATES, type PublicRates } from '@/lib/roi';
 import { REGISTER_URL } from '@/lib/site';
 import { CalculateProjectButton } from './calculate-project-button';
 
@@ -10,20 +10,22 @@ export function ProjectCard({
   project,
   locale,
   dict,
+  rates = DEFAULT_RATES,
 }: {
   project: PublicProject;
   locale: Locale;
   dict: Dictionary;
+  rates?: PublicRates;
 }) {
   const f = createFormat(locale, dict.units);
   const t = dict.projectCard;
   const isOpen = project.status === 'OPEN';
   const typeLabel =
     project.investmentType === 'fixed'
-      ? fill(t.fixed, { rate: f.rate(FIXED_RATE_BPS) })
+      ? fill(t.fixed, { rate: f.rate(rates.fixedRateBps) })
       : fill(t.variable, {
-          minRate: f.rate(VARIABLE_RATE_MIN_BPS),
-          maxRate: f.rate(VARIABLE_RATE_MAX_BPS),
+          minRate: f.rate(rates.variableRateMinBps),
+          maxRate: f.rate(rates.variableRateMaxBps),
         });
 
   return (
@@ -49,7 +51,6 @@ export function ProjectCard({
       <dl className="mt-4 divide-y divide-zinc-100 text-sm">
         <Fact label={t.minimum} value={f.taka(project.minimumInvestment)} />
         <Fact label={t.type} value={typeLabel} />
-        <Fact label={t.frequency} value={formatPeriods(project.payoutFrequencies, dict.periods)} />
         <Fact label={t.term} value={f.term(project.termMonths)} />
       </dl>
 

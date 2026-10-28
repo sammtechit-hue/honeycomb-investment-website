@@ -1,12 +1,13 @@
 import type { Locale } from './i18n/config';
-import type { Dictionary } from './i18n/dictionaries/en';
 import type { InvestmentType } from './roi';
+import { API_BASE_URL, isShowDemo } from './site';
 
 // Shape of a public project listing.
 //
 // The Project model and GET /api/project don't carry these fields yet:
-// investment type and disbursement period live on Investment, and there is
-// no company, term, use-of-funds or document list on Project at all. Until
+// investment type lives on Investment, and there is no company, term,
+// use-of-funds or document list on Project at all. Payout frequency is
+// deliberately absent: it is not a project term (client, 2026-10-12). Until
 // the API is extended, getProjects() returns the SAMPLE data below. When it
 // is, replace only the body of getProjects() — the page renders from this
 // type and nothing else.
@@ -15,10 +16,8 @@ import type { InvestmentType } from './roi';
 // both English and Bengali, so the API will have to store and return both;
 // the samples below show the shape as Localized<string>.
 //
-// Values reuse the Prisma enum spellings (InvestmentType, DisbursementPeriod)
-// so mapping the API response later is a straight copy.
-
-export type DisbursementPeriod = 'monthly' | 'quarterly' | 'half_yearly' | 'yearly';
+// Values reuse the Prisma enum spellings (InvestmentType) so mapping the API
+// response later is a straight copy.
 
 export type ProjectStatus = 'OPEN' | 'FULL' | 'PAUSED' | 'COMPLETED';
 
@@ -29,7 +28,6 @@ export type PublicProject = {
   status: ProjectStatus;
   minimumInvestment: number;
   investmentType: InvestmentType;
-  payoutFrequencies: DisbursementPeriod[];
   termMonths: number;
   useOfFunds: string;
   // Labels only. The files themselves stay on the secure server (brief §9:
@@ -54,7 +52,6 @@ type Localized<T> = Record<Locale, T>;
 // Document labels shared by the sample projects.
 const DOC = {
   summary: { en: 'Project summary', bn: 'প্রকল্পের সারসংক্ষেপ' },
-  tradeLicence: { en: 'Trade licence', bn: 'ট্রেড লাইসেন্স' },
   shareholderAgreement: { en: 'Shareholder agreement', bn: 'শেয়ারহোল্ডার চুক্তি' },
   leaseDeed: { en: 'Lease deed', bn: 'লিজ দলিল' },
 } satisfies Record<string, Localized<string>>;
@@ -68,13 +65,12 @@ const SAMPLE_PROJECTS = [
     status: 'OPEN',
     minimumInvestment: 200_000,
     investmentType: 'unfixed',
-    payoutFrequencies: ['monthly', 'quarterly'],
     termMonths: 24,
     useOfFunds: {
       en: 'Fit-out and opening stock for new brick-and-mortar outlets in Dhaka.',
       bn: 'ঢাকায় নতুন দোকানের সাজসজ্জা ও প্রাথমিক পণ্য মজুত।',
     },
-    documents: [DOC.summary, DOC.tradeLicence, DOC.shareholderAgreement],
+    documents: [DOC.summary, DOC.shareholderAgreement],
   },
   {
     id: 'sammtech-infrastructure',
@@ -83,26 +79,24 @@ const SAMPLE_PROJECTS = [
     status: 'OPEN',
     minimumInvestment: 500_000,
     investmentType: 'unfixed',
-    payoutFrequencies: ['quarterly', 'yearly'],
     termMonths: 36,
     useOfFunds: {
       en: 'Server hardware and delivery-team capacity for offshore client contracts.',
       bn: 'বিদেশি ক্লায়েন্টের চুক্তির জন্য সার্ভার হার্ডওয়্যার ও ডেলিভারি টিমের সক্ষমতা।',
     },
-    documents: [DOC.summary, DOC.tradeLicence, DOC.shareholderAgreement],
+    documents: [DOC.summary, DOC.shareholderAgreement],
   },
   {
-    id: 'love-life-memories-venue',
-    name: { en: 'Banquet venue lease and fit-out', bn: 'ব্যাংকুয়েট ভেন্যু লিজ ও সাজসজ্জা' },
-    company: 'Love Life Memories',
+    id: 'mars-tile-showroom',
+    name: { en: 'Tile showroom and stock', bn: 'টাইলস শোরুম ও পণ্য মজুত' },
+    company: 'Mars Tile',
     status: 'OPEN',
     minimumInvestment: 300_000,
     investmentType: 'fixed',
-    payoutFrequencies: ['monthly'],
     termMonths: 18,
     useOfFunds: {
-      en: 'Long-term lease and interior build-out of a wedding and event venue.',
-      bn: 'বিয়ে ও অনুষ্ঠানের ভেন্যুর দীর্ঘমেয়াদি লিজ ও অভ্যন্তরীণ নির্মাণ।',
+      en: 'Showroom lease, fit-out and opening tile stock.',
+      bn: 'শোরুম লিজ, সাজসজ্জা ও প্রাথমিক টাইলস মজুত।',
     },
     documents: [DOC.summary, DOC.leaseDeed, DOC.shareholderAgreement],
   },
@@ -114,12 +108,12 @@ const SAMPLE_PROJECTS = [
 
 // SAMPLE — confirm names, sectors and years with the client.
 const GROUP_COMPANIES: (Omit<GroupCompany, 'sector'> & { sector: Localized<string> })[] = [
-  { name: 'Tahams', sector: { en: 'Fashion and retail', bn: 'ফ্যাশন ও খুচরা বিক্রয়' }, operatingSince: 2018 },
-  { name: 'Love Life Memories', sector: { en: 'Event management', bn: 'ইভেন্ট ম্যানেজমেন্ট' }, operatingSince: 2019 },
+  { name: 'Tahams', sector: { en: 'Fashion and retail', bn: 'ফ্যাশন ও খুচরা বিক্রয়' }, operatingSince: 2020 },
+  { name: 'Love Life Memories', sector: { en: 'Event management', bn: 'ইভেন্ট ম্যানেজমেন্ট' }, operatingSince: 2016 },
   {
     name: 'SammTech',
     sector: { en: 'Software and digital marketing', bn: 'সফটওয়্যার ও ডিজিটাল মার্কেটিং' },
-    operatingSince: 2020,
+    operatingSince: 2017,
   },
 ];
 
@@ -157,6 +151,71 @@ const TESTIMONIALS: Localized<Testimonial>[] = [
 ];
 
 export async function getProjects(locale: Locale): Promise<PublicProject[]> {
+  if (isShowDemo()) {
+    return SAMPLE_PROJECTS.map((project) => ({
+      ...project,
+      name: project.name[locale],
+      useOfFunds: project.useOfFunds[locale],
+      documents: project.documents.map((document) => document[locale]),
+    }));
+  }
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/project?isVisible=true&limit=20`, {
+      next: { revalidate: 60, tags: ['projects'] },
+    });
+
+    if (res.ok) {
+      const json = await res.json();
+      const list = Array.isArray(json) ? json : json?.data;
+
+      if (Array.isArray(list) && list.length > 0) {
+        return list.map((raw) => {
+          const item = raw as Record<string, unknown>;
+          const nameObj = item.name as Record<string, string> | null | undefined;
+          const name =
+            typeof item.name === 'object' && item.name
+              ? (nameObj?.[locale] ?? nameObj?.en ?? Object.values(nameObj ?? {})[0])
+              : String(item.name ?? '');
+
+          const descObj = (item.description ?? item.useOfFunds) as
+            | Record<string, string>
+            | null
+            | undefined;
+          const useOfFunds =
+            typeof item.description === 'object' && item.description
+              ? (descObj?.[locale] ?? descObj?.en ?? Object.values(descObj ?? {})[0])
+              : typeof item.useOfFunds === 'object' && item.useOfFunds
+                ? (descObj?.[locale] ?? descObj?.en ?? Object.values(descObj ?? {})[0])
+                : String(item.description ?? item.useOfFunds ?? '');
+
+          const docs: string[] = Array.isArray(item.documents)
+            ? (item.documents as unknown[]).map((doc) => {
+                const docObj = doc as Record<string, string> | null | undefined;
+                return typeof doc === 'object' && doc
+                  ? (docObj?.[locale] ?? docObj?.en ?? Object.values(docObj ?? {})[0] ?? '')
+                  : String(doc ?? '');
+              })
+            : [locale === 'bn' ? 'প্রকল্পের সারসংক্ষেপ' : 'Project summary'];
+
+          return {
+            id: String(item.id),
+            name: name || (locale === 'bn' ? 'প্রকল্প' : 'Project'),
+            company: String(item.company ?? 'HoneyComb'),
+            status: (item.status ?? 'OPEN') as ProjectStatus,
+            minimumInvestment: Number(item.minimumInvestment) || 10_000,
+            investmentType: (item.investmentType === 'fixed' ? 'fixed' : 'unfixed') as InvestmentType,
+            termMonths: Number(item.termMonths) || 24,
+            useOfFunds,
+            documents: docs,
+          };
+        });
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to fetch dynamic projects from API, using sample data:', error);
+  }
+
   return SAMPLE_PROJECTS.map((project) => ({
     ...project,
     name: project.name[locale],
@@ -165,17 +224,82 @@ export async function getProjects(locale: Locale): Promise<PublicProject[]> {
   }));
 }
 
-export function getGroupCompanies(locale: Locale): GroupCompany[] {
+export async function getGroupCompanies(locale: Locale): Promise<GroupCompany[]> {
+  if (isShowDemo()) {
+    return GROUP_COMPANIES.map((company) => ({ ...company, sector: company.sector[locale] }));
+  }
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/group-companies`, {
+      next: { revalidate: 86400, tags: ['companies'] },
+    });
+
+    if (res.ok) {
+      const json = await res.json();
+      const list = Array.isArray(json) ? json : json?.data;
+
+      if (Array.isArray(list) && list.length > 0) {
+        return list.map((raw) => {
+          const company = raw as Record<string, unknown>;
+          const sectorObj = company.sector as Record<string, string> | null | undefined;
+          return {
+            name: String(company.name),
+            sector:
+              typeof company.sector === 'object' && company.sector
+                ? (sectorObj?.[locale] ?? sectorObj?.en ?? Object.values(sectorObj ?? {})[0] ?? '')
+                : String(company.sector ?? ''),
+            operatingSince: Number(company.operatingSince) || 2020,
+          };
+        });
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to fetch dynamic companies from API, using sample data:', error);
+  }
+
   return GROUP_COMPANIES.map((company) => ({ ...company, sector: company.sector[locale] }));
 }
 
-export function getTestimonials(locale: Locale): Testimonial[] {
-  return TESTIMONIALS.map((testimonial) => testimonial[locale]);
-}
+export async function getTestimonials(locale: Locale): Promise<Testimonial[]> {
+  if (isShowDemo()) {
+    return TESTIMONIALS.map((testimonial) => testimonial[locale]);
+  }
 
-export function formatPeriods(
-  periods: DisbursementPeriod[],
-  labels: Dictionary['periods'],
-): string {
-  return periods.map((period) => labels[period]).join(labels.or);
+  try {
+    const res = await fetch(`${API_BASE_URL}/testimonials`, {
+      next: { revalidate: 86400, tags: ['testimonials'] },
+    });
+
+    if (res.ok) {
+      const json = await res.json();
+      const list = Array.isArray(json) ? json : json?.data;
+
+      if (Array.isArray(list) && list.length > 0) {
+        return list.map((raw) => {
+          const item = raw as Record<string, unknown>;
+          const quoteObj = item.quote as Record<string, string> | null | undefined;
+          const nameObj = item.name as Record<string, string> | null | undefined;
+          const detailObj = item.detail as Record<string, string> | null | undefined;
+          return {
+            quote:
+              typeof item.quote === 'object' && item.quote
+                ? (quoteObj?.[locale] ?? quoteObj?.en ?? Object.values(quoteObj ?? {})[0] ?? '')
+                : String(item.quote ?? ''),
+            name:
+              typeof item.name === 'object' && item.name
+                ? (nameObj?.[locale] ?? nameObj?.en ?? Object.values(nameObj ?? {})[0] ?? '')
+                : String(item.name ?? ''),
+            detail:
+              typeof item.detail === 'object' && item.detail
+                ? (detailObj?.[locale] ?? detailObj?.en ?? Object.values(detailObj ?? {})[0] ?? '')
+                : String(item.detail ?? ''),
+          };
+        });
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to fetch dynamic testimonials from API, using sample data:', error);
+  }
+
+  return TESTIMONIALS.map((testimonial) => testimonial[locale]);
 }

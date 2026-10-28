@@ -3,8 +3,10 @@ import Link from 'next/link';
 import { LOCALES, localePath } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { createFormat, fill } from '@/lib/i18n/format';
-import { VARIABLE_RATE_MAX_BPS, VARIABLE_RATE_MIN_BPS } from '@/lib/roi';
+import { getRates } from '@/lib/rates';
 import { WITHDRAWAL_LIMIT } from '@/lib/site';
+
+export const revalidate = 3600;
 
 export async function generateMetadata(): Promise<Metadata> {
   const { locale, dict } = await getDictionary();
@@ -22,10 +24,11 @@ export async function generateMetadata(): Promise<Metadata> {
 // fixed in the requirements brief.
 export default async function LegalPage() {
   const { locale, dict } = await getDictionary();
+  const ratesData = await getRates();
   const f = createFormat(locale, dict.units);
   const values = {
-    minRate: f.rate(VARIABLE_RATE_MIN_BPS),
-    maxRate: f.rate(VARIABLE_RATE_MAX_BPS),
+    minRate: f.rate(ratesData.variableRateMinBps),
+    maxRate: f.rate(ratesData.variableRateMaxBps),
     withdrawalLimit: f.taka(WITHDRAWAL_LIMIT),
   };
 

@@ -3,12 +3,7 @@
 import { roiCalculatorLeadCreateSchema } from '@investment-platform/contracts/roi-calculator-lead';
 import { DEFAULT_LOCALE, hasLocale } from '@/lib/i18n/config';
 import { loadDictionary } from '@/lib/i18n/load-dictionary';
-
-// Server-only base URL. The browser never calls the API directly: the API's
-// CORS and CSRF-origin checks only accept secure-web's origin, and this
-// server-to-server request carries no Origin header, so it passes without
-// widening that allowlist to the public site.
-const API_BASE_URL = process.env.API_URL ?? 'http://localhost:3000/api';
+import { API_BASE_URL } from '@/lib/site';
 
 export type SubmitLeadState = {
   success: boolean;

@@ -19,6 +19,18 @@ export const FIXED_RATE_BPS = 250;
 export const VARIABLE_RATE_MIN_BPS = 200;
 export const VARIABLE_RATE_MAX_BPS = 250;
 
+export type PublicRates = {
+  fixedRateBps: number;
+  variableRateMinBps: number;
+  variableRateMaxBps: number;
+};
+
+export const DEFAULT_RATES: PublicRates = {
+  fixedRateBps: FIXED_RATE_BPS,
+  variableRateMinBps: VARIABLE_RATE_MIN_BPS,
+  variableRateMaxBps: VARIABLE_RATE_MAX_BPS,
+};
+
 export const TERM_OPTIONS_MONTHS = [12, 18, 24, 36] as const;
 
 export const MONTHS_PER_PAYOUT: Record<PayoutFrequency, number> = {
@@ -41,10 +53,10 @@ export type Projection = {
   termMonths: number;
 };
 
-export function rateRange(type: InvestmentType): Range {
+export function rateRange(type: InvestmentType, rates: PublicRates = DEFAULT_RATES): Range {
   return type === 'fixed'
-    ? { low: FIXED_RATE_BPS, high: FIXED_RATE_BPS }
-    : { low: VARIABLE_RATE_MIN_BPS, high: VARIABLE_RATE_MAX_BPS };
+    ? { low: rates.fixedRateBps, high: rates.fixedRateBps }
+    : { low: rates.variableRateMinBps, high: rates.variableRateMaxBps };
 }
 
 // Whole-taka amount for one month at one rate.
@@ -57,8 +69,9 @@ export function project(
   type: InvestmentType,
   frequency: PayoutFrequency,
   termMonths: number,
+  rates: PublicRates = DEFAULT_RATES,
 ): Projection {
-  const rateBps = rateRange(type);
+  const rateBps = rateRange(type, rates);
   const monthsPerPayout = MONTHS_PER_PAYOUT[frequency];
   const monthly = {
     low: monthlyProfit(amount, rateBps.low),
