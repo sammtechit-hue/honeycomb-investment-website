@@ -534,20 +534,6 @@ export class InvestorService {
           },
         });
 
-        await tx.adminNotification.create({
-          data: {
-            type: 'investor_action' as AdminNotificationType,
-            referenceId: request.investorId,
-            message: `${request.investor.fullname}'s edit request was ${dto.status}${
-              approving
-                ? ` and merged (${Object.keys(applied).join(', ') || 'nothing to merge'})`
-                : `: ${dto.rejectionReason}`
-            }`,
-            isRead: false,
-            clickLink: `/admin/investors/${request.investorId}`,
-          },
-        });
-
         return {
           message: approving
             ? 'Investor edit request approved and merged'
