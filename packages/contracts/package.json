@@ -16,6 +16,10 @@
       "types": "./dist/investor.d.ts",
       "default": "./dist/investor.js"
     },
+    "./investorEditRequest": {
+      "types": "./dist/investorEditRequest.d.ts",
+      "default": "./dist/investorEditRequest.js"
+    },
     "./investment": {
       "types": "./dist/investment.d.ts",
       "default": "./dist/investment.js"
@@ -47,6 +51,10 @@
     "./monthlyProfitLedger": {
       "types": "./dist/monthlyProfitLedger.d.ts",
       "default": "./dist/monthlyProfitLedger.js"
+    },
+    "./monthlyRateSetting": {
+      "types": "./dist/monthlyRateSetting.d.ts",
+      "default": "./dist/monthlyRateSetting.js"
     },
     "./nominee": {
       "types": "./dist/nominee.d.ts",
@@ -83,6 +91,10 @@
     "./roi-calculator-lead": {
       "types": "./dist/roi-calculator-lead.d.ts",
       "default": "./dist/roi-calculator-lead.js"
+    },
+    "./fixed-rate": {
+      "types": "./dist/fixedRate.d.ts",
+      "default": "./dist/fixedRate.js"
     },
     "./package.json": "./package.json"
   },
