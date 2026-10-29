@@ -708,7 +708,7 @@ model InvestmentDocument {
 model MonthlyRateSetting {
     id          String   @id @default(uuid()) @db.Uuid
     periodMonth DateTime @unique @map("period_month") @db.Date
-    ratePercent Decimal  @map("rate_percent") @db.Decimal(5, 2)
+    ratePercent Decimal  @map("rate_percent") @db.Decimal(3, 2)
     isActive    Boolean  @default(true)
     setAt       DateTime @default(now()) @map("set_at")
 
@@ -726,7 +726,7 @@ model MonthlyProfitLedger {
     cycleEnd    DateTime @map("cycle_end") @db.Date
     daysCounted Int      @map("days_counted")
 
-    rateApplied  Decimal      @map("rate_applied") @db.Decimal(5, 2)
+    rateApplied  Decimal      @map("rate_applied") @db.Decimal(3, 2)
     profitAmount Decimal      @map("profit_amount") @db.Decimal(14, 2)
     payoutStatus PayoutStatus @default(accrued) @map("payout_status")
 
@@ -1007,7 +1007,7 @@ model AuditLog {
 
 model FixedRate {
     id   Int      @id @default(autoincrement())
-    rate Decimal? @db.Decimal(2, 2)
+    rate Decimal? @db.Decimal(3, 2)
 
     label    String? @db.VarChar(200)
     isActive Boolean @default(true)
