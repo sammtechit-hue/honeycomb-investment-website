@@ -974,7 +974,7 @@ model AuditLog {
     // What was affected
     targetLabel String? // Human-readable name at time of action
     targetTable String  @map("target_table") @db.VarChar(50)
-    targetId    String  @map("target_id") @db.Uuid
+    targetId    String  @map("target_id") @db.VarChar(50)
 
     // What changed
     oldValue Json? // Previous state
