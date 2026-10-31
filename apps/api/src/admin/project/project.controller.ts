@@ -91,7 +91,7 @@ export class ProjectController {
         };
 
         // user.userId is the User.id attached by JwtAuthGuard/JwtStrategy.
-        return this.projectService.update(id, updateProjectDto, user?.userId, context);
+        return this.projectService.updateInvestor(id, updateProjectDto, user?.userId, context);
     }
 
     // DELETE /api/admin/project/:id

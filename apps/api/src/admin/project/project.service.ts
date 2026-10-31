@@ -6,8 +6,7 @@ import { RequestAuditContext } from '../../utils/common types';
 import { Prisma, LogModule, LogSeverity, LogStatus, AuditAction, InvestmentStatus, ProjectStatus } from '@investment-platform/db';
 import { PrismaService } from '../../prisma/prisma.service';
 
-// A project with money actively running can't be wound down until those
-// investments are closed, otherwise payouts would point at a dead project.
+
 const STATUSES_BLOCKED_BY_ACTIVE_INVESTMENTS: ProjectStatus[] = [
     ProjectStatus.DRAFT,
     ProjectStatus.PAUSED,
@@ -196,7 +195,7 @@ export class ProjectService {
 
 
     // PATCH /api/admin/project/:id — partial update. Only fields present in
-    async update(
+    async updateInvestor( 
         id: string,
         dto: UpdateProjectDto,
         userId: string,
@@ -217,19 +216,20 @@ export class ProjectService {
             throw new BadRequestException('No fields provided to update');
         }
 
-        // Resolved outside the transaction to keep it (and the row lock) short.
-        const admin = await this.prisma.adminProfile.findUnique({
-            where: { userId },
-            select: { id: true, name: true },
-        });
+        // Independent queries -> one round trip instead of two.
+        const [admin, existing] = await Promise.all([
+            this.prisma.adminProfile.findUnique({
+                where: { userId },
+                select: { id: true, name: true },
+            }),
+            this.prisma.project.findUnique({ where: { id } }),
+        ]);
 
-        const existing = await this.prisma.project.findUnique({ where: { id } });
         if (!existing) {
             throw new NotFoundException(`Project with id ${id} not found`);
         }
 
-        // An admin can't move a project to DRAFT/PAUSED/COMPLETED/CANCELLED while
-        // it still has active investments. Close those investments first.
+        // if Project even has one investment active, project cant be changed to these(STATUSES_BLOCKED_BY_ACTIVE_INVESTMENTS) status.
         const becomingBlockedStatus =
             status !== undefined &&
             status !== existing.status &&
@@ -276,7 +276,7 @@ export class ProjectService {
         if (effectiveEndDate !== undefined && effectiveEndDate <= effectiveStartDate) {
             throw new BadRequestException('endDate must be after startDate');
         }
-        
+
 
         try {
             await this.prisma.$transaction(async (tx) => {

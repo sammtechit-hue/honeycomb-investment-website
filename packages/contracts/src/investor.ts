@@ -9,6 +9,7 @@ import {
   maxAmountQuerySchema,
   minAmountQuerySchema,
   pageValidationSchema,
+  passwordSchema,
   phoneNumberSchema,
   searchValidationSchema,
   sortOrderSchema,
@@ -126,14 +127,24 @@ export type InvestorCreateInput = z.infer<typeof investorCreateInputSchema>;
 // Update
 // ---------------------------------------------------------------------------
 
+// Self-service profile edit. Changes are staged in the Editable* tables and
+// applied by an admin, which is why bank account changes are excluded (they go
+// through the dedicated bank-account endpoint) and passwordHash is never
+// accepted (password changes go through auth).
 export const investorUpdateInputSchema = investorCreateInputSchema
-  // .omit({
-  //   kycDocuments: true,   // KYC changes go through re-verification
-  //   bankAccount: true,    // Bank changes go through a dedicated endpoint
-  //   nominee: true,        // Nominee changes go through a dedicated endpoint
-  //   referralCode: true,   // Cannot change referrer after registration
-  // })
-  .partial();
+  .omit({
+    fullName: true,
+    bankAccount: true,
+    referralCode: true,
+  })
+  .partial()
+  .extend({
+    email: emailSchema.optional(),
+    phone: phoneNumberSchema.optional(),
+    password: passwordSchema.optional(),
+    nominee: nomineeSchema.partial().optional(),
+    kycDocuments: kycDocumentsSchema.partial().optional(),
+  });
 
 export type InvestorUpdateInput = z.infer<typeof investorUpdateInputSchema>;
 
