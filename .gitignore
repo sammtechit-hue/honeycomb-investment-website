@@ -15,6 +15,9 @@ node_modules
 # Testing
 coverage
 
+# Encrypted KYC documents (apps/api STORAGE_DRIVER=local)
+apps/api/storage/
+
 # Turbo
 .turbo
 

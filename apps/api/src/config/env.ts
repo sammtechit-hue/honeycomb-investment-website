@@ -65,7 +65,41 @@ const envSchema = z.object({
   // /reset-password and /set-password pages. Defaults to the first
   // CORS_ORIGINS entry outside production.
   APP_URL: z.string().url('APP_URL must be a full URL').optional(),
+
+  // KYC document storage (src/files). Every file is AES-256-GCM encrypted
+  // in this process before it reaches the driver, so neither the disk nor
+  // the bucket ever holds plaintext.
+  //   local    — a directory on this server (the client's secure server)
+  //   supabase — a PRIVATE Supabase Storage bucket (staging: Render's free
+  //              disk is wiped on every deploy)
+  STORAGE_DRIVER: z.enum(['local', 'supabase']).default('local'),
+  STORAGE_LOCAL_DIR: z.string().min(1).default('./storage'),
+  // 32 random bytes, base64. Losing it makes every stored file unreadable.
+  //   node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+  // Optional so existing deploys still boot; uploads answer 503 without it.
+  STORAGE_ENCRYPTION_KEY: z
+    .string()
+    .refine((value) => Buffer.from(value, 'base64').length === 32, {
+      message: 'STORAGE_ENCRYPTION_KEY must be 32 bytes, base64-encoded',
+    })
+    .optional(),
+  SUPABASE_URL: z.string().url('SUPABASE_URL must be a full URL').optional(),
+  // service_role key — server-side only, bypasses RLS. Never ship to a client.
+  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
+  SUPABASE_STORAGE_BUCKET: z.string().min(1).default('kyc-documents'),
 }).superRefine((env, ctx) => {
+  if (env.STORAGE_DRIVER === 'supabase') {
+    for (const key of ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'] as const) {
+      if (!env[key]) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [key],
+          message: `${key} is required when STORAGE_DRIVER=supabase`,
+        });
+      }
+    }
+  }
+
   if (env.NODE_ENV !== 'production') return;
   for (const key of ['RESEND_API_KEY', 'MAIL_FROM', 'APP_URL'] as const) {
     if (!env[key]) {
