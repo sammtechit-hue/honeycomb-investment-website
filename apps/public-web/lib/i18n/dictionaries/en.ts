@@ -10,6 +10,7 @@ export const en = {
     description:
       "Put money into projects run by HoneyComb Inc.'s operating companies. Profit is calculated monthly on your original amount and paid by direct bank transfer.",
     legalTitle: "Legal and risk information — HoneyComb Inc.",
+    notFoundTitle: "Page not found — HoneyComb Inc.",
   },
 
   units: {
@@ -339,6 +340,13 @@ export const en = {
         ],
       },
     ],
+  },
+
+  notFound: {
+    title: "Page not found",
+    body: "We couldn't find the page you're looking for. It may have been moved, or the link may be wrong.",
+    home: "Back to home",
+    projects: "Browse projects",
   },
 };
 

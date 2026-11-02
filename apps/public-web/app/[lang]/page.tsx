@@ -149,9 +149,9 @@ export default async function Home() {
                 dict.methodology.sums,
                 dict.methodology.bank,
               ].map(({ lead, body }) => (
-                <p key={lead}>
+                <div key={lead}>
                   <strong className="text-zinc-950">{lead}</strong> {body}
-                </p>
+                </div>
               ))}
             </div>
 
