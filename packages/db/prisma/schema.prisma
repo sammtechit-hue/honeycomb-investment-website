@@ -34,6 +34,8 @@ enum AuditAction {
     investment_status_changed
     monthly_rate_set
     monthly_rate_updated // any admin edit to an existing monthly rate setting (rate, active flag, period)
+    fixed_rate_set
+    fixed_rate_updated
     disbursement_batch_created
     disbursement_batch_exported
     disbursement_batch_confirmed
@@ -706,7 +708,7 @@ model InvestmentDocument {
 model MonthlyRateSetting {
     id          String   @id @default(uuid()) @db.Uuid
     periodMonth DateTime @unique @map("period_month") @db.Date
-    ratePercent Decimal  @map("rate_percent") @db.Decimal(5, 2)
+    ratePercent Decimal  @map("rate_percent") @db.Decimal(3, 2)
     isActive    Boolean  @default(true)
     setAt       DateTime @default(now()) @map("set_at")
 
@@ -724,7 +726,7 @@ model MonthlyProfitLedger {
     cycleEnd    DateTime @map("cycle_end") @db.Date
     daysCounted Int      @map("days_counted")
 
-    rateApplied  Decimal      @map("rate_applied") @db.Decimal(5, 2)
+    rateApplied  Decimal      @map("rate_applied") @db.Decimal(3, 2)
     profitAmount Decimal      @map("profit_amount") @db.Decimal(14, 2)
     payoutStatus PayoutStatus @default(accrued) @map("payout_status")
 
@@ -972,7 +974,7 @@ model AuditLog {
     // What was affected
     targetLabel String? // Human-readable name at time of action
     targetTable String  @map("target_table") @db.VarChar(50)
-    targetId    String  @map("target_id") @db.Uuid
+    targetId    String  @map("target_id") @db.VarChar(50)
 
     // What changed
     oldValue Json? // Previous state
@@ -1005,7 +1007,7 @@ model AuditLog {
 
 model FixedRate {
     id   Int      @id @default(autoincrement())
-    rate Decimal? @db.Decimal(2, 2)
+    rate Decimal? @db.Decimal(3, 2)
 
     label    String? @db.VarChar(200)
     isActive Boolean @default(true)
