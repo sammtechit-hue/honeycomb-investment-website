@@ -36,6 +36,8 @@ enum AuditAction {
     monthly_rate_updated // any admin edit to an existing monthly rate setting (rate, active flag, period)
     fixed_rate_set
     fixed_rate_updated
+    profit_ledger_settings_set // profit ledger cycle-day setting created
+    profit_ledger_settings_updated // any edit to an existing profit ledger settings row
     disbursement_batch_created
     disbursement_batch_exported
     disbursement_batch_confirmed
@@ -718,6 +720,18 @@ model MonthlyRateSetting {
 // ----------------------------------------------------------------------------
 // 11. Monthly Profit Ledger
 // ----------------------------------------------------------------------------
+
+
+model  MonthlyProfitLedgerSettings{
+    id   Int      @id @default(autoincrement())
+    setcycleday   Int
+
+    label    String? @db.VarChar(200)
+    isActive Boolean @default(true)
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+}
 
 model MonthlyProfitLedger {
     id String @id @default(uuid()) @db.Uuid
