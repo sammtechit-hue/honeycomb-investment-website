@@ -19,6 +19,7 @@ import { RequestAuditContext } from '../../utils/common types';
 import { CreateInvestmentDto } from './dto/create-investment.dto';
 import { UpdateInvestmentDto } from './dto/update-investment.dto';
 import { InvestmentQueryDto } from './dto/query-investment.dto';
+import { getDhakaDateOnly } from '../../utils/common/bangladeshTime.util';
 
 // Fields returned by both admin investment endpoints (list + detail). Defined
 // once so the two views can never drift apart.
@@ -271,7 +272,10 @@ export class InvestmentService {
         };
     }
 
-    
+
+    // ----------------------------------------------------------
+    // ---------------------- updateInvestment ---------------------------
+    //------------------------------------------------------------ 
     async updateInvestment(
         id: string,
         updateInvestmentDto: UpdateInvestmentDto,
@@ -348,14 +352,14 @@ export class InvestmentService {
         }
 
         // An active investment's date cannot be changed once set.
-        if (
-            existingInvestment.status === InvestmentStatus.active &&
-            investmentDate !== undefined
-        ) {
-            throw new BadRequestException(
-                'The investment date of an active investment cannot be changed',
-            );
-        }
+        // if (
+        //     existingInvestment.status === InvestmentStatus.active &&
+        //     investmentDate !== undefined
+        // ) {
+        //     throw new BadRequestException(
+        //         'The investment date of an active investment cannot be changed',
+        //     );
+        // }
 
         const oldAmount = existingInvestment.amount;
         const newAmount = amount !== undefined ? new Prisma.Decimal(amount) : oldAmount;
@@ -363,7 +367,18 @@ export class InvestmentService {
         const oldStatus = existingInvestment.status;
         const newStatus = status ?? oldStatus;
 
-        
+        // Activation date is system-controlled: when the admin activates the
+        // investment, the investment date is stamped with the current Dhaka
+        // calendar date at that moment, ignoring any client-sent value.
+        const activating =
+            newStatus === InvestmentStatus.active &&
+            oldStatus !== InvestmentStatus.active;
+
+        if (activating) {
+            data.investmentDate = getDhakaDateOnly();
+        }
+
+
         if (!ALLOWED_STATUS_TRANSITIONS[oldStatus].includes(newStatus)) {
             throw new BadRequestException(
                 statusTransitionError(oldStatus, newStatus),
@@ -397,7 +412,7 @@ export class InvestmentService {
             newStatus === InvestmentStatus.active &&
             oldStatus !== InvestmentStatus.active &&
             existingInvestment.incomingPayments?.status !==
-                IncomingPaymentStatus.confirmed
+            IncomingPaymentStatus.confirmed
         ) {
             throw new BadRequestException(
                 'Investment cannot be activated due to incomplete payment',
@@ -416,7 +431,7 @@ export class InvestmentService {
             );
         }
 
-        
+
         const oldContribution = contributionOf(oldStatus, oldAmount);
         const newContribution = contributionOf(newStatus, newAmount);
 
