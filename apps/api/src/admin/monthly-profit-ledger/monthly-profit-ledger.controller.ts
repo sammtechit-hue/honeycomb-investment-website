@@ -1,75 +1,56 @@
 import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  ParseUUIDPipe,
-  Patch,
-  Post,
-  Query,
-  UsePipes,
+    Body,
+    Controller,
+    Delete,
+    Get,
+    Param,
+    ParseUUIDPipe,
+    Patch,
+    Post,
+    Query,
+    UseGuards,
+    UsePipes,
 } from '@nestjs/common';
 import { ZodValidationPipe } from 'nestjs-zod';
-import { CreateMonthlyProfitLedgerDto } from './dto/create-monthly-profit-ledger.dto';
-import { UpdateMonthlyProfitLedgerDto } from './dto/update-monthly-profit-ledger.dto';
 import { MonthlyProfitLedgerQueryDto } from './dto/query-monthly-profit-ledger.dto';
 import { MonthlyProfitLedgerService } from './monthly-profit-ledger.service';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../auth/guards/roles.guard';
+import { Roles } from '../../auth/decorators/roles.decorator';
+import { Role } from '@investment-platform/db';
+import { CurrentUser } from '../../auth/decorators/current-user.decorator';
+import type { AuthenticatedUser } from '../../auth/types/jwt-payload.interface';
 
-// Admin endpoints for the monthly profit ledger — one row per investment per
-// profit month, tracking the applied rate, computed profit and payout status.
-// Validation is scoped to this controller (@UsePipes) instead of globally —
-// see main.ts for why.
 @Controller('admin/monthly-profit-ledger')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(Role.ADMIN, Role.MODERATOR)
 @UsePipes(ZodValidationPipe)
 export class MonthlyProfitLedgerController {
     constructor(
         private readonly monthlyProfitLedgerService: MonthlyProfitLedgerService,
-    ) {}
+    ) { }
 
-    // For getting all monthly profit ledger rows with filtering, searching,
-    // sorting & pagination.
-    // GET /api/admin/monthly-profit-ledger?search=&investmentId=&investorId=
-    //   &payoutStatus=accrued&min=&max=&periodFrom=&periodTo=
-    //   &page=1&limit=10&sortBy=periodMonth&sortOrder=desc
+
     @Get()
     findAll(@Query() query: MonthlyProfitLedgerQueryDto) {
-        // Search, filters, amount/period ranges, sort and pagination are
-        // validated by MonthlyProfitLedgerQueryDto.
-        return this.monthlyProfitLedgerService.findAll(query);
+        return this.monthlyProfitLedgerService.findAllMonthlyLedger(query);
     }
 
     // GET /admin/monthly-profit-ledger/:id
     @Get(':id')
-    findOne(@Param('id', ParseUUIDPipe) id: string) {
+    findOne(
+        @Param('id', ParseUUIDPipe) id: string,
+        @Query() query: MonthlyProfitLedgerQueryDto,
+        @CurrentUser() user: AuthenticatedUser,
+    ) {
         // Return a single monthly profit ledger data
-        return this.monthlyProfitLedgerService.findOne(id);
+        return this.monthlyProfitLedgerService.findOneMonthlyLedger(id, user?.userId, query);
     }
 
     // POST /admin/monthly-profit-ledger
-    // payoutStatus defaults to "accrued".
     @Post()
-    create(@Body() createMonthlyProfitLedgerDto: CreateMonthlyProfitLedgerDto) {
+    create() {
         // Create a new monthly profit ledger record
-        return this.monthlyProfitLedgerService.create(createMonthlyProfitLedgerDto);
-    }
-
-    // PATCH /admin/monthly-profit-ledger/:id
-    @Patch(':id')
-    update(
-        @Param('id', ParseUUIDPipe) id: string,
-        @Body() updateMonthlyProfitLedgerDto: UpdateMonthlyProfitLedgerDto,
-    ) {
-        // Only the fields provided in the request
-        // will be updated.
-
-        return this.monthlyProfitLedgerService.update(id, updateMonthlyProfitLedgerDto);
-    }
-
-    // DELETE /admin/monthly-profit-ledger/:id
-    @Delete(':id')
-    remove(@Param('id', ParseUUIDPipe) id: string) {
-        // Delete a monthly profit ledger by id
-        return this.monthlyProfitLedgerService.remove(id);
+        return this.monthlyProfitLedgerService.createMonthlyLedger();
     }
 }

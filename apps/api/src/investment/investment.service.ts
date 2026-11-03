@@ -22,6 +22,7 @@ import { UpdateInvestmentDto } from './dto/update-investment.dto';
 import { InvestmentQueryDto } from './dto/query-investment.dto';
 import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import { Env } from '../config/env';
+import { getDhakaDateOnly } from '../utils/common/bangladeshTime.util';
 
 const INVESTMENT_LIST_SELECT = {
   id: true,
@@ -271,6 +272,9 @@ export class InvestmentService {
       where: { isActive: true },
     })
 
+    // for setting investmentDate
+    const today = getDhakaDateOnly();
+
     const rate =
       databaseRate?.rate ??
       new Prisma.Decimal(this.config.get('FIXED_RATE', { infer: true }));
@@ -286,7 +290,7 @@ export class InvestmentService {
             disbursementPeriod: dto.disbursementPeriod,
             // Default to "now" so later slot math has a date even if the
             // client omitted investmentDate.
-            investmentDate: dto.investmentDate ?? new Date(),
+            investmentDate: today,
             status: 'pending',
             investor: { connect: { id: investor.id } },
             project: { connect: { id: project.id } },

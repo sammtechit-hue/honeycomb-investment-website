@@ -103,6 +103,10 @@
       "types": "./dist/fixedRate.d.ts",
       "default": "./dist/fixedRate.js"
     },
+    "./profit-ledger-settings": {
+      "types": "./dist/profitLedgerSettings.d.ts",
+      "default": "./dist/profitLedgerSettings.js"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {
