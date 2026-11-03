@@ -1,0 +1,8 @@
+{
+  // TypeScript 6 requires an explicit rootDir — without it ts-jest fails
+  // with TS5011 before any unit test runs (same fix as test/tsconfig.e2e.json).
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "."
+  }
+}
