@@ -40,9 +40,9 @@ export function RegistryHeader({ active }: { active: NavKey }) {
 export function RegistryFooter() {
   return (
     <footer className="bg-addon px-4 sm:px-10">
-      <div className="mx-auto flex max-w-[1200px] flex-wrap items-center justify-center gap-2 px-2 py-8 text-center text-xs leading-4 text-secondary sm:px-6">
+      <div className="mx-auto flex max-w-[1200px] flex-col items-center justify-center gap-2 px-2 py-8 text-center text-xs leading-4 text-secondary sm:flex-row sm:px-6">
         <p>© {new Date().getFullYear()} HoneyComb Inc. All rights reserved.</p>
-        <span aria-hidden>•</span>
+        <span aria-hidden className="hidden sm:inline">•</span>
         <a href={TERMS_URL} className="underline underline-offset-2">
           Institutional Terms
         </a>

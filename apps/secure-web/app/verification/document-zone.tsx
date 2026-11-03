@@ -15,7 +15,10 @@ export type Slot = { key: DocumentKey; label: string };
 type Upload = { name: string; size: number; progress: number; controller: AbortController };
 
 function formatSize(bytes: number) {
-  return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  // Non-breaking space keeps "1.4 MB" on one line.
+  return bytes >= 1024 * 1024
+    ? `${(bytes / 1024 / 1024).toFixed(1)} MB`
+    : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
 // The upload URL points at secure-web's own /api proxy; open it by path so
@@ -113,10 +116,19 @@ export function DocumentZone({
       <legend className="sr-only">{title}</legend>
       <div className="flex items-start justify-between gap-3">
         <div className="flex flex-col gap-0.5">
-          <p className="flex items-center gap-2 text-base leading-6 font-bold text-ink" aria-hidden>
+          {/* Inline (not flex) so the status mark follows the last word when the title wraps. */}
+          <p className="text-base leading-6 font-bold text-ink" aria-hidden>
             {title}
-            {complete && <Image src="/verify/zone-complete.svg" alt="" width={13.3333} height={13.3333} />}
-            {uploading && <span className="size-2 rounded-full bg-black" />}
+            {complete && (
+              <Image
+                src="/verify/zone-complete.svg"
+                alt=""
+                width={13.3333}
+                height={13.3333}
+                className="ml-2 inline-block align-[-1px]"
+              />
+            )}
+            {uploading && <span className="ml-2 inline-block size-2 rounded-full bg-black align-middle" />}
           </p>
           <p className="text-xs leading-4 text-muted">{hint}</p>
         </div>
