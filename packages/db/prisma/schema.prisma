@@ -409,7 +409,6 @@ model EditableNominee {
     editRequest   InvestorEditRequest @relation(fields: [editRequestId], references: [id], onDelete: Cascade)
 }
 
-
 model EditableUser {
     id           String  @id @default(uuid()) @db.Uuid
     email        String? @db.VarChar(150)
@@ -721,10 +720,9 @@ model MonthlyRateSetting {
 // 11. Monthly Profit Ledger
 // ----------------------------------------------------------------------------
 
-
-model  MonthlyProfitLedgerSettings{
-    id   Int      @id @default(autoincrement())
-    setcycleday   Int
+model MonthlyProfitLedgerSettings {
+    id          Int @id @default(autoincrement())
+    setcycleday Int
 
     label    String? @db.VarChar(200)
     isActive Boolean @default(true)
@@ -785,11 +783,11 @@ model DisbursementBatch {
 // ----------------------------------------------------------------------------
 
 model DisbursementItem {
-    id           String       @id @default(uuid()) @db.Uuid
-    reason       String       @db.VarChar(150)
-    amount       Decimal      @db.Decimal(14, 2)
+    id           String        @id @default(uuid()) @db.Uuid
+    reason       String        @db.VarChar(150)
+    amount       Decimal       @db.Decimal(14, 2)
     exportFormat ExportFormat @map("export_format")
-    remarks      String?      @db.VarChar(255)
+    remarks      String?       @db.VarChar(255)
 
     investmentId String     @map("investment_id") @db.Uuid
     investment   Investment @relation(fields: [investmentId], references: [id])
@@ -797,8 +795,8 @@ model DisbursementItem {
     investorId String   @map("investor_id") @db.Uuid
     investor   Investor @relation(fields: [investorId], references: [id])
 
-    batchId String            @map("batch_id") @db.Uuid
-    batch   DisbursementBatch @relation(fields: [batchId], references: [id])
+    batchId String?            @map("batch_id") @db.Uuid
+    batch   DisbursementBatch? @relation(fields: [batchId], references: [id])
 
     snapshotBankName      String
     snapshotAccountName   String
