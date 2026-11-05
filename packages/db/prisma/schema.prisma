@@ -195,6 +195,7 @@ enum AdminNotificationType {
     disbursement_sent
     incoming_payments
     company_document_expiring
+    monthly_profit_cycle
 }
 
 enum PayoutSchedule {

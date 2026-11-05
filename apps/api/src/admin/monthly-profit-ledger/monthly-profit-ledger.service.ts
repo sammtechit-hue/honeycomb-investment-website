@@ -312,7 +312,7 @@ export class MonthlyProfitLedgerService {
                 // summarizes the whole batch.
                 await tx.adminNotification.create({
                     data: {
-                        type: 'upcoming_payout' as AdminNotificationType,
+                        type: 'monthly_profit_cycle' as AdminNotificationType,
                         message: `Profit accrual run completed for cycle ending ${fmt(cycleEnd)}: ${result.count} ledger entries created, ${skipped} skipped.`,
                         isRead: false,
                         clickLink: '/admin/monthly-profit-ledger',
