@@ -1,6 +1,4 @@
 import {
-    BadRequestException,
-    ConflictException,
     Injectable,
     NotFoundException,
 } from '@nestjs/common';
@@ -11,19 +9,11 @@ import {
     DisbursementPeriod,
     ExportFormat,
     InvestmentStatus,
-    LogModule,
-    LogSeverity,
-    LogStatus,
     PayoutStatus,
     Prisma,
 } from '@investment-platform/db';
 import { PrismaService } from '../../prisma/prisma.service';
-import { RequestAuditContext } from '../../utils/common types';
-import type { DisbursementItemQuery } from '@investment-platform/contracts/disbursementItem';
 import { DisbursementItemQueryDto } from './dto/query-disbursement-item.dto';
-import { buildOrderBy } from '../../utils/common/build-order-by.util';
-import { fetchData } from '../../utils/common/fetchData.util';
-import { buildDisbursementItemWhere } from '../../utils/common/disbursement-itemWhereQuery.util';
 
 // How many monthly profit-ledger rows make up one payout for each
 // investment disbursement period.
@@ -53,19 +43,9 @@ const MONTH_ABBREVIATIONS = [
 export class DisbursementItemService {
     constructor(private readonly prisma: PrismaService) { }
 
-    // sortBy → Prisma column map, type-checked against the contract's
-    // disbursementItemSortBySchema so a new enum value cannot be added
-    // without a matching column (same pattern as MonthlyProfitLedgerService).
-    private readonly sortColumns = {
-        amount: 'amount',
-        exportFormat: 'exportFormat',
-        createdAt: 'createdAt',
-        snapshotBankName: 'snapshotBankName',
-    } as const satisfies Record<
-        DisbursementItemQuery['sortBy'],
-        keyof Prisma.DisbursementItemOrderByWithRelationInput
-    >;
-
+    // --------------------------------------------------------
+    // -------------- FindAll Disbursement Item ----------------
+    //---------------------------------------------------------
     // For Getting All DisbursementItem's Data with filtering, searching, sorting & pagination
     // Example: GET /admin/disbursement-item?search=ROI&exportFormat=cbl&page=1&limit=10
     async findAllDisbursementItem(query: DisbursementItemQueryDto) {
@@ -85,33 +65,66 @@ export class DisbursementItemService {
         } = query;
 
         // 1. Build the WHERE clause from whichever filters were provided.
-        const where = buildDisbursementItemWhere({
-            search,
-            batchId,
-            investmentId,
-            investorId,
-            exportFormat,
-            snapshotBankName,
-            minAmount,
-            maxAmount,
-        });
+        const where: Prisma.DisbursementItemWhereInput = {
+            ...(batchId && { batchId }),
+            ...(investmentId && { investmentId }),
+            ...(investorId && { investorId }),
+            ...(exportFormat && { exportFormat }),
+            ...(snapshotBankName && {
+                snapshotBankName: { contains: snapshotBankName, mode: 'insensitive' },
+            }),
+            ...((minAmount !== undefined || maxAmount !== undefined) && {
+                amount: {
+                    ...(minAmount !== undefined && { gte: minAmount }),
+                    ...(maxAmount !== undefined && { lte: maxAmount }),
+                },
+            }),
+            ...(search && {
+                OR: [
+                    { reason: { contains: search, mode: 'insensitive' } },
+                    { snapshotBankName: { contains: search, mode: 'insensitive' } },
+                    { snapshotAccountName: { contains: search, mode: 'insensitive' } },
+                    { snapshotAccountNumber: { contains: search, mode: 'insensitive' } },
+                    // fullname is on the Investor row itself; email/phone on the User.
+                    { investor: { fullname: { contains: search, mode: 'insensitive' } } },
+                    { investor: { user: { email: { contains: search, mode: 'insensitive' } } } },
+                    { investor: { user: { phone: { contains: search, mode: 'insensitive' } } } },
+                ],
+            }),
+        };
 
-        // 2. Reuse the Order function — sortBy value plus an id asc tiebreaker
-        // so pages stay deterministic.
-        const orderBy =
-            buildOrderBy<Prisma.DisbursementItemOrderByWithRelationInput>(
-                this.sortColumns[sortBy],
-                sortOrder,
-            );
+        // Every sortBy value is a direct column, so no mapping is needed.
+        const orderBy: Prisma.DisbursementItemOrderByWithRelationInput[] = [
+            { [sortBy]: sortOrder },
+            // Tie-breaker on id keeps pagination deterministic.
+            { id: 'asc' as const },
+        ];
 
-        // 3. Reuse the fetch function — current page and total count in parallel.
-        const [items, total] = await fetchData(
-            this.prisma.disbursementItem,
-            where,
-            orderBy,
-            page,
-            limit,
-        );
+        // Current page and total count fetched in parallel.
+        const [items, total] = await Promise.all([
+            this.prisma.disbursementItem.findMany({
+                where,
+                orderBy,
+                skip: (page - 1) * limit,
+                take: limit,
+                include: {
+                    investor: {
+                        select: {
+                            fullname: true,
+                            status: true,
+                            user: { select: { email: true, phone: true } },
+                        },
+                    },
+                    investment: { select: { amount: true, status: true } },
+                    batch: {
+                        select: { slotLabel: true, batchDate: true, status: true },
+                    },
+                },
+            }),
+            this.prisma.disbursementItem.count({ where }),
+        ]);
+
+        const totalPages = Math.ceil(total / limit);
 
         return {
             message: 'Disbursement items fetched successfully',
@@ -121,7 +134,7 @@ export class DisbursementItemService {
                 page,
                 limit,
                 total,
-                totalPages: Math.ceil(total / limit),
+                totalPages,
             },
         };
     }
