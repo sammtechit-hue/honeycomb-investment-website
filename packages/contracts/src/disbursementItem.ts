@@ -89,7 +89,7 @@ export const disbursementItemQuerySchema = z
     investmentId: uuidSchema.optional(),
     investorId: uuidSchema.optional(),
     exportFormat: exportFormatSchema.optional(),
-    snapshotBankName: bankNameSchema,
+    snapshotBankName: bankNameSchema.optional(),
 
     // Amount range (both ends inclusive and optional).
     minAmount: nonNegativeNumberSchema.optional(),
