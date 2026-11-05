@@ -19,6 +19,7 @@ import { RequestAuditContext } from '../../utils/common types';
 import { CreateInvestmentDto } from './dto/create-investment.dto';
 import { UpdateInvestmentDto } from './dto/update-investment.dto';
 import { InvestmentQueryDto } from './dto/query-investment.dto';
+import { investmentPeriodDisbursementError } from '@investment-platform/contracts/investment';
 import { getDhakaDateOnly } from '../../utils/common/bangladeshTime.util';
 
 // Fields returned by both admin investment endpoints (list + detail). Defined
@@ -342,6 +343,23 @@ export class InvestmentService {
 
         if (!existingInvestment) {
             throw new NotFoundException(`Investment with id ${id} not found`);
+        }
+
+        // Also used in service because if during update, pass one of the value of investmentPeriodMonths or disbursementPeriod.
+        if (
+            investmentPeriodMonths !== undefined ||
+            disbursementPeriod !== undefined
+        ) {
+            const periodError = investmentPeriodDisbursementError({
+                investmentPeriodMonths:
+                    investmentPeriodMonths ??
+                    existingInvestment.investmentPeriodMonths,
+                disbursementPeriod:
+                    disbursementPeriod ?? existingInvestment.disbursementPeriod,
+            });
+            if (periodError) {
+                throw new BadRequestException(periodError);
+            }
         }
 
         const projectChanged =

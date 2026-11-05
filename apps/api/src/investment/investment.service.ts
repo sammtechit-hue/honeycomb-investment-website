@@ -20,6 +20,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateInvestmentDto } from './dto/create-investment.dto';
 import { UpdateInvestmentDto } from './dto/update-investment.dto';
 import { InvestmentQueryDto } from './dto/query-investment.dto';
+import { investmentPeriodDisbursementError } from '@investment-platform/contracts/investment';
 import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import { Env } from '../config/env';
 import { getDhakaDateOnly } from '../utils/common/bangladeshTime.util';
@@ -226,6 +227,17 @@ export class InvestmentService {
   async create(dto: CreateInvestmentDto, userId: string | undefined) {
     if (!userId) {
       throw new UnauthorizedException('Session is no longer valid');
+    }
+
+    // Cross-field contract rule, re-checked in code so every caller of this
+    // service (not just the controller DTO path) is covered. See
+    // packages/contracts/src/investment.ts.
+    const periodError = investmentPeriodDisbursementError({
+      investmentPeriodMonths: dto.investmentPeriodMonths,
+      disbursementPeriod: dto.disbursementPeriod,
+    });
+    if (periodError) {
+      throw new BadRequestException(periodError);
     }
 
     const amount = new Prisma.Decimal(dto.amount);
