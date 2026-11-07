@@ -136,9 +136,14 @@ export default function VerificationWizard({ userId }: { userId: string }) {
         body: JSON.stringify(payload),
       });
 
-      if (res.ok || res.status === 409) {
-        // 409: a profile already exists (e.g. submitted from another tab) —
-        // either way the server page now shows the submitted state.
+      // 409 is either "a profile already exists" (e.g. submitted from another
+      // tab) or a referral code taken mid-submit, which rolls everything back.
+      // Only the first means we're done — check before dropping the draft.
+      const submitted =
+        res.ok || (res.status === 409 && (await clientFetch('/api/investor')).ok);
+
+      if (submitted) {
+        // The server page now shows the submitted state.
         submittedRef.current = true;
         sessionStorage.removeItem(storageKey(userId));
         router.replace('/verification');
@@ -161,6 +166,8 @@ export default function VerificationWizard({ userId }: { userId: string }) {
             )}
           </>,
         );
+      } else if (res.status === 409) {
+        setSubmitError(<p>{error.message ?? GENERIC_ERROR}</p>);
       } else {
         setSubmitError(<p>{res.status === 429 ? RATE_LIMIT_ERROR : GENERIC_ERROR}</p>);
       }

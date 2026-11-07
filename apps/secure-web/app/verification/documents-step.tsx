@@ -8,10 +8,10 @@ import { Alert, StepCard, StepFooter } from './ui';
 
 // Shareholder KYC = own NID + photo, nominee NID + photo. Never a trade
 // licence — investors must not be asked for one.
-const ZONES: { title: string; hint: string; slots: Slot[] }[] = [
+const ZONES: { title: string; hint: string; slots: Slot[]; imagesOnly?: boolean }[] = [
   {
     title: 'National ID (NID)',
-    hint: 'Both sides required. JPG, PNG or PDF, up to 5 MB.',
+    hint: 'Both sides required. JPG, PNG, WEBP or PDF, up to 5 MB.',
     slots: [
       { key: 'nidFront', label: 'Front of your NID' },
       { key: 'nidBack', label: 'Back of your NID' },
@@ -19,12 +19,13 @@ const ZONES: { title: string; hint: string; slots: Slot[] }[] = [
   },
   {
     title: 'Passport-size photograph',
-    hint: 'A recent photo against a plain background. JPG or PNG, up to 5 MB.',
+    hint: 'A recent photo against a plain background. JPG, PNG or WEBP, up to 5 MB.',
     slots: [{ key: 'photo', label: 'Your photograph' }],
+    imagesOnly: true,
   },
   {
     title: "Nominee's National ID",
-    hint: 'Both sides required. JPG, PNG or PDF, up to 5 MB.',
+    hint: 'Both sides required. JPG, PNG, WEBP or PDF, up to 5 MB.',
     slots: [
       { key: 'nomineeNidFront', label: "Front of nominee's NID" },
       { key: 'nomineeNidBack', label: "Back of nominee's NID" },
@@ -32,8 +33,9 @@ const ZONES: { title: string; hint: string; slots: Slot[] }[] = [
   },
   {
     title: "Nominee's photograph",
-    hint: 'A recent photo against a plain background. JPG or PNG, up to 5 MB.',
+    hint: 'A recent photo against a plain background. JPG, PNG or WEBP, up to 5 MB.',
     slots: [{ key: 'nomineePhoto', label: "Nominee's photograph" }],
+    imagesOnly: true,
   },
 ];
 
@@ -82,6 +84,7 @@ export function DocumentsStep({
             title={zone.title}
             hint={zone.hint}
             slots={zone.slots}
+            imagesOnly={zone.imagesOnly}
             documents={documents}
             missing={attempted && zone.slots.some((slot) => !documents[slot.key])}
             onChange={onChange}
