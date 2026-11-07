@@ -67,4 +67,15 @@ describe('MailService (Resend)', () => {
     await mail.sendPasswordReset('a@example.com', 'https://x/reset-password#token=t', 30);
     expect(called).toBe(false);
   });
+
+  it('never sends to a seeded demo account, even with an API key', async () => {
+    let called = false;
+    global.fetch = (async () => {
+      called = true;
+      return new Response('{}');
+    }) as typeof fetch;
+    const mail = mailServiceWith({ RESEND_API_KEY: 're_test_key', MAIL_FROM: 'x <x@x.com>' });
+    await mail.sendPasswordReset('Admin@Honeycomb.test', 'https://x/reset-password#token=t', 30);
+    expect(called).toBe(false);
+  });
 });

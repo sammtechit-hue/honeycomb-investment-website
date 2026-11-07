@@ -92,6 +92,10 @@
       "types": "./dist/monthlyRateSetting.d.ts",
       "default": "./dist/monthlyRateSetting.js"
     },
+    "./demo-accounts": {
+      "types": "./dist/demo-accounts.d.ts",
+      "default": "./dist/demo-accounts.js"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {
