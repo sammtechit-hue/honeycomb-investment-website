@@ -9,11 +9,16 @@ import {
     DisbursementPeriod,
     ExportFormat,
     InvestmentStatus,
+    LogModule,
+    LogSeverity,
+    LogStatus,
     PayoutStatus,
     Prisma,
 } from '@investment-platform/db';
 import { PrismaService } from '../../prisma/prisma.service';
+import { RequestAuditContext } from '../../utils/common types';
 import { DisbursementItemQueryDto } from './dto/query-disbursement-item.dto';
+import { UpdateDisbursementItemDto } from './dto/update-disbursement-item.dto';
 
 // How many monthly profit-ledger rows make up one payout for each
 // investment disbursement period.
@@ -340,6 +345,71 @@ export class DisbursementItemService {
             message: `Disbursement Items Created Successfully: ${created.length} created, ${skipped.length} skipped`,
             success: true,
             data: { created, skipped },
+        };
+    }
+
+    // --------------------------------------------------------
+    // -------------- Update Disbursement Item Remark ----------
+    //---------------------------------------------------------
+    // Only `remarks` is editable after creation. A null / empty value clears it.
+    // Example: PATCH /admin/disbursement-item/:id  { "remarks": "..." }
+    async updateDisbursementItem(
+        id: string,
+        dto: UpdateDisbursementItemDto,
+        userId?: string,
+        context?: RequestAuditContext,
+    ) {
+        const [existingItem, admin] = await Promise.all([
+            this.prisma.disbursementItem.findUnique({
+                where: { id },
+                select: { id: true, remarks: true },
+            }),
+            userId
+                ? this.prisma.adminProfile.findUnique({
+                    where: { userId },
+                    select: { id: true, name: true },
+                })
+                : Promise.resolve(null),
+        ]);
+
+        if (!existingItem) {
+            throw new NotFoundException(`Disbursement item with id ${id} not found`);
+        }
+
+        const remarks = dto.remarks?.trim() || null;
+
+        const updated = await this.prisma.$transaction(async (tx) => {
+            const updatedItem = await tx.disbursementItem.update({
+                where: { id },
+                data: { remarks },
+            });
+
+            await tx.auditLog.create({
+                data: {
+                    adminName: admin?.name ?? 'Admin',
+                    adminProfileId: admin?.id ?? null,
+                    action: AuditAction.disbursement_item_remark_updated,
+                    module: LogModule.DISBURSEMENT,
+                    severity: LogSeverity.INFO,
+                    status: LogStatus.SUCCESS,
+                    targetLabel: `Disbursement Item Remark Updated: ${updatedItem.id}`,
+                    targetTable: 'disbursement_items',
+                    targetId: updatedItem.id,
+                    oldValue: { remarks: existingItem.remarks } as unknown as Prisma.InputJsonValue,
+                    newValue: { remarks: updatedItem.remarks } as unknown as Prisma.InputJsonValue,
+                    ipAddress: context?.ipAddress ?? null,
+                    userAgent: context?.userAgent ?? null,
+                    sessionId: context?.sessionId ?? null,
+                },
+            });
+
+            return updatedItem;
+        });
+
+        return {
+            message: 'Disbursement Item Remark Updated Successfully',
+            success: true,
+            data: updated,
         };
     }
 

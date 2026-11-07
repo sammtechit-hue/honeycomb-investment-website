@@ -41,6 +41,7 @@ enum AuditAction {
     disbursement_batch_created
     disbursement_batch_exported
     disbursement_batch_confirmed
+    disbursement_item_remark_updated // admin edited (or cleared) a disbursement item's remarks
     withdrawal_status_changed
     referral_code_generated
     company_document_uploaded
