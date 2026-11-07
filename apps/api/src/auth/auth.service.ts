@@ -7,6 +7,7 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   AuditAction,
   LogModule,
@@ -23,6 +24,8 @@ import type {
   ResetPasswordInput,
   SignupInput,
 } from '@investment-platform/contracts/auth';
+import { isDemoEmail } from '@investment-platform/contracts/demo-accounts';
+import type { Env } from '../config/env';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { AuthTokensService, IssuedTokens } from './auth-tokens.service';
@@ -58,6 +61,7 @@ const PUBLIC_USER_SELECT = {
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
+  private readonly isProduction: boolean;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -66,7 +70,10 @@ export class AuthService {
     private readonly loginAttempts: LoginAttemptsService,
     private readonly passwordTokens: PasswordTokensService,
     private readonly mail: MailService,
-  ) { }
+    config: ConfigService<Env, true>,
+  ) {
+    this.isProduction = config.get('NODE_ENV', { infer: true }) === 'production';
+  }
 
   // Creates an INVESTOR User only — the investor profile/KYC is filled in
   // afterwards on the registration page, while this session is already live.
@@ -137,6 +144,7 @@ export class AuthService {
       where: whereIdentifier(identifier),
       select: {
         id: true,
+        email: true,
         role: true,
         passwordHash: true,
         isActive: true,
@@ -147,7 +155,9 @@ export class AuthService {
       },
     });
 
-    if (!user) {
+    // Demo accounts (seed-demo, public password) never log in on a
+    // production deploy — answered exactly like an unknown account.
+    if (!user || (this.isProduction && isDemoEmail(user.email))) {
       await this.passwords.burnTime(input.password);
       await this.loginAttempts.recordFailure(identifier);
       throw new UnauthorizedException(INVALID_CREDENTIALS);

@@ -7,8 +7,10 @@ import type { DocumentKey, DocumentRef, Documents } from './schema';
 import { FieldError } from './ui';
 
 const MAX_BYTES = 5 * 1024 * 1024;
-const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-const ACCEPT_ATTR = '.jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf';
+const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const ACCEPTED_TYPES = [...IMAGE_TYPES, 'application/pdf'];
+const IMAGE_ACCEPT_ATTR = '.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp';
+const ACCEPT_ATTR = `${IMAGE_ACCEPT_ATTR},.pdf,application/pdf`;
 
 export type Slot = { key: DocumentKey; label: string };
 
@@ -35,6 +37,7 @@ export function DocumentZone({
   title,
   hint,
   slots,
+  imagesOnly = false,
   documents,
   missing,
   onChange,
@@ -43,6 +46,8 @@ export function DocumentZone({
   title: string;
   hint: string;
   slots: Slot[];
+  // Photographs must be images; ID scans may also be PDFs.
+  imagesOnly?: boolean;
   documents: Documents;
   // Set when the user tried to submit with this zone incomplete.
   missing: boolean;
@@ -64,8 +69,11 @@ export function DocumentZone({
 
   async function start(slot: Slot, file: File) {
     setErrors((prev) => ({ ...prev, [slot.key]: undefined }));
-    if (file.type && !ACCEPTED_TYPES.includes(file.type)) {
-      setErrors((prev) => ({ ...prev, [slot.key]: 'Upload a JPG, PNG, WEBP or PDF file.' }));
+    if (file.type && !(imagesOnly ? IMAGE_TYPES : ACCEPTED_TYPES).includes(file.type)) {
+      setErrors((prev) => ({
+        ...prev,
+        [slot.key]: imagesOnly ? 'Upload a JPG, PNG or WEBP image.' : 'Upload a JPG, PNG, WEBP or PDF file.',
+      }));
       return;
     }
     if (file.size > MAX_BYTES) {
@@ -218,7 +226,11 @@ export function DocumentZone({
 
           return (
             <div key={slot.key} className="flex flex-col gap-1.5">
-              <DropTarget label={slot.label} onFile={(file) => start(slot, file)} />
+              <DropTarget
+                label={slot.label}
+                accept={imagesOnly ? IMAGE_ACCEPT_ATTR : ACCEPT_ATTR}
+                onFile={(file) => start(slot, file)}
+              />
               {error && <FieldError message={error} />}
             </div>
           );
@@ -246,7 +258,15 @@ function FileSummary({ name, detail, pdf }: { name: string; detail: string; pdf:
   );
 }
 
-function DropTarget({ label, onFile }: { label: string; onFile: (file: File) => void }) {
+function DropTarget({
+  label,
+  accept,
+  onFile,
+}: {
+  label: string;
+  accept: string;
+  onFile: (file: File) => void;
+}) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
 
@@ -287,7 +307,7 @@ function DropTarget({ label, onFile }: { label: string; onFile: (file: File) => 
       <input
         ref={inputRef}
         type="file"
-        accept={ACCEPT_ATTR}
+        accept={accept}
         className="sr-only"
         tabIndex={-1}
         aria-label={`Upload ${label}`}

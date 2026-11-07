@@ -435,6 +435,9 @@ model Investor {
     totalInvestmentAmount      Decimal          @default(0) @map("total_investment_amount") @db.Decimal(18, 2)
     totalActiveInvestmentAmout Decimal          @default(0) @db.Decimal(18, 2)
     address                    String?
+    // NID number as text (the KYC record only holds card images). Printed on
+    // the investment contract. Nullable for investors registered before it existed.
+    nidNumber                  String?          @map("nid_number") @db.VarChar(20)
     profession                 String?          @db.VarChar(150)
     workplace                  String?          @db.VarChar(150)
     // Every investor always has a category and status; defaults cover the unset case.
@@ -450,6 +453,7 @@ model Investor {
 
     kycDocuments InvestorKycDocument?
     nominee      Nominee?
+    guarantor    InvestorGuarantor?
     bankAccount  InvestorBankAccount[]
     investments  Investment[]
 
@@ -560,18 +564,74 @@ model InvestorBankAccount {
 // ----------------------------------------------------------------------------
 
 model Nominee {
-    id              String  @id @default(uuid()) @db.Uuid
-    nomineeName     String  @map("nominee_name") @db.VarChar(150)
-    nomineeNidFront String? @db.VarChar(500)
-    nomineeNidBack  String? @db.VarChar(500)
-    nomineePhoto    String? @map("nominee_photo")
-    nomineePhone    String  @map("nominee_phone") @db.VarChar(20)
-    relation        String  @db.VarChar(50)
+    id               String  @id @default(uuid()) @db.Uuid
+    nomineeName      String  @map("nominee_name") @db.VarChar(150)
+    nomineeNidFront  String? @db.VarChar(500)
+    nomineeNidBack   String? @db.VarChar(500)
+    nomineePhoto     String? @map("nominee_photo")
+    nomineePhone     String  @map("nominee_phone") @db.VarChar(20)
+    relation         String  @db.VarChar(50)
+    // Printed on the investment contract; nullable for nominees added before it existed.
+    nomineeNidNumber String? @map("nominee_nid_number") @db.VarChar(20)
 
     investorId String   @unique @map("investor_id") @db.Uuid
     investor   Investor @relation(fields: [investorId], references: [id], onDelete: Cascade)
 
     @@map("nominees")
+}
+
+// ----------------------------------------------------------------------------
+// 5b. Investor Guarantors (investor side of the investment contract)
+// Optional — an investor has at most one. The company side's guarantor lives
+// on ContractSignatory.
+// ----------------------------------------------------------------------------
+
+model InvestorGuarantor {
+    id       String  @id @default(uuid()) @db.Uuid
+    name     String  @db.VarChar(150)
+    nid      String  @db.VarChar(20) // NID number as printed on the card (10, 13 or 17 digits)
+    phone    String  @db.VarChar(20)
+    relation String  @db.VarChar(50) // Relationship to the investor (সম্পর্ক)
+    address  String?
+
+    investorId String   @unique @map("investor_id") @db.Uuid
+    investor   Investor @relation(fields: [investorId], references: [id], onDelete: Cascade)
+
+    @@map("investor_guarantors")
+}
+
+// ----------------------------------------------------------------------------
+// 5c. Contract Signatories (company side of the investment contract)
+// বিনিয়োগ গ্রহণকারী (the person receiving the investment for the company) and
+// their guarantor, who carries all liability in the receiver's absence
+// (contract clause ১০). Admin-managed. Exactly one row should be active; the
+// service flips the others off in the same transaction. Rows used by an
+// investment can't be deleted (Restrict), only deactivated.
+// ----------------------------------------------------------------------------
+
+model ContractSignatory {
+    id String @id @default(uuid()) @db.Uuid
+
+    receiverName      String  @map("receiver_name") @db.VarChar(150)
+    receiverNid       String  @map("receiver_nid") @db.VarChar(20)
+    receiverPhone     String  @map("receiver_phone") @db.VarChar(20)
+    // Storage key of the scanned signature image (PNG with transparent background)
+    receiverSignature String? @map("receiver_signature")
+
+    guarantorName      String  @map("guarantor_name") @db.VarChar(150)
+    guarantorNid       String  @map("guarantor_nid") @db.VarChar(20)
+    guarantorPhone     String  @map("guarantor_phone") @db.VarChar(20)
+    guarantorRelation  String  @map("guarantor_relation") @db.VarChar(50) // Relationship to the receiver
+    guarantorSignature String? @map("guarantor_signature")
+
+    isActive  Boolean  @default(false) @map("is_active")
+    createdAt DateTime @default(now()) @map("created_at")
+    updatedAt DateTime @updatedAt @map("updated_at")
+
+    investments Investment[]
+
+    @@index([isActive])
+    @@map("contract_signatories")
 }
 
 // ----------------------------------------------------------------------------
@@ -652,6 +712,14 @@ model Investment {
     status                  InvestmentStatus   @default(pending)
 
     remarks String? @db.VarChar(255)
+
+    // Investment contract (বিনিয়োগ চুক্তি) PDF. Generated once and stored
+    // encrypted; never re-rendered, so it stays the signed snapshot even if
+    // profile or signatory data changes later.
+    contractFileKey     String?            @map("contract_file_key")
+    contractGeneratedAt DateTime?          @map("contract_generated_at")
+    contractSignatoryId String?            @map("contract_signatory_id") @db.Uuid
+    contractSignatory   ContractSignatory? @relation(fields: [contractSignatoryId], references: [id], onDelete: Restrict)
 
     createdAt DateTime @default(now()) @map("created_at")
     updatedAt DateTime @updatedAt

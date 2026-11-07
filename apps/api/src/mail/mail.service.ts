@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { isDemoEmail } from '@investment-platform/contracts/demo-accounts';
 import type { Env } from '../config/env';
 
 const RESEND_ENDPOINT = 'https://api.resend.com/emails';
@@ -15,7 +16,9 @@ interface OutgoingEmail {
 // Sends through Resend's HTTP API with plain fetch (no SDK dependency).
 // Without RESEND_API_KEY (allowed outside production only — see
 // config/env.ts) nothing is sent and the email is logged instead, so the
-// reset/invite flows are usable in local dev.
+// reset/invite flows are usable in local dev. The same happens for the
+// seeded demo accounts' undeliverable @honeycomb.test addresses, even with
+// a key set.
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
@@ -68,9 +71,9 @@ export class MailService {
   }
 
   private async send(email: OutgoingEmail): Promise<void> {
-    if (!this.apiKey) {
+    if (!this.apiKey || isDemoEmail(email.to)) {
       this.logger.warn(
-        `RESEND_API_KEY not set — email NOT sent (dev only).\n` +
+        `${this.apiKey ? 'Demo account' : 'RESEND_API_KEY not set'} — email NOT sent.\n` +
           `To: ${email.to}\nSubject: ${email.subject}\n${email.text}`,
       );
       return;

@@ -1,0 +1,27 @@
+# Local development database only — never used by staging or production.
+#
+#   docker compose up -d db
+#
+# Matches the localhost URLs in packages/db/.env.example. Host port 5433, not
+# 5432, so it doesn't clash with a natively installed Postgres. Bound to
+# 127.0.0.1 so the database isn't reachable from the rest of the network.
+services:
+  db:
+    image: postgres:16.4-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: investment_platform
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d investment_platform"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  db-data:
