@@ -789,6 +789,7 @@ export class InvestorService {
       address,
       profession,
       workplace,
+      nidNumber,
       status,
       category,
       email,
@@ -803,6 +804,7 @@ export class InvestorService {
         address,
         profession,
         workplace,
+        nidNumber,
         status,
         category,
         email,
@@ -820,6 +822,7 @@ export class InvestorService {
       address !== undefined ||
       profession !== undefined ||
       workplace !== undefined ||
+      nidNumber !== undefined ||
       category !== undefined ||
       email !== undefined ||
       phone !== undefined ||
@@ -897,11 +900,28 @@ export class InvestorService {
     const becomingActive =
       status === InvestorStatus.active && existing.status !== InvestorStatus.active;
 
+    // Investors never type NID numbers; the admin copies them from the NID
+    // images during review. The contract prints both, so approval waits for
+    // them — they may come in this same request.
+    if (becomingActive) {
+      const missing = [
+        !(nidNumber ?? existing.nidNumber) && "the investor's NID number",
+        !(nominee?.nomineeNidNumber ?? existing.nominee?.nomineeNidNumber) &&
+          "the nominee's NID number",
+      ].filter(Boolean);
+      if (missing.length) {
+        throw new BadRequestException(
+          `Enter ${missing.join(' and ')} before approving this investor.`,
+        );
+      }
+    }
+
     const investorData: Prisma.InvestorUpdateInput = {
       fullname: fullName,
       address,
       profession,
       workplace,
+      nidNumber,
       status,
       category,
       ...(becomingActive && { approvedAt: new Date(), approvedBy: userId }),
@@ -1130,6 +1150,7 @@ export class InvestorService {
           nomineeName: nominee.nomineeName,
           nomineePhone: nominee.nomineePhone,
           relation: nominee.relation,
+          nomineeNidNumber: nominee.nomineeNidNumber,
           nomineeNidFront: nominee.nomineeNidFront,
           nomineeNidBack: nominee.nomineeNidBack,
           nomineePhoto: nominee.nomineePhoto,
@@ -1264,6 +1285,7 @@ function toInvestorSnapshot(investor: InvestorWithRelations) {
     address: investor.address,
     profession: investor.profession,
     workplace: investor.workplace,
+    nidNumber: investor.nidNumber,
     category: investor.category,
     status: investor.status,
     totalInvestmentAmount: Number(investor.totalInvestmentAmount),

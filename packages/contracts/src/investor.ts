@@ -52,6 +52,14 @@ export const verificationStatusSchema = z.enum([
   'rejected',
 ]);
 
+// NID number as printed on the card: 10 (smart card), 13 or 17 digits (old
+// cards). Entered by an admin from the NID images during KYC review —
+// investors never type it — and printed on the investment contract.
+export const nidNumberSchema = z
+  .string()
+  .trim()
+  .regex(/^(\d{10}|\d{13}|\d{17})$/, 'NID number must be 10, 13 or 17 digits');
+
 // NomineeSchema
 export const nomineeSchema = z.object({
   nomineeName: z
@@ -156,6 +164,8 @@ export type InvestorUpdateInput = z.infer<typeof investorUpdateInputSchema>;
 // creation) — neither admins nor investors may set it, so it is not accepted here.
 // NOTE: approvedAt / approvedBy are system-set on the transition to `active`
 // (stamped from the acting admin's session) — they are not accepted as input.
+// NOTE: nidNumber / nominee.nomineeNidNumber are admin-only, and both must be
+// set (in this request or earlier) before an investor can become `active`.
 // ---------------------------------------------------------------------------
 export const investorAdminUpdateInputSchema = z.object({
   fullName: z
@@ -179,11 +189,15 @@ export const investorAdminUpdateInputSchema = z.object({
     .trim()
     .max(150, 'Workplace cannot exceed 150 characters')
     .optional(),
+  nidNumber: nidNumberSchema.optional(),
   status: investorStatusSchema.optional(),
   category: investorCategorySchema.optional(),
   email: emailSchema.optional(),
   phone: phoneNumberSchema.optional(),
-  nominee: nomineeSchema.partial().optional(),
+  nominee: nomineeSchema
+    .extend({ nomineeNidNumber: nidNumberSchema })
+    .partial()
+    .optional(),
   kycDocuments: kycDocumentsSchema
     .extend({
       verificationStatus: verificationStatusSchema.optional(),
