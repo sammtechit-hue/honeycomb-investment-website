@@ -44,32 +44,119 @@ export const disbursementPeriodSchema = z.enum(
   },
 );
 
+// Months behind each disbursementPeriod value (mirrors the Prisma enum).
+export const disbursementPeriodMonths: Record<
+  z.infer<typeof disbursementPeriodSchema>,
+  number
+> = {
+  monthly: 1,
+  quarterly: 3,
+  half_yearly: 6,
+  yearly: 12,
+};
+
+// Human-readable label used inside the rule's error message.
+const disbursementPeriodLabels: Record<
+  keyof typeof disbursementPeriodMonths,
+  string
+> = {
+  monthly: 'monthly',
+  quarterly: 'quarterly',
+  half_yearly: 'half-yearly',
+  yearly: 'yearly',
+};
+
+/**
+ * Cross-field rule: investmentPeriodMonths must be a positive whole number
+ * of months AND an exact multiple of the profit disbursement period (so every
+ * disbursement lands on a real cycle). Returns the error message, or null
+ * when the combination is valid.
+ *
+ * Shared by the zod refinements below and the Nest service layer (which turns
+ * a non-null result into a BadRequestException) so the rule lives in one place.
+ *
+ * When disbursementPeriod is absent (partial update payloads) the check is
+ * skipped here — callers must re-run it with the merged final values.
+ */
+export function investmentPeriodDisbursementError(input: {
+  investmentPeriodMonths?: number | null;
+  disbursementPeriod?: string | null;
+}): string | null {
+  const { investmentPeriodMonths, disbursementPeriod } = input;
+  if (
+    disbursementPeriod != null &&
+    disbursementPeriod in disbursementPeriodMonths
+  ) {
+    if (
+      typeof investmentPeriodMonths !== 'number' ||
+      !Number.isInteger(investmentPeriodMonths) ||
+      investmentPeriodMonths < 1
+    ) {
+      return 'Investment period must be a positive whole number of months';
+    }
+    const months =
+      disbursementPeriodMonths[
+        disbursementPeriod as keyof typeof disbursementPeriodMonths
+      ];
+    // monthly (1) accepts any positive integer of months.
+    if (months > 1 && investmentPeriodMonths % months !== 0) {
+      return `Investment period must be a multiple of ${months} months for ${disbursementPeriodLabels[disbursementPeriod as keyof typeof disbursementPeriodLabels]} disbursement`;
+    }
+  }
+  return null;
+}
+
+// Super-refine adapter for the rule above; issues are reported on
+// investmentPeriodMonths so forms can surface the error at that field.
+function refineInvestmentPeriodAgainstDisbursement(
+  data: {
+    investmentPeriodMonths?: number | null;
+    disbursementPeriod?: string | null;
+  },
+  ctx: z.RefinementCtx,
+): void {
+  const message = investmentPeriodDisbursementError(data);
+  if (message) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['investmentPeriodMonths'],
+      message,
+    });
+  }
+}
+
+// Field definitions only (no refinement), so the update schemas below can
+// still .pick() / .extend() from them.
+const investmentCreateFieldsSchema = z.object({
+  projectId: uuidSchema,
+  amount: moneySchema,
+  investmentType: investmentTypeSchema,
+  // Only meaningful for fixed-rate investments — enforced below since a
+  // Confirmed: an explicit period must be 3+ months.
+  investmentPeriodMonths: z.coerce
+    .number()
+    .int('Investment period must be a whole number of months')
+    .min(1, 'Minimum investment period is 1 month')
+    .default(3),
+  disbursementPeriod: disbursementPeriodSchema,
+});
+
 // InvestmentCreateInputSchema
-export const investmentCreateInputSchema = z
-  .object({
-    projectId: uuidSchema,
-    investmentDate: dateSchema.optional(),
-    amount: moneySchema,
-    investmentType: investmentTypeSchema,
-    // Only meaningful for fixed-rate investments — enforced below since a
-    // Confirmed: an explicit period must be 3+ months.
-    investmentPeriodMonths: z.coerce
-      .number()
-      .int('Investment period must be a whole number of months')
-      .min(1, 'Minimum investment period is 1 month')
-      .default(3),
-    disbursementPeriod: disbursementPeriodSchema,
-  })
+export const investmentCreateInputSchema =
+  investmentCreateFieldsSchema.superRefine(
+    refineInvestmentPeriodAgainstDisbursement,
+  );
 
 export type InvestmentCreateInput = z.infer<typeof investmentCreateInputSchema>;
 
 
-// For admin 
-export const investmentAdminUpdateInputSchema = investmentCreateInputSchema
+// For admin
+export const investmentAdminUpdateInputSchema = investmentCreateFieldsSchema
   .extend({
     status: investmentStatusSchema.optional(),
     // rate is intentionally excluded — admin sets it during approval
     rate: percentSchema.optional(),
+    investmentDate: dateSchema.optional(),
     agreementEndDate: dateSchema.optional(),
     agreementPlace: z.string().trim().max(150).optional(),
     deedOffical: z.string().trim().optional(),
@@ -92,13 +179,16 @@ export const investmentAdminUpdateInputSchema = investmentCreateInputSchema
       .max(1000, 'Special instruction cannot exceed 1000 characters')
       .optional(),
   })
-  .partial();
+  .partial()
+  // Only enforced when the payload carries both fields; the Service
+  // re-validates merged values on partial updates.
+  .superRefine(refineInvestmentPeriodAgainstDisbursement);
 
 export type InvestmentAdminUpdateInputSchema = z.infer<typeof investmentAdminUpdateInputSchema>;
 
 
 // For investor
-export const investmentUpdateInputSchema = investmentCreateInputSchema
+export const investmentUpdateInputSchema = investmentCreateFieldsSchema
   .pick({
     investmentPeriodMonths: true,
     // disbursementPeriod: true,
