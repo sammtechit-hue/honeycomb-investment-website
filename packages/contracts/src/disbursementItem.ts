@@ -70,6 +70,20 @@ export type DisbursementItemUpdateInput = z.infer<
   typeof disbursementItemUpdateInputSchema
 >;
 
+// Admin-only partial edit: only the free-form note can change after creation.
+// `null` (or an empty string) clears it.
+export const disbursementItemRemarkUpdateInputSchema = z.object({
+  remarks: z
+    .string()
+    .trim()
+    .max(255, 'Remarks cannot exceed 255 characters')
+    .nullable(),
+});
+
+export type DisbursementItemRemarkUpdateInput = z.infer<
+  typeof disbursementItemRemarkUpdateInputSchema
+>;
+
 // Disbursement Item Query Schema
 // For GET /disbursement-item and GET /admin/disbursement-item
 
