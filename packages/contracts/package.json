@@ -96,13 +96,6 @@
       "types": "./dist/roi-calculator-lead.d.ts",
       "default": "./dist/roi-calculator-lead.js"
     },
-    "./investorEditRequest": {
-      "types": "./dist/investorEditRequest.d.ts",
-      "default": "./dist/investorEditRequest.js"
-    },
-    "./monthlyRateSetting": {
-      "types": "./dist/monthlyRateSetting.d.ts",
-      "default": "./dist/monthlyRateSetting.js"
     "./fixed-rate": {
       "types": "./dist/fixedRate.d.ts",
       "default": "./dist/fixedRate.js"
