@@ -796,6 +796,8 @@ model DisbursementBatch {
 model PayoutWindow {
     id          String             @id @default(uuid()) @db.Uuid
     periodMonth DateTime           @map("period_month") @db.Date 
+    monthLabel  String
+    yearLabel   Int
     startDate   DateTime           @map("start_date") @db.Date
     endDate     DateTime           @map("end_date") @db.Date
     status      PayoutWindowStatus @default(open)
