@@ -21,7 +21,6 @@ const payoutWindowBaseSchema = z.object({
   periodMonth: dateSchema,
   startDate: dateSchema,
   endDate: dateSchema,
-  status: payoutWindowStatusSchema.default('open'),
 });
 
 type PayoutWindowCompletionState = {
