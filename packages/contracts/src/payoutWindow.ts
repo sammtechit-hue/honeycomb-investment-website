@@ -12,8 +12,6 @@ export const payoutWindowStatusSchema = z.enum(['open', 'completed'], {
   message: 'Status must be one of: open, completed',
 });
 
-
-
 // ============================================================================
 // Base Payout Window Schema
 // ============================================================================
@@ -23,10 +21,6 @@ const payoutWindowBaseSchema = z.object({
   endDate: dateSchema,
 });
 
-type PayoutWindowCompletionState = {
-  status?: z.infer<typeof payoutWindowStatusSchema>;
-  completedAt?: Date | null;
-};
 
 const addWindowDateIssues = (
   data: { startDate?: Date; endDate?: Date },

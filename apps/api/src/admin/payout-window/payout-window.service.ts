@@ -206,11 +206,11 @@ export class PayoutWindowService {
                 data: {
                     adminName: adminProfile?.name ?? 'Admin',
                     adminProfileId: adminProfile?.id ?? null,
-                    action: 'payout_window_updated' as const,
+                    action: AuditAction.payout_window_updated,
                     module: LogModule.DISBURSEMENT,
                     severity: LogSeverity.INFO,
                     status: LogStatus.SUCCESS,
-                    targetLabel: `Payout Window Updated: ${toDateOnly(updated.periodMonth)}`,
+                    targetLabel: `Payout Window Updated: ${toDateOnly(updatedRow.periodMonth)}`,
                     targetTable: 'PayoutWindow',
                     targetId: id,
                     oldValue: toPayoutWindowSnapshot(existing) as unknown as Prisma.InputJsonValue,
