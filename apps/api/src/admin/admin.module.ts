@@ -18,9 +18,10 @@ import { RoiCalculatorLeadModule } from './roi-calculator-lead/roi-calculator-le
 import { AdminNotificationModule } from './admin-notification/admin-notification.module';
 import { FixedRateModule } from './fixed-rate/fixed-rate.module';
 import { ProfitLedgerSettingsModule } from './profit-ledger-settings/profit-ledger-settings.module';
+import { PayoutWindowModule } from './payout-window/payout-window.module';
 
 @Module({
-  imports: [AdminAccountModule, InvestorModule, InvestmentModule, MonthlyRateSettingModule, AuditLogModule, DisbursementBatchModule, DisbursementItemModule, IncomingPaymentModule, InvestmentDocumentModule, ProjectModule, WithdrawalRequestModule, InvestorKycDocumentModule, MonthlyProfitLedgerModule, AdminNotificationModule, RoiCalculatorLeadModule, FixedRateModule, ProfitLedgerSettingsModule],
+  imports: [AdminAccountModule, InvestorModule, InvestmentModule, MonthlyRateSettingModule, AuditLogModule, DisbursementBatchModule, DisbursementItemModule, IncomingPaymentModule, InvestmentDocumentModule, ProjectModule, WithdrawalRequestModule, InvestorKycDocumentModule, MonthlyProfitLedgerModule, AdminNotificationModule, RoiCalculatorLeadModule, FixedRateModule, ProfitLedgerSettingsModule, PayoutWindowModule],
   controllers: [AdminController],
   providers: [AdminService]
 })
