@@ -150,6 +150,12 @@ enum DisbursementBatchStatus {
     confirmed
 }
 
+enum DisbursementItemType {
+    roi
+    principal_withdrawal
+    referral_bonus
+}
+
 enum ExportFormat {
     cbl
     beftn
@@ -161,6 +167,7 @@ enum WithdrawalStatus {
     ready
     paid
     cancelled
+    rejected
 }
 
 enum WithdrawalMethod {
@@ -812,6 +819,9 @@ model MonthlyProfitLedger {
     profitAmount Decimal      @map("profit_amount") @db.Decimal(14, 2)
     payoutStatus PayoutStatus @default(accrued) @map("payout_status")
 
+    // Amount still invested this cycle (drops after a partial withdrawal).
+    principalAmount Decimal @map("principal_amount") @db.Decimal(14, 2)
+
     investmentId String     @map("investment_id") @db.Uuid
     investment   Investment @relation(fields: [investmentId], references: [id])
 
@@ -853,11 +863,11 @@ model DisbursementBatch {
 // ----------------------------------------------------------------------------
 
 model DisbursementItem {
-    id           String        @id @default(uuid()) @db.Uuid
-    reason       String        @db.VarChar(150)
-    amount       Decimal       @db.Decimal(14, 2)
+    id           String       @id @default(uuid()) @db.Uuid
+    reason       String       @db.VarChar(150)
+    amount       Decimal      @db.Decimal(14, 2)
     exportFormat ExportFormat @map("export_format")
-    remarks      String?       @db.VarChar(255)
+    remarks      String?      @db.VarChar(255)
 
     investmentId String     @map("investment_id") @db.Uuid
     investment   Investment @relation(fields: [investmentId], references: [id])
@@ -867,6 +877,9 @@ model DisbursementItem {
 
     batchId String?            @map("batch_id") @db.Uuid
     batch   DisbursementBatch? @relation(fields: [batchId], references: [id])
+
+    type         DisbursementItemType @default(roi)
+    investorNote String?              @map("investor_note") @db.VarChar(500) // shown to the investor; `remarks` is internal
 
     snapshotBankName      String
     snapshotAccountName   String
@@ -894,10 +907,23 @@ model WithdrawalRequest {
 
     requestDate DateTime @map("request_date") @db.Date
 
-    noticePeriodDays Int?      @map("notice_period_days")
-    noticePeriodEnd  DateTime? @map("notice_period_end") @db.Date
+    // Set by the server, never by the investor. ROI on the withdrawn part stops on noticePeriodEnd.
+    noticePeriodDays Int      @map("notice_period_days")
+    noticePeriodEnd  DateTime @map("notice_period_end") @db.Date
 
     disbursementDate DateTime? @map("disbursement_date") @db.Date
+
+    overrideReason String?   @map("override_reason") @db.VarChar(500) // why the admin changed the notice; shown to the investor
+    reviewedBy     String?   @map("reviewed_by") @db.Uuid
+    reviewedAt     DateTime? @map("reviewed_at")
+    cancelReason   String?   @map("cancel_reason") @db.VarChar(500) // shown to the investor
+
+    // Last ROI on the withdrawn part (cycle start → day before notice end), paid with the next regular ROI.
+    finalRoiDays   Int?     @map("final_roi_days")
+    finalRoiAmount Decimal? @map("final_roi_amount") @db.Decimal(14, 2)
+
+    createdAt DateTime @default(now()) @map("created_at")
+    updatedAt DateTime @updatedAt @map("updated_at")
 
     status WithdrawalStatus @default(pending)
 
