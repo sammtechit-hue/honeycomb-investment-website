@@ -43,6 +43,7 @@ enum AuditAction {
     disbursement_batch_confirmed
     disbursement_item_remark_updated // admin edited (or cleared) a disbursement item's remarks
     payout_window_created // admin opened a payout window for a period month
+    payout_window_updated // admin edited a payout window
     withdrawal_status_changed
     referral_code_generated
     company_document_uploaded

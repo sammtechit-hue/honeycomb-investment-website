@@ -8,6 +8,8 @@ import {
     Query,
     UseGuards,
     UsePipes,
+    Patch,
+    Param,
 } from '@nestjs/common';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { Role } from '@investment-platform/db';
@@ -17,6 +19,7 @@ import { Roles } from '../../auth/decorators/roles.decorator';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../auth/types/jwt-payload.interface';
 import { CreatePayoutWindowDto } from './dto/create-payout-window.dto';
+import { UpdatePayoutWindowDto } from './dto/update-payout-window.dto';
 import { PayoutWindowQueryDto } from './dto/query-payout-window.dto';
 import { PayoutWindowService } from './payout-window.service';
 
@@ -34,7 +37,6 @@ export class PayoutWindowController {
     }
 
     // POST /api/admin/payout-window
-    @Post()
     @Roles(Role.ADMIN)
     create(
         @Body() createPayoutWindowDto: CreatePayoutWindowDto,
@@ -51,6 +53,31 @@ export class PayoutWindowController {
 
         return this.payoutWindowService.createPayoutWindow(
             createPayoutWindowDto,
+            user?.userId,
+            context,
+        );
+    }
+
+    // PATCH /api/admin/payout-window/:id
+    @Patch(':id')
+    @Roles(Role.ADMIN)
+    update(
+        @Param('id') id: string,
+        @Body() updatePayoutWindowDto: UpdatePayoutWindowDto,
+        @CurrentUser() user: AuthenticatedUser,
+        @Ip() ip?: string,
+        @Headers('user-agent') userAgent?: string,
+        @Headers('x-session-id') sessionId?: string,
+    ) {
+        const context = {
+            ipAddress: ip,
+            userAgent: userAgent,
+            sessionId: sessionId,
+        };
+
+        return this.payoutWindowService.updatePayoutWindow(
+            id,
+            updatePayoutWindowDto,
             user?.userId,
             context,
         );
