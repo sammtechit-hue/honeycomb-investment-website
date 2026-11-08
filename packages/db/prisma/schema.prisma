@@ -42,6 +42,8 @@ enum AuditAction {
     disbursement_batch_exported
     disbursement_batch_confirmed
     disbursement_item_remark_updated // admin edited (or cleared) a disbursement item's remarks
+    payout_window_created // admin opened a payout window for a period month
+    payout_window_updated // admin edited a payout window
     withdrawal_status_changed
     referral_code_generated
     company_document_uploaded
@@ -212,11 +214,31 @@ enum PayoutSchedule {
     YEARLY
 }
 
-enum DisbursementSlot {
-    slot_1
-    slot_2
-    slot_3
-    slot_4
+// enum DisbursementSlot {
+//     slot_1
+//     slot_2
+//     slot_3
+//     slot_4
+// }
+
+enum PayoutWindowStatus {
+    open
+    completed
+}
+
+enum Month {
+    JANUARY
+    FEBRUARY
+    MARCH
+    APRIL
+    MAY
+    JUNE
+    JULY
+    AUGUST
+    SEPTEMBER
+    OCTOBER
+    NOVEMBER
+    DECEMBER
 }
 
 enum LogModule {
@@ -744,7 +766,7 @@ model Investment {
 
     // An investment's slot is determined automatically... Admin can manually move an investment to a different slot if needed
     disbursementItems  DisbursementItem[]
-    disbursementSlot   DisbursementSlot?  @map("disbursement_slot") // investmentDate + 10 din calculate kore
+    // disbursementSlot   DisbursementSlot?  @map("disbursement_slot") // investmentDate + 10 din calculate kore
     slotManuallyMoved  Boolean            @default(false) @map("slot_manually_moved")
     slotAdjustmentDays Int?               @map("slot_adjustment_days") // koto din berlo/komlo, audit-er jonno
 
@@ -843,7 +865,7 @@ model MonthlyProfitLedger {
 
 model DisbursementBatch {
     id         String                  @id @default(uuid()) @db.Uuid
-    slot       DisbursementSlot        @map("slot")
+    // slot       DisbursementSlot        @map("slot")
     slotLabel  String                  @map("slot_label") @db.VarChar(50)
     batchDate  DateTime                @map("batch_date") @db.Date
     exportType DisbursementExportType  @map("export_type")
@@ -851,15 +873,40 @@ model DisbursementBatch {
     status     DisbursementBatchStatus @default(draft)
     createdAt  DateTime                @default(now()) @map("created_at")
 
+    windowId String       @map("window_id") @db.Uuid
+    window   PayoutWindow @relation(fields: [windowId], references: [id])
+
     items DisbursementItem[]
 
-    @@index([slot, batchDate])
     @@index([status])
     @@map("disbursement_batches")
 }
 
 // ----------------------------------------------------------------------------
-// 13. Disbursement Items
+// 13. Payout Window
+// ----------------------------------------------------------------------------
+
+model PayoutWindow {
+    id          String             @id @default(uuid()) @db.Uuid
+    periodMonth DateTime           @map("period_month") @db.Date 
+    monthLabel  Month           
+    yearLabel   Int
+    startDate   DateTime           @map("start_date") @db.Date
+    endDate     DateTime           @map("end_date") @db.Date
+    status      PayoutWindowStatus @default(open)
+    completedAt DateTime?          @map("completed_at")
+    createdAt   DateTime           @default(now()) @map("created_at")
+    updatedAt   DateTime           @updatedAt @map("updated_at")
+
+    batches DisbursementBatch[]
+
+    // "Overdue" is not stored: status = open and endDate < today.
+    @@index([status, endDate])
+    @@map("payout_windows")
+}
+
+// ----------------------------------------------------------------------------
+// 14. Disbursement Items
 // ----------------------------------------------------------------------------
 
 model DisbursementItem {
@@ -867,7 +914,8 @@ model DisbursementItem {
     reason       String       @db.VarChar(150)
     amount       Decimal      @db.Decimal(14, 2)
     exportFormat ExportFormat @map("export_format")
-    remarks      String?      @db.VarChar(255)
+    remarks      String?       @db.VarChar(255)
+    isDisbursed  Boolean      @default(false)
 
     investmentId String     @map("investment_id") @db.Uuid
     investment   Investment @relation(fields: [investmentId], references: [id])
@@ -897,7 +945,7 @@ model DisbursementItem {
 }
 
 // ----------------------------------------------------------------------------
-// 14. Withdrawal Requests
+// 15. Withdrawal Requests
 // ----------------------------------------------------------------------------
 
 model WithdrawalRequest {
@@ -939,7 +987,7 @@ model WithdrawalRequest {
 }
 
 // ----------------------------------------------------------------------------
-// 15. Incoming Payments
+// 16. Incoming Payments
 // ----------------------------------------------------------------------------
 
 model IncomingPayment {
@@ -965,7 +1013,7 @@ model IncomingPayment {
 }
 
 // ----------------------------------------------------------------------------
-// 16. Referral Codes
+// 17. Referral Codes
 // ----------------------------------------------------------------------------
 
 model ReferralCode {
@@ -996,7 +1044,7 @@ model ReferralCode {
 }
 
 // ----------------------------------------------------------------------------
-// 17. Referrals
+// 18. Referrals
 // ----------------------------------------------------------------------------
 
 model Referral {
@@ -1027,7 +1075,7 @@ model Referral {
 }
 
 // ----------------------------------------------------------------------------
-// 18. ROI Calculator Leads
+// 19. ROI Calculator Leads
 // ----------------------------------------------------------------------------
 
 model RoiCalculatorLead {
@@ -1044,7 +1092,7 @@ model RoiCalculatorLead {
 }
 
 // ----------------------------------------------------------------------------
-// 19. Admin Notifications
+// 20. Admin Notifications
 // ----------------------------------------------------------------------------
 
 model AdminNotification {
@@ -1063,7 +1111,7 @@ model AdminNotification {
 }
 
 // ----------------------------------------------------------------------------
-// 20. Audit Log
+// 21. Audit Log
 // ----------------------------------------------------------------------------
 
 model AuditLog {
@@ -1105,7 +1153,7 @@ model AuditLog {
 }
 
 // ----------------------------------------------------------------------------
-// 21. Business Settings
+// 22. Business Settings
 // ----------------------------------------------------------------------------
 
 // model BusinessSettings {

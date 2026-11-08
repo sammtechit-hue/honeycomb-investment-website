@@ -36,6 +36,10 @@
       "types": "./dist/disbursementItem.d.ts",
       "default": "./dist/disbursementItem.js"
     },
+    "./payoutWindow": {
+      "types": "./dist/payoutWindow.d.ts",
+      "default": "./dist/payoutWindow.js"
+    },
     "./referral": {
       "types": "./dist/referral.d.ts",
       "default": "./dist/referral.js"

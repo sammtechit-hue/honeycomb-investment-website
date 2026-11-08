@@ -425,6 +425,23 @@ export class InvestmentService {
             );
         }
 
+        // Money still owed must not be left behind: every disbursement item of
+        // the investment has to be marked disbursed before it can be closed.
+        if (
+            oldStatus === InvestmentStatus.active &&
+            newStatus === InvestmentStatus.closed
+        ) {
+            const undisbursedCount = await this.prisma.disbursementItem.count({
+                where: { investmentId: id, isDisbursed: false },
+            });
+
+            if (undisbursedCount > 0) {
+                throw new BadRequestException(
+                    `Investment cannot be closed while it has ${undisbursedCount} undisbursed disbursement item${undisbursedCount === 1 ? '' : 's'}`,
+                );
+            }
+        }
+
         // Activating money requires a confirmed incoming payment.
         if (
             newStatus === InvestmentStatus.active &&
