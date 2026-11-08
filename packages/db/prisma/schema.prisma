@@ -219,6 +219,21 @@ enum PayoutWindowStatus {
     completed
 }
 
+enum Month {
+    JANUARY
+    FEBRUARY
+    MARCH
+    APRIL
+    MAY
+    JUNE
+    JULY
+    AUGUST
+    SEPTEMBER
+    OCTOBER
+    NOVEMBER
+    DECEMBER
+}
+
 enum LogModule {
     AUTH // Login, logout, password resets, role changes
     USER // User management (Admins, Moderators)
@@ -796,7 +811,7 @@ model DisbursementBatch {
 model PayoutWindow {
     id          String             @id @default(uuid()) @db.Uuid
     periodMonth DateTime           @map("period_month") @db.Date 
-    monthLabel  String
+    monthLabel  Month           
     yearLabel   Int
     startDate   DateTime           @map("start_date") @db.Date
     endDate     DateTime           @map("end_date") @db.Date
