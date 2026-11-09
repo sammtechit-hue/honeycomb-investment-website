@@ -78,6 +78,11 @@ export const disbursementItemRemarkUpdateInputSchema = z.object({
     .trim()
     .max(255, 'Remarks cannot exceed 255 characters')
     .nullable(),
+  investorNote: z
+    .string()
+    .trim()
+    .max(255, 'investorNote cannot exceed 255 characters')
+    .nullable(),
 });
 
 export type DisbursementItemRemarkUpdateInput = z.infer<

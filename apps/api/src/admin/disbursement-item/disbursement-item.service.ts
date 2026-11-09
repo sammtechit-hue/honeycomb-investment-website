@@ -351,8 +351,6 @@ export class DisbursementItemService {
     // --------------------------------------------------------
     // -------------- Update Disbursement Item Remark ----------
     //---------------------------------------------------------
-    // Only `remarks` is editable after creation. A null / empty value clears it.
-    // Example: PATCH /admin/disbursement-item/:id  { "remarks": "..." }
     async updateDisbursementItem(
         id: string,
         dto: UpdateDisbursementItemDto,
@@ -362,7 +360,7 @@ export class DisbursementItemService {
         const [existingItem, admin] = await Promise.all([
             this.prisma.disbursementItem.findUnique({
                 where: { id },
-                select: { id: true, remarks: true },
+                select: { id: true, remarks: true, investorNote: true },
             }),
             userId
                 ? this.prisma.adminProfile.findUnique({
@@ -376,12 +374,14 @@ export class DisbursementItemService {
             throw new NotFoundException(`Disbursement item with id ${id} not found`);
         }
 
+        // Empty string / null clears each note; both are nullable per the schema.
         const remarks = dto.remarks?.trim() || null;
+        const investorNote = dto.investorNote?.trim() || null;
 
         const updated = await this.prisma.$transaction(async (tx) => {
             const updatedItem = await tx.disbursementItem.update({
                 where: { id },
-                data: { remarks },
+                data: { remarks, investorNote },
             });
 
             await tx.auditLog.create({
@@ -395,8 +395,14 @@ export class DisbursementItemService {
                     targetLabel: `Disbursement Item Remark Updated: ${updatedItem.id}`,
                     targetTable: 'disbursement_items',
                     targetId: updatedItem.id,
-                    oldValue: { remarks: existingItem.remarks } as unknown as Prisma.InputJsonValue,
-                    newValue: { remarks: updatedItem.remarks } as unknown as Prisma.InputJsonValue,
+                    oldValue: {
+                        remarks: existingItem.remarks,
+                        investorNote: existingItem.investorNote,
+                    } as unknown as Prisma.InputJsonValue,
+                    newValue: {
+                        remarks: updatedItem.remarks,
+                        investorNote: updatedItem.investorNote,
+                    } as unknown as Prisma.InputJsonValue,
                     ipAddress: context?.ipAddress ?? null,
                     userAgent: context?.userAgent ?? null,
                     sessionId: context?.sessionId ?? null,

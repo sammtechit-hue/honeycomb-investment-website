@@ -53,7 +53,6 @@ export class DisbursementItemController {
     }
 
     // PATCH /api/admin/disbursement-item/:id
-    // Only the free-form remarks note can be edited; null/empty clears it.
     @Patch(':id')
     update(
         @Param('id', ParseUUIDPipe) id: string,
