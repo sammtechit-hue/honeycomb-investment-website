@@ -12,11 +12,40 @@ export const payoutWindowStatusSchema = z.enum(['open', 'completed'], {
   message: 'Status must be one of: open, completed',
 });
 
+// Mirrors Prisma `Month` enum (PayoutWindow.monthLabel).
+export const payoutMonthLabelSchema = z.enum(
+  [
+    'JANUARY',
+    'FEBRUARY',
+    'MARCH',
+    'APRIL',
+    'MAY',
+    'JUNE',
+    'JULY',
+    'AUGUST',
+    'SEPTEMBER',
+    'OCTOBER',
+    'NOVEMBER',
+    'DECEMBER',
+  ],
+  {
+    message:
+      'Month label must be one of: JANUARY, FEBRUARY, MARCH, APRIL, MAY, JUNE, JULY, AUGUST, SEPTEMBER, OCTOBER, NOVEMBER, DECEMBER',
+  },
+);
+
+export const payoutYearLabelSchema = z.coerce
+  .number()
+  .int('Year label must be a whole number')
+  
+
 // ============================================================================
 // Base Payout Window Schema
 // ============================================================================
 const payoutWindowBaseSchema = z.object({
   periodMonth: dateSchema,
+  monthLabel: payoutMonthLabelSchema,
+  yearLabel: payoutYearLabelSchema,
   startDate: dateSchema,
   endDate: dateSchema,
 });
@@ -72,6 +101,8 @@ export type PayoutWindowUpdateInput = z.infer<
 // ============================================================================
 export const payoutWindowSortBySchema = z.enum([
   'periodMonth',
+  'monthLabel',
+  'yearLabel',
   'startDate',
   'endDate',
   'status',

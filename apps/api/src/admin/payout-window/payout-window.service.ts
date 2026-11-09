@@ -96,7 +96,20 @@ export class PayoutWindowService {
         userId?: string,
         context?: RequestAuditContext,
     ) {
-        const { periodMonth, startDate, endDate } = createPayoutWindowDto;
+        const { periodMonth, monthLabel, yearLabel, startDate, endDate } =
+            createPayoutWindowDto;
+
+        // monthLabel / yearLabel are derived columns: they must always agree
+        // with the month and year of periodMonth.
+        const derivedLabel = toDateLabel(periodMonth);
+        if (
+            monthLabel !== derivedLabel.monthLabel ||
+            yearLabel !== derivedLabel.yearLabel
+        ) {
+            throw new BadRequestException(
+                'monthLabel and yearLabel must match the month and year of periodMonth',
+            );
+        }
 
         // For audit log
         const adminProfile = userId
@@ -108,7 +121,7 @@ export class PayoutWindowService {
 
         const payoutWindow = await this.prisma.$transaction(async (tx) => {
             const created = await tx.payoutWindow.create({
-                data: { periodMonth, startDate, endDate },
+                data: { periodMonth, monthLabel, yearLabel, startDate, endDate },
             });
 
             // --------------------------------------------------------
@@ -153,7 +166,8 @@ export class PayoutWindowService {
         userId?: string,
         context?: RequestAuditContext,
     ) {
-        const { periodMonth, startDate, endDate } = updatePayoutWindowDto;
+        const { periodMonth, monthLabel, yearLabel, startDate, endDate } =
+            updatePayoutWindowDto;
 
         // Admin profile (for the audit log) and the current row (404 check)
         const [adminProfile, existing] = await Promise.all([
@@ -174,6 +188,8 @@ export class PayoutWindowService {
 
         const data: Prisma.PayoutWindowUpdateInput = {
             ...(periodMonth !== undefined && { periodMonth }),
+            ...(monthLabel !== undefined && { monthLabel }),
+            ...(yearLabel !== undefined && { yearLabel }),
             ...(startDate !== undefined && { startDate }),
             ...(endDate !== undefined && { endDate }),
         };
@@ -190,6 +206,26 @@ export class PayoutWindowService {
 
         if (datesChanged && effectiveStart >= effectiveEnd) {
             throw new BadRequestException('Start date must be before end date');
+        }
+
+        // The effective label after the update must still agree with the
+        // effective period month (only checked when either side is involved).
+        if (
+            periodMonth !== undefined ||
+            monthLabel !== undefined ||
+            yearLabel !== undefined
+        ) {
+            const derived = toDateLabel(periodMonth ?? existing.periodMonth);
+            const effectiveMonthLabel = monthLabel ?? existing.monthLabel;
+            const effectiveYearLabel = yearLabel ?? existing.yearLabel;
+            if (
+                effectiveMonthLabel !== derived.monthLabel ||
+                effectiveYearLabel !== derived.yearLabel
+            ) {
+                throw new BadRequestException(
+                    'monthLabel and yearLabel must match the month and year of periodMonth',
+                );
+            }
         }
 
         const updated = await this.prisma.$transaction(async (tx) => {
@@ -234,6 +270,8 @@ export class PayoutWindowService {
 
 function toPayoutWindowSnapshot(payoutWindow: {
     periodMonth: Date;
+    monthLabel: string;
+    yearLabel: number;
     startDate: Date;
     endDate: Date;
     status: string;
@@ -241,12 +279,38 @@ function toPayoutWindowSnapshot(payoutWindow: {
 }) {
     return {
         periodMonth: toDateOnly(payoutWindow.periodMonth),
+        monthLabel: payoutWindow.monthLabel,
+        yearLabel: payoutWindow.yearLabel,
         startDate: toDateOnly(payoutWindow.startDate),
         endDate: toDateOnly(payoutWindow.endDate),
         status: payoutWindow.status,
         completedAt: payoutWindow.completedAt
             ? payoutWindow.completedAt.toISOString()
             : null,
+    };
+}
+
+// Derives PayoutWindow's monthLabel / yearLabel from a date-only column
+// (@db.Date). Values are UTC-midnight Dates, so UTC accessors are exact.
+const MONTH_LABELS = [
+    'JANUARY',
+    'FEBRUARY',
+    'MARCH',
+    'APRIL',
+    'MAY',
+    'JUNE',
+    'JULY',
+    'AUGUST',
+    'SEPTEMBER',
+    'OCTOBER',
+    'NOVEMBER',
+    'DECEMBER',
+] as const;
+
+function toDateLabel(date: Date) {
+    return {
+        monthLabel: MONTH_LABELS[date.getUTCMonth()],
+        yearLabel: date.getUTCFullYear(),
     };
 }
 
