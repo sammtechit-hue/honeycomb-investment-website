@@ -290,6 +290,7 @@ export class MonthlyProfitLedgerService {
 
             candidates.push({
                 investmentId: inv.id,
+                principalAmount: inv.amount,
                 cycleStart: actualCycleStart,
                 cycleEnd,
                 profitAmount,
