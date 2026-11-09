@@ -22,6 +22,7 @@ import { RequestAuditContext } from '../utils/common types';
 import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import * as bcrypt from 'bcrypt';
 import { BCRYPT_ROUNDS } from '../auth/auth.constants';
+import { KycFilesService } from '../files/kyc-files.service';
 
 // Selected Field for investor can see
 const INVESTOR_PROFILE_SELECT = {
@@ -84,7 +85,10 @@ const INVESTOR_PROFILE_SELECT = {
 
 @Injectable()
 export class InvestorService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly kycFiles: KycFilesService,
+  ) { }
 
   async findOne(user: AuthenticatedUser) {
     // fetech existing investor data using auth userid as given in function param
@@ -157,6 +161,16 @@ export class InvestorService {
         );
       }
     }
+
+    // Document links must be this user's own uploads (POST /api/files/kyc).
+    await this.kycFiles.assertOwnedUploads(userId, [
+      dto.kycDocuments?.nidFront,
+      dto.kycDocuments?.nidBack,
+      dto.kycDocuments?.photo,
+      dto.nominee.nomineeNidFront,
+      dto.nominee.nomineeNidBack,
+      dto.nominee.nomineePhoto,
+    ]);
 
     // Check that kyc file are given and set status kyc_uploaded if not, set status pending.
     const kycInput = dto.kycDocuments;
@@ -323,6 +337,16 @@ export class InvestorService {
     if (!profileChanges && !nomineeChanges && !kycChanges && !userChanges) {
       throw new BadRequestException('No changes detected');
     }
+
+    // Same rule as createInvestor: document links must be the user's uploads.
+    await this.kycFiles.assertOwnedUploads(user.userId, [
+      dto.kycDocuments?.nidFront,
+      dto.kycDocuments?.nidBack,
+      dto.kycDocuments?.photo,
+      dto.nominee?.nomineeNidFront,
+      dto.nominee?.nomineeNidBack,
+      dto.nominee?.nomineePhoto,
+    ]);
 
     if (userChanges) {
       const clash = await this.prisma.user.findFirst({
