@@ -26,6 +26,7 @@ export const auditActionSchema = z.enum([
   'disbursement_batch_created',
   'disbursement_batch_exported',
   'disbursement_batch_confirmed',
+  'disbursement_batch_deleted',
   'disbursement_item_remark_updated',
   'withdrawal_status_changed',
   'referral_code_generated',
