@@ -46,10 +46,15 @@ const envSchema = z.object({
   // /api to this server on the same host (host-only cookie is strictest).
   COOKIE_DOMAIN: z.string().min(1).optional(),
 
-  // Fallback fixed rate (percent) used to create an investment when no active
-  // FixedRate row exists. Matches the public site's FIXED_RATE_BPS / 100.
+  // Fallback fixed rate (percent) used to create an investment when the active
+  // BusinessSettings row has no rate. Matches the public site's FIXED_RATE_BPS / 100.
   FIXED_RATE: z.coerce.number().positive().default(2.5),
 
+  // Fallback delay (in days) before profit counting starts for an investment,
+  // used by the monthly profit ledger job when the active BusinessSettings row
+  // leaves countingStartAfterDays empty. Same 1–28 range as the settings field.
+  COUNTING_START_AFTER_DAYS: z.coerce.number().int().min(0).default(10),
+  CYCLE_DAY: z.coerce.number().int().min(1).max(28).default(11),
   // Number of reverse proxies in front of the API (nginx = 1). Required for
   // req.ip to be the real client IP, which the admin IP allowlist and rate
   // limiting depend on. 0 = connect directly (dev).

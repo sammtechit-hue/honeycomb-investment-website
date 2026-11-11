@@ -15,8 +15,6 @@ import { ProjectModule } from './project/project.module';
 import { NomineeModule } from './nominee/nominee.module';
 import { InvestorBankAccountModule } from './investor-bank-account/investor-bank-account.module';
 import { InvestorKycDocumentModule } from './investor-kyc-document/investor-kyc-document.module';
-import { DisbursementBatchModule } from './disbursement-batch/disbursement-batch.module';
-import { DisbursementItemModule } from './disbursement-item/disbursement-item.module';
 import { WithdrawalRequestModule } from './withdrawal-request/withdrawal-request.module';
 import { IncomingPaymentModule } from './incoming-payment/incoming-payment.module';
 import { ReferralModule } from './referral/referral.module';
@@ -50,8 +48,6 @@ import { MonthlyProfitLedgerModule } from './monthly-profit-ledger/monthly-profi
     NomineeModule,
     InvestorBankAccountModule,
     InvestorKycDocumentModule,
-    DisbursementBatchModule,
-    DisbursementItemModule,
     WithdrawalRequestModule,
     IncomingPaymentModule,
     ReferralModule,

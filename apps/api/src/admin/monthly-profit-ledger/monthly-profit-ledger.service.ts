@@ -1,10 +1,12 @@
 
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type {
     MonthlyProfitLedgerQuery,
     MonthlyProfitLedgerUpdateInput,
 } from '@investment-platform/contracts/monthlyProfitLedger';
 import { PrismaService } from '../../prisma/prisma.service';
+import type { Env } from '../../config/env';
 
 import {
     InvestmentType,
@@ -38,6 +40,7 @@ function computeProfit(
 export class MonthlyProfitLedgerService {
     constructor(
         private readonly prisma: PrismaService,
+        private readonly config: ConfigService<Env, true>,
     ) { }
 
     private result(
@@ -150,19 +153,21 @@ export class MonthlyProfitLedgerService {
         const today = getDhakaDateOnly();
 
         // Must run on the 11th (Bangladesh date).
-        // Fetch setcycleday from the active MonthlyProfitLedgerSettings row.
-        const settings = await this.prisma.monthlyProfitLedgerSettings.findFirst({
+        // Fetch setcycleday from the active BusinessSettings row.
+        const settings = await this.prisma.businessSettings.findFirst({
             where: { isActive: true },
-            select: { setcycleday: true },
+            select: { setcycleday: true, countingStartAfterDays: true },
         });
 
         if (!settings?.setcycleday) {
             throw new NotFoundException(
-                'No active MonthlyProfitLedgerSettings row found — cycle day is not configured',
+                'No active BusinessSettings row found — cycle day is not configured',
             );
         }
 
-        const setcycleday = settings.setcycleday;
+        const setcycleday = settings.setcycleday ??
+            this.config.get('CYCLE_DAY', { infer: true }) ?? 11;
+
 
         if (today.getUTCDate() !== setcycleday) {
             throw new BadRequestException(
@@ -226,11 +231,16 @@ export class MonthlyProfitLedgerService {
             );
         }
 
-        const rateMonth = monthlyRateRows.ratePercent; 
+        const rateMonth = monthlyRateRows.ratePercent;
 
         const candidates: Prisma.MonthlyProfitLedgerCreateManyInput[] = [];
 
         let skipped = 0;
+        // Prefer the active settings row; fall back to the validated env default
+        // when the column is NULL (settings are optional at the contract level).
+        const countingDelayDays =
+            settings.countingStartAfterDays ??
+            this.config.get('COUNTING_START_AFTER_DAYS', { infer: true }) ?? 10;
 
         for (const inv of investments) {
             if (!inv.investmentDate) {
@@ -240,8 +250,8 @@ export class MonthlyProfitLedgerService {
 
             const invDate = toDateOnly(inv.investmentDate);
 
-            // Counting starts 10 days after the investment date.
-            const countingStart = addDays(invDate, 10);
+            // Counting starts countingDelayDays after the investment date.
+            const countingStart = addDays(invDate, countingDelayDays);
             // console.log(countingStart, "countingStart")
 
             // Investment is not eligible for this cycle yet.

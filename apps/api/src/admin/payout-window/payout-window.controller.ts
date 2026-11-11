@@ -37,6 +37,7 @@ export class PayoutWindowController {
     }
 
     // POST /api/admin/payout-window
+    @Post()
     @Roles(Role.ADMIN)
     create(
         @Body() createPayoutWindowDto: CreatePayoutWindowDto,
