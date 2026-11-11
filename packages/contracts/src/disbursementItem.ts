@@ -70,8 +70,10 @@ export type DisbursementItemUpdateInput = z.infer<
   typeof disbursementItemUpdateInputSchema
 >;
 
-// Admin-only partial edit: only the free-form note can change after creation.
-// `null` (or an empty string) clears it.
+// Admin-only partial edit: the free-form notes can change after creation and the
+// item can be attached to a disbursement batch. `null` (or an empty string for a
+// note) clears it; omitting `batchId` leaves the current batch unchanged, while
+// `null` detaches the item.
 export const disbursementItemRemarkUpdateInputSchema = z.object({
   remarks: z
     .string()
@@ -83,6 +85,7 @@ export const disbursementItemRemarkUpdateInputSchema = z.object({
     .trim()
     .max(255, 'investorNote cannot exceed 255 characters')
     .nullable(),
+  batchId: uuidSchema.nullable().optional(),
 });
 
 export type DisbursementItemRemarkUpdateInput = z.infer<
@@ -124,3 +127,27 @@ export const disbursementItemQuerySchema = z
   })
 
 export type DisbursementItemQuery = z.infer<typeof disbursementItemQuerySchema>;
+
+
+// Isdisbursed true for items and update batch
+//-----------------------------------------------------------------
+export const addItemsToBatchInpu = z.object({
+  batchId: uuidSchema,
+  itemIds: z
+    .array(z.string().uuid('Each item ID must be a valid UUID'))
+    .min(1, 'At least one item must be provided'),
+})
+  .superRefine((data, ctx) => {
+    const uniqueItemIds = new Set(data.itemIds);
+
+    if (uniqueItemIds.size !== data.itemIds.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['itemIds'],
+        message: 'Duplicate item IDs are not allowed',
+      });
+    }
+  })
+
+
+export type AddItemsToBatchInpu = z.infer<typeof addItemsToBatchInpu>;
