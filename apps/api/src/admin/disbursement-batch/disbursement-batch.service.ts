@@ -1,9 +1,8 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, AuditAction, LogModule, LogSeverity, LogStatus } from '@investment-platform/db';
+import { Prisma, AuditAction, LogModule, LogSeverity, LogStatus, PayoutStatus } from '@investment-platform/db';
 import { RequestAuditContext } from '../../utils/common types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { buildOrderBy } from '../../utils/common/build-order-by.util';
-import { fetchData } from '../../utils/common/fetchData.util';
 import { CreateDisbursementBatchDto } from './dto/create-disbursement-batch.dto';
 import { UpdateDisbursementBatchDto } from './dto/update-disbursement-batch.dto';
 import { DisbursementBatchQueryDto } from './dto/query-disbursement-batch.dto';
@@ -41,14 +40,18 @@ export class DisbursementBatchService {
             sortOrder,
         );
 
-        // Reuse the fetch function
-        const [batches, total] = await fetchData(
-            this.prisma.disbursementBatch,
-            where,
-            orderBy,
-            page,
-            limit,
-        );
+        // Not reusing the shared fetchData helper: the list has to carry the
+        // batch's payout line items in the same response.
+        const [batches, total] = await Promise.all([
+            this.prisma.disbursementBatch.findMany({
+                where,
+                orderBy,
+                skip: (page - 1) * limit,
+                take: limit,
+                include: { items: true },
+            }),
+            this.prisma.disbursementBatch.count({ where }),
+        ]);
 
         return {
             message: 'Disbursement batches fetched successfully',
@@ -205,34 +208,72 @@ export class DisbursementBatchService {
             );
         }
 
-        try {
-            const updated = await this.prisma.disbursementBatch.update({
-                where: { id },
-                data: {
-                    ...(slotLabel !== undefined && { slotLabel }),
-                    ...(batchDate !== undefined && { batchDate }),
-                    ...(exportType !== undefined && { exportType }),
-                    ...(fileUrl !== undefined && { fileUrl }),
-                    ...(status !== undefined && { status }),
-                },
-            });
+        // Confirming is the payout step: the batch status change, the items
+        // flagged as disbursed, the ledger rows marked paid and the audit entry
+        // must all land together or not at all.
+        const isConfirming = status === 'confirmed';
 
-            await this.prisma.auditLog.create({
-                data: {
-                    adminName: admin?.name ?? 'Admin',
-                    adminProfileId: admin?.id ?? null,
-                    action: AuditAction.disbursement_batch_updated,
-                    module: LogModule.DISBURSEMENT,
-                    severity: LogSeverity.INFO,
-                    status: LogStatus.SUCCESS,
-                    targetLabel: `Disbursement Batch Updated: ${batch.slotLabel}`,
-                    targetTable: 'disbursement_batches',
-                    targetId: batch.id,
-                    oldValue: toDisbursementBatchSnapshot(batch) as unknown as Prisma.InputJsonValue,
-                    ipAddress: context?.ipAddress ?? null,
-                    userAgent: context?.userAgent ?? null,
-                    sessionId: context?.sessionId ?? null,
-                },
+        try {
+            const updated = await this.prisma.$transaction(async (tx) => {
+                const updatedBatch = await tx.disbursementBatch.update({
+                    where: { id },
+                    data: {
+                        ...(slotLabel !== undefined && { slotLabel }),
+                        ...(batchDate !== undefined && { batchDate }),
+                        ...(exportType !== undefined && { exportType }),
+                        ...(fileUrl !== undefined && { fileUrl }),
+                        ...(status !== undefined && { status }),
+                    },
+                });
+
+                let payoutCounts:
+                    | { itemsMarkedDisbursed: number; ledgerRowsDisbursed: number }
+                    | undefined;
+
+                if (isConfirming) {
+                    // Every item in this batch is paid out by the confirmation.
+                    const disbursedItems = await tx.disbursementItem.updateMany({
+                        where: { batchId: id },
+                        data: { isDisbursed: true },
+                    });
+
+                    // The profit ledger rows paid by those items follow them.
+                    const disbursedLedger = await tx.monthlyProfitLedger.updateMany({
+                        where: { disbursementItem: { batchId: id } },
+                        data: { payoutStatus: PayoutStatus.disbursed },
+                    });
+
+                    payoutCounts = {
+                        itemsMarkedDisbursed: disbursedItems.count,
+                        ledgerRowsDisbursed: disbursedLedger.count,
+                    };
+                }
+
+                await tx.auditLog.create({
+                    data: {
+                        adminName: admin?.name ?? 'Admin',
+                        adminProfileId: admin?.id ?? null,
+                        action: AuditAction.disbursement_batch_updated,
+                        module: LogModule.DISBURSEMENT,
+                        severity: LogSeverity.INFO,
+                        status: LogStatus.SUCCESS,
+                        targetLabel: `Disbursement Batch Updated: ${batch.slotLabel}`,
+                        targetTable: 'disbursement_batches',
+                        targetId: batch.id,
+                        oldValue: toDisbursementBatchSnapshot(batch) as unknown as Prisma.InputJsonValue,
+                        ...(isConfirming && {
+                            newValue: {
+                                batch: toDisbursementBatchSnapshot(updatedBatch),
+                                ...payoutCounts,
+                            } as unknown as Prisma.InputJsonValue,
+                        }),
+                        ipAddress: context?.ipAddress ?? null,
+                        userAgent: context?.userAgent ?? null,
+                        sessionId: context?.sessionId ?? null,
+                    },
+                });
+
+                return updatedBatch;
             });
 
             return {
@@ -374,7 +415,7 @@ function ordinal(day: number): string {
     }
 }
 
-
+// 1st-10th November
 function buildSlotLabel(startDate: Date, endDate: Date): string {
     const sameMonth =
         startDate.getUTCFullYear() === endDate.getUTCFullYear() &&

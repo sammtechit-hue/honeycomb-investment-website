@@ -445,7 +445,8 @@ export class DisbursementItemService {
     // -------- Add Disbursement Items To A Batch -------------
     //---------------------------------------------------------
     // PATCH /admin/disbursement-batch/items
-    // Attaches the selected items to a draft batch and marks them disbursed.
+    // Attaches the selected items to a draft batch. The items are only marked
+    // disbursed later, when the batch is confirmed.
     async addDisbursementItemToBatch(
         dto: AddItemsToBatchDto,
         userId?: string,
@@ -525,7 +526,8 @@ export class DisbursementItemService {
             );
         }
 
-        // 6. Attach the items, mark them disbursed and audit — atomically.
+        // 6. Attach the items and audit — atomically. `isDisbursed` stays false
+        // until the batch is confirmed.
         const updatedCount = await this.prisma.$transaction(async (tx) => {
             const result = await tx.disbursementItem.updateMany({
                 where: {
@@ -534,7 +536,6 @@ export class DisbursementItemService {
                 },
                 data: {
                     batchId,
-                    // isDisbursed: true,
                 },
             });
 
@@ -568,7 +569,6 @@ export class DisbursementItemService {
                     } as unknown as Prisma.InputJsonValue,
                     newValue: {
                         batchId,
-                        isDisbursed: true,
                         itemIds,
                     } as unknown as Prisma.InputJsonValue,
                     ipAddress: context?.ipAddress ?? null,

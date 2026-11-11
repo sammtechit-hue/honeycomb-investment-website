@@ -53,8 +53,8 @@ const envSchema = z.object({
   // Fallback delay (in days) before profit counting starts for an investment,
   // used by the monthly profit ledger job when the active BusinessSettings row
   // leaves countingStartAfterDays empty. Same 1–28 range as the settings field.
-  COUNTING_START_AFTER_DAYS: z.coerce.number().int().min(1).max(28).default(10),
-
+  COUNTING_START_AFTER_DAYS: z.coerce.number().int().min(0).default(10),
+  CYCLE_DAY: z.coerce.number().int().min(1).max(28).default(11),
   // Number of reverse proxies in front of the API (nginx = 1). Required for
   // req.ip to be the real client IP, which the admin IP allowlist and rate
   // limiting depend on. 0 = connect directly (dev).

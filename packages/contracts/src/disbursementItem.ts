@@ -131,7 +131,7 @@ export type DisbursementItemQuery = z.infer<typeof disbursementItemQuerySchema>;
 
 // Isdisbursed true for items and update batch
 //-----------------------------------------------------------------
-export const addItemsToBatchInpu = z.object({
+export const addItemsToBatchInput = z.object({
   batchId: uuidSchema,
   itemIds: z
     .array(z.string().uuid('Each item ID must be a valid UUID'))
@@ -150,4 +150,4 @@ export const addItemsToBatchInpu = z.object({
   })
 
 
-export type AddItemsToBatchInpu = z.infer<typeof addItemsToBatchInpu>;
+export type AddItemsToBatchInpu = z.infer<typeof addItemsToBatchInput>;

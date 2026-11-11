@@ -165,7 +165,9 @@ export class MonthlyProfitLedgerService {
             );
         }
 
-        const setcycleday = settings.setcycleday;
+        const setcycleday = settings.setcycleday ??
+            this.config.get('CYCLE_DAY', { infer: true }) ?? 11;
+
 
         if (today.getUTCDate() !== setcycleday) {
             throw new BadRequestException(
@@ -229,7 +231,7 @@ export class MonthlyProfitLedgerService {
             );
         }
 
-        const rateMonth = monthlyRateRows.ratePercent; 
+        const rateMonth = monthlyRateRows.ratePercent;
 
         const candidates: Prisma.MonthlyProfitLedgerCreateManyInput[] = [];
 
@@ -238,7 +240,7 @@ export class MonthlyProfitLedgerService {
         // when the column is NULL (settings are optional at the contract level).
         const countingDelayDays =
             settings.countingStartAfterDays ??
-            this.config.get('COUNTING_START_AFTER_DAYS', { infer: true });
+            this.config.get('COUNTING_START_AFTER_DAYS', { infer: true }) ?? 10;
 
         for (const inv of investments) {
             if (!inv.investmentDate) {

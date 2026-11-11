@@ -178,7 +178,7 @@ export class BusinessSettingsService {
             updateBusinessSettingsDto;
 
         // For audit log
-        const [adminProfile, existing] = await Promise.all([
+        const [adminProfile, existingBusinessSettings] = await Promise.all([
             userId
                 ? this.prisma.adminProfile.findUnique({
                     where: { userId },
@@ -190,7 +190,11 @@ export class BusinessSettingsService {
             }),
         ]);
 
-        if (!existing) {
+        if (!adminProfile){
+            throw new NotFoundException(`adminProfile not found`);
+        }
+
+        if (!existingBusinessSettings) {
             throw new NotFoundException(`Business settings with id ${id} not found`);
         }
 
@@ -243,7 +247,7 @@ export class BusinessSettingsService {
                         : `Business Settings Updated: ${updated.id}`,
                     targetTable: 'BusinessSettings',
                     targetId: updated.id.toString(),
-                    oldValue: toBusinessSettingsSnapshot(existing) as unknown as Prisma.InputJsonValue,
+                    oldValue: toBusinessSettingsSnapshot(existingBusinessSettings) as unknown as Prisma.InputJsonValue,
                     newValue: toBusinessSettingsSnapshot(updated) as unknown as Prisma.InputJsonValue,
                     ipAddress: context?.ipAddress ?? null,
                     userAgent: context?.userAgent ?? null,

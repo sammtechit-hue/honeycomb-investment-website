@@ -16,6 +16,7 @@ const DaySchema = z
     .min(1, 'Cycle day must be between 1 and 28')
     .max(28, 'Cycle day must be between 1 and 28');
 
+
 const businessSettingsLabelSchema = z
     .string()
     .trim()
@@ -26,7 +27,11 @@ const businessSettingsLabelSchema = z
 export const businessSettingsCreateInputSchema = z.object({
     rate: percentSchema.optional(),
     setcycleday: DaySchema.optional(),
-    countingStartAfterDays: DaySchema.optional(),
+    countingStartAfterDays: z
+        .coerce
+        .number()
+        .int('Cycle day must be a whole number')
+        .min(0, 'Cycle day must be at least 0').optional(),
 
     label: businessSettingsLabelSchema.optional(),
 })
