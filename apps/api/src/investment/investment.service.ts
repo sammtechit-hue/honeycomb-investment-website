@@ -280,8 +280,9 @@ export class InvestmentService {
 
     this.assertProjectAcceptsInvestment(project, amount);
 
-    const databaseRate = await this.prisma.fixedRate.findFirst({
+    const databaseRate = await this.prisma.businessSettings.findFirst({
       where: { isActive: true },
+      select: { rate: true },
     })
 
     // for setting investmentDate
