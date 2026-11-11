@@ -96,13 +96,9 @@
       "types": "./dist/roi-calculator-lead.d.ts",
       "default": "./dist/roi-calculator-lead.js"
     },
-    "./fixed-rate": {
-      "types": "./dist/fixedRate.d.ts",
-      "default": "./dist/fixedRate.js"
-    },
-    "./profit-ledger-settings": {
-      "types": "./dist/profitLedgerSettings.d.ts",
-      "default": "./dist/profitLedgerSettings.js"
+    "./business-settings": {
+      "types": "./dist/business-settings.d.ts",
+      "default": "./dist/business-settings.js"
     },
     "./demo-accounts": {
       "types": "./dist/demo-accounts.d.ts",

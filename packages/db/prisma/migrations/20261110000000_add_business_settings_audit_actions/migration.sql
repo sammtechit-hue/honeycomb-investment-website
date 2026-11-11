@@ -6,5 +6,5 @@
 -- the enum.
 
 
-ALTER TYPE "AuditAction" ADD VALUE 'fixed_rate_set';
-ALTER TYPE "AuditAction" ADD VALUE 'fixed_rate_updated';
+ALTER TYPE "AuditAction" ADD VALUE 'business_settings_set';
+ALTER TYPE "AuditAction" ADD VALUE 'business_settings_updated';

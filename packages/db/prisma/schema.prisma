@@ -34,10 +34,8 @@ enum AuditAction {
     investment_status_changed
     monthly_rate_set
     monthly_rate_updated // any admin edit to an existing monthly rate setting (rate, active flag, period)
-    fixed_rate_set
-    fixed_rate_updated
-    profit_ledger_settings_set // profit ledger cycle-day setting created
-    profit_ledger_settings_updated // any edit to an existing profit ledger settings row
+    business_settings_set // business settings (rate, cycle day, counting start) created
+    business_settings_updated // any edit to an existing business settings row
     disbursement_batch_created
     disbursement_batch_updated // admin edit to an existing disbursement batch
     disbursement_batch_exported
@@ -820,18 +818,6 @@ model MonthlyRateSetting {
 // ----------------------------------------------------------------------------
 // 11. Monthly Profit Ledger
 // ----------------------------------------------------------------------------
-
-model MonthlyProfitLedgerSettings {
-    id          Int @id @default(autoincrement())
-    setcycleday Int
-
-    label    String? @db.VarChar(200)
-    isActive Boolean @default(true)
-
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
-}
-
 model MonthlyProfitLedger {
     id String @id @default(uuid()) @db.Uuid
 
@@ -1157,15 +1143,12 @@ model AuditLog {
 // ----------------------------------------------------------------------------
 // 22. Business Settings
 // ----------------------------------------------------------------------------
-
-// model BusinessSettings {
-//     id        Int      @id @default(autoincrement())
-//     fixedRate Decimal? @db.Decimal(2, 2)
-// }
-
-model FixedRate {
+model BusinessSettings {
     id   Int      @id @default(autoincrement())
+
     rate Decimal? @db.Decimal(3, 2)
+    setcycleday Int?
+    countingStartAfterDays Int?
 
     label    String? @db.VarChar(200)
     isActive Boolean @default(true)
@@ -1173,5 +1156,7 @@ model FixedRate {
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
 }
+
+
 
 // Anouncement for investor
