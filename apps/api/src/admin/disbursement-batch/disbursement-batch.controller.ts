@@ -26,6 +26,8 @@ import { CreateDisbursementBatchDto } from './dto/create-disbursement-batch.dto'
 import { UpdateDisbursementBatchDto } from './dto/update-disbursement-batch.dto';
 import { DisbursementBatchQueryDto } from './dto/query-disbursement-batch.dto';
 import { DisbursementBatchService } from './disbursement-batch.service';
+import { AddItemsToBatchDto } from '../disbursement-item/dto/add-items-to-batch.dto';
+import { DisbursementItemService } from '../disbursement-item/disbursement-item.service';
 
 // Admin disbursement batch endpoints — list/filter batches, create a batch
 // draft and move it through draft → exported → confirmed.
@@ -38,6 +40,7 @@ import { DisbursementBatchService } from './disbursement-batch.service';
 export class DisbursementBatchController {
     constructor(
         private readonly disbursementBatchService: DisbursementBatchService,
+        private readonly disbursementItemService: DisbursementItemService,
     ) { }
 
     // GET /api/admin/disbursement-batch?search=1st&exportType=cbl&status=draft
@@ -71,6 +74,30 @@ export class DisbursementBatchController {
         return this.disbursementBatchService.createDisbursementBatch(
             windowId,
             createDisbursementBatchDto,
+            user?.userId,
+            context,
+        );
+    }
+
+    // PATCH /api/admin/disbursement-batch/items
+    // Attaches the selected items to a draft batch and marks them disbursed.
+    // Declared before `PATCH :id` so "items" is never parsed as a UUID id.
+    @Patch('items')
+    addItems(
+        @Body() addItemsToBatchDto: AddItemsToBatchDto,
+        @CurrentUser() user: AuthenticatedUser,
+        @Ip() ip?: string,
+        @Headers('user-agent') userAgent?: string,
+        @Headers('x-session-id') sessionId?: string,
+    ) {
+        const context = {
+            ipAddress: ip,
+            userAgent: userAgent,
+            sessionId: sessionId,
+        };
+
+        return this.disbursementItemService.addDisbursementItemToBatch(
+            addItemsToBatchDto,
             user?.userId,
             context,
         );
