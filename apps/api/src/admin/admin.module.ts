@@ -18,10 +18,9 @@ import { RoiCalculatorLeadModule } from './roi-calculator-lead/roi-calculator-le
 import { AdminNotificationModule } from './admin-notification/admin-notification.module';
 import { PayoutWindowModule } from './payout-window/payout-window.module';
 import { BusinessSettingsModule } from './business-settings/business-settings.module';
-import { RefferalCodeModule } from './refferal-code/refferal-code.module';
 
 @Module({
-  imports: [AdminAccountModule, InvestorModule, InvestmentModule, MonthlyRateSettingModule, AuditLogModule, DisbursementBatchModule, DisbursementItemModule, IncomingPaymentModule, InvestmentDocumentModule, ProjectModule, WithdrawalRequestModule, InvestorKycDocumentModule, MonthlyProfitLedgerModule, AdminNotificationModule, RoiCalculatorLeadModule, PayoutWindowModule, BusinessSettingsModule, RefferalCodeModule],
+  imports: [AdminAccountModule, InvestorModule, InvestmentModule, MonthlyRateSettingModule, AuditLogModule, DisbursementBatchModule, DisbursementItemModule, IncomingPaymentModule, InvestmentDocumentModule, ProjectModule, WithdrawalRequestModule, InvestorKycDocumentModule, MonthlyProfitLedgerModule, AdminNotificationModule, RoiCalculatorLeadModule, PayoutWindowModule, BusinessSettingsModule],
   controllers: [AdminController],
   providers: [AdminService]
 })
