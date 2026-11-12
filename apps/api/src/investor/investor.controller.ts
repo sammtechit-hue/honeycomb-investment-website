@@ -49,16 +49,8 @@ export class InvestorController {
   create(
     @Body() createInvestorDto: CreateInvestorDto,
     @CurrentUser() user: AuthenticatedUser,
-    @Ip() ip?: string,
-    @Headers('user-agent') userAgent?: string,
-    @Headers('x-session-id') sessionId?: string,
   ) {
-    const context = {
-      ipAddress: ip,
-      userAgent: userAgent,
-      sessionId: sessionId,
-    };
-    return this.investorService.createInvestor(createInvestorDto, user?.userId, context);
+    return this.investorService.createInvestor(createInvestorDto, user?.userId);
   }
 
   // PATCH /api/investor/:id/update

@@ -19,6 +19,7 @@ import {
 } from '@investment-platform/db';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RequestAuditContext } from '../../utils/common types';
+import { generateUniqueReferralCode } from '../../utils/common/generateReferralCode.utils';
 import { CreateInvestorDto } from './dto/create-investor.dto';
 import { UpdateInvestorDto } from './dto/update-investor.dto';
 import { InvestorQueryDto } from './dto/query-investor.dto';
@@ -959,6 +960,10 @@ export class InvestorService {
           if (phone !== undefined) updated.user.phone = phone;
         }
 
+        if (becomingActive) {
+          await this.ensureReferralCode(tx, id);
+        }
+
         await tx.auditLog.create({
           data: {
             adminName: admin?.name ?? 'Admin',
@@ -1126,6 +1131,27 @@ export class InvestorService {
       }
       throw err;
     }
+  }
+
+  // Approval is when the investor becomes eligible to refer others. An existing
+  // unused, active code is reused; otherwise a fresh one is issued.
+  private async ensureReferralCode(
+    tx: Prisma.TransactionClient,
+    investorId: string,
+  ) {
+    const reusable = await tx.referralCode.findFirst({
+      where: { referrerId: investorId, isUsed: false, isActive: true },
+      select: { id: true },
+    });
+
+    if (reusable) return;
+
+    await tx.referralCode.create({
+      data: {
+        code: await generateUniqueReferralCode(tx),  //modular function in utils
+        referrerId: investorId,
+      },
+    });
   }
 
   private nomineeNestedWrite(
