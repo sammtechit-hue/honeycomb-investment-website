@@ -908,7 +908,7 @@ export class InvestorService {
       const missing = [
         !(nidNumber ?? existing.nidNumber) && "the investor's NID number",
         !(nominee?.nomineeNidNumber ?? existing.nominee?.nomineeNidNumber) &&
-          "the nominee's NID number",
+        "the nominee's NID number",
       ].filter(Boolean);
       if (missing.length) {
         throw new BadRequestException(
@@ -1146,12 +1146,35 @@ export class InvestorService {
 
     if (reusable) return;
 
-    await tx.referralCode.create({
+    // await tx.referralCode.create({
+    //   data: {
+    //     code: await generateUniqueReferralCode(tx),  //modular function in utils
+    //     referrerId: investorId,
+    //   },
+    // });
+
+    const newReferralCode = await tx.referralCode.create({
       data: {
-        code: await generateUniqueReferralCode(tx),  //modular function in utils
+        code: await generateUniqueReferralCode(tx),
         referrerId: investorId,
       },
+      select: {
+        id: true,
+      },
     });
+
+    // Deactivate previous active referral codes
+    await tx.referralCode.updateMany({
+      where: {
+        referrerId: investorId,
+        isActive: true,
+        id: { not: newReferralCode.id },
+      },
+      data: {
+        isActive: false,
+      },
+    });
+
   }
 
   private nomineeNestedWrite(

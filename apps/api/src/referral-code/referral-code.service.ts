@@ -73,12 +73,25 @@ export class ReferralCodeService {
         );
       }
 
-      return tx.referralCode.create({
+      const newReferralCode = await tx.referralCode.create({
         data: {
           code: await generateUniqueReferralCode(tx),
           referrerId: investor.id,
         },
       });
+
+      // Deactivate all previous active referral codes.
+      await tx.referralCode.updateMany({
+        where: {
+          referrerId: investor.id,
+          isActive: true,
+          id: { not: newReferralCode.id },
+        },
+        data: {
+          isActive: false,
+        },
+      });
+      
     });
 
     return {
