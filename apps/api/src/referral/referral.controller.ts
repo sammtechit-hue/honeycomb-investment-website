@@ -2,68 +2,51 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
   Query,
+  UseGuards,
   UsePipes,
 } from '@nestjs/common';
 import { ZodValidationPipe } from 'nestjs-zod';
-import { CreateReferralDto } from './dto/create-referral.dto';
-import { UpdateReferralDto } from './dto/update-referral.dto';
-import { ReferralQueryDto } from './dto/query-referral.dto';
 import { ReferralService } from './referral.service';
+import { ReferralQueryDto } from './dto/query-referral.dto';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import type { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { Role } from '@investment-platform/db';
 
-// Investor-facing referral endpoints — who referred whom, which referral code
-// was used and the bonus that was paid out.
-// Validation is scoped to this controller (@UsePipes) instead of globally —
-// see main.ts for why.
 @Controller('referral')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(Role.INVESTOR)
 @UsePipes(ZodValidationPipe)
 export class ReferralController {
-  constructor(private readonly referralService: ReferralService) {}
+  constructor(private readonly referralService: ReferralService) { }
 
-  // GET /api/referral?search=ABC123&referrerId=&referredInvestorId=&referralCodeId=
-  //   &minBonusAmount=&maxBonusAmount=&fromDate=&toDate=
-  //   &page=1&limit=10&sortBy=createdAt&sortOrder=desc
+  // GET /api/referral?search=ABC123&referrerId=&referredInvestorId=&referralCodeId=&minBonusAmount=&maxBonusAmount=&fromDate=&toDate=&page=1&limit=10&sortBy=createdAt&sortOrder=desc
   @Get()
-  findAll(@Query() query: ReferralQueryDto) {
-    // Search, filters, bonus/date ranges, sort and pagination are validated by
-    // ReferralQueryDto.
-    return this.referralService.findAll(query);
+  findAll(
+    @Query() query: ReferralQueryDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    if (user.role !== Role.INVESTOR) {
+          throw new ForbiddenException(
+            'Only investors allow',
+          );
+        }
+    return this.referralService.findAllReferral(query, user?.userId);
   }
 
   // GET /api/referral/:id
   @Get(':id')
   findOne(@Param('id', ParseUUIDPipe) id: string) {
-    // Return a single referral data
     return this.referralService.findOne(id);
   }
 
-  // POST /api/referral — referrerId, referredInvestorId and referralCodeId are
-  // required; bonusPercent defaults to 1.00% (the Prisma default).
-  @Post()
-  create(@Body() createReferralDto: CreateReferralDto) {
-    return this.referralService.create(createReferralDto);
-  }
-
-  // PATCH /api/referral/:id
-  @Patch(':id')
-  update(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() updateReferralDto: UpdateReferralDto,
-  ) {
-    // Only the fields provided in the request
-    // will be updated.
-
-    return this.referralService.update(id, updateReferralDto);
-  }
-
-  // DELETE /api/referral/:id
-  @Delete(':id')
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.referralService.remove(id);
-  }
 }

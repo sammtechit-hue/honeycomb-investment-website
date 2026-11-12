@@ -77,10 +77,6 @@ export const referralSortBySchema = z.enum([
 
 export const referralQuerySchema = z
   .object({
-    
-    // investor names (relation fields). VarChar(150) investor names.
-    search: searchValidationSchema,
-
     // --- Filters ---
     referrerId: uuidSchema.optional(),
     referredInvestorId: uuidSchema.optional(),
