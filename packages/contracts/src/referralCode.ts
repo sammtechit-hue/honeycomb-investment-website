@@ -2,44 +2,6 @@ import { z } from 'zod';
 import { dateSchema, limitValidationSchema, pageValidationSchema, queryBooleanSchema, searchValidationSchema, sortOrderSchema, uuidSchema } from './common.js';
 
 
-// The code itself — VarChar(20) and unique in Prisma. Normalized to upper case
-// so "abc123" and "ABC123" cannot become two different codes.
-export const referralCodeValueSchema = z
-  .string()
-  .trim()
-  .min(4, 'Referral code must be at least 4 characters')
-  .max(20, 'Referral code cannot exceed 20 characters')
-  .regex(/^[A-Za-z0-9]+$/, 'Referral code may only contain letters and numbers')
-  .transform((val) => val.toUpperCase());
-
-// ============================================================================
-// Base Referral Code Schema
-// ============================================================================
-// Keep this as a ZodObject so the update schema can call `.partial()`.
-// ============================================================================
-
-const referralCodeBaseSchema = z.object({
-  // The shareable code (unique in Prisma — the database rejects duplicates).
-  code: referralCodeValueSchema,
-
-  // Investor who owns and created this referral code.
-  referrerId: uuidSchema,
-
-  // Investor who redeemed the code — null/omitted while it is still unused.
-  referredId: uuidSchema.nullish(),
-
-  // Whether the code has been redeemed — mirrors the Prisma default of false.
-  isUsed: z.boolean().default(false),
-
-  // When the code stops being redeemable.
-  expiresAt: dateSchema.optional(),
-
-  // When the code was redeemed.
-  usedAt: dateSchema.optional(),
-});
-
-// Create rule: a code may only be marked as used once somebody has actually
-// redeemed it, so `referredId` must be sent together with `isUsed: true`.
 const addUsedCodeIssues = (
   data: {
     isUsed?: boolean | null;
@@ -65,9 +27,7 @@ const addUsedCodeIssues = (
   }
 };
 
-// Update rule: the body is partial, so only what it actually states can be
-// checked. `referredId` may already be stored on the row, therefore only an
-// explicit `referredId: null` conflicts with `isUsed: true`.
+
 const addPartialUsedCodeIssues = (
   data: {
     isUsed?: boolean | null;
@@ -93,11 +53,29 @@ const addPartialUsedCodeIssues = (
   }
 };
 
+export const referralCodeValueSchema = z
+  .string()
+  .trim()
+  .min(4, 'Referral code must be at least 4 characters')
+  .max(20, 'Referral code cannot exceed 20 characters')
+  .regex(/^[A-Za-z0-9]+$/, 'Referral code may only contain letters and numbers')
+  .transform((val) => val.toUpperCase());
+
+// ============================================================================
+// Base Referral Code Schema
+// ============================================================================
+const referralCodeBaseSchema = z.object({
+  referrerId: uuidSchema,
+  referredId: uuidSchema.nullish(),
+  isUsed: z.boolean().default(false),
+  expiresAt: dateSchema.optional(),
+  usedAt: dateSchema.optional(),
+});
+
 // ============================================================================
 // Referral Code Create Schema
 // For POST /refferal-code
 // ============================================================================
-
 export const referralCodeCreateInputSchema = referralCodeBaseSchema.superRefine(
   addUsedCodeIssues,
 );
