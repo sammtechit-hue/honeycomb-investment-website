@@ -46,6 +46,7 @@ enum AuditAction {
     payout_window_updated // admin edited a payout window
     withdrawal_status_changed
     referral_code_generated
+    referral_updated // any admin edit to an existing referral (bonus fields or relations)
     company_document_uploaded
     // Auth / staff accounts (apps/api/src/auth, admin/admin-account)
     admin_login
