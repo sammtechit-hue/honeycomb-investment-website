@@ -49,7 +49,7 @@ export class ReferralService {
 
   // For getting all Referral's data with filtering, searching, sorting & pagination.
   // Example: GET /api/referral?search=ABC123&referrerId=&referredInvestorId=
-  //   &referralCodeId=&minBonusAmount=&maxBonusAmount=&fromDate=&toDate=
+  //   &minBonusAmount=&maxBonusAmount=&fromDate=&toDate=
   //   &page=1&limit=10&sortBy=createdAt&sortOrder=desc
   async findAllReferral(query: ReferralQueryDto, userId: string | undefined) {
     if (!userId) {
@@ -70,7 +70,6 @@ export class ReferralService {
 
     const {
       referredInvestorId,
-      referralCodeId,
       minBonusAmount,
       maxBonusAmount,
       fromDate,
@@ -84,7 +83,6 @@ export class ReferralService {
     const where: Prisma.ReferralWhereInput = {
       referrerId: investor.id,
       ...(referredInvestorId && { referredInvestorId }),
-      ...(referralCodeId && { referralCodeId }),
       ...((minBonusAmount !== undefined || maxBonusAmount !== undefined) && {
         bonusAmount: {
           ...(minBonusAmount !== undefined && { gte: minBonusAmount }),
