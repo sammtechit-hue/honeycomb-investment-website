@@ -17,6 +17,7 @@ import { RequestAuditContext } from '../../utils/common types';
 import { ReferralQueryDto } from './dto/query-referral.dto';
 import { UpdateReferralDto } from './dto/update-referral.dto';
 import { buildOrderBy } from '../../utils/common/build-order-by.util';
+import { fetchData } from '../../utils/common/fetchData.util';
 
 const REFERRAL_LIST_SELECT = {
     id: true,
@@ -125,17 +126,15 @@ export class ReferralService {
             sortOrder,
         );
 
-        // Current page and total count in parallel.
-        const [referrals, total] = await Promise.all([
-            this.prisma.referral.findMany({
-                where,
-                select: REFERRAL_LIST_SELECT,
-                orderBy,
-                skip: (page - 1) * limit,
-                take: limit,
-            }),
-            this.prisma.referral.count({ where }),
-        ]);
+        // Reuse the fetch function — current page and total count in parallel.
+        const [referrals, total] = await fetchData(
+            this.prisma.referral,
+            where,
+            orderBy,
+            page,
+            limit,
+            { select: REFERRAL_LIST_SELECT },
+        );
 
         return {
             message: 'Referrals fetched successfully',

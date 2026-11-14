@@ -8,6 +8,7 @@ import type { ReferralQuery } from '@investment-platform/contracts/referral';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReferralQueryDto } from './dto/query-referral.dto';
 import { buildOrderBy } from '../utils/common/build-order-by.util';
+import { fetchData } from '../utils/common/fetchData.util';
 
 // Fields returned by the referral list endpoint. Explicit select (never bare
 // include) so investor relations can't leak credential / KYC / bank fields.
@@ -103,17 +104,15 @@ export class ReferralService {
       sortOrder,
     );
 
-    // Current page and total count in parallel.
-    const [referrals, total] = await Promise.all([
-      this.prisma.referral.findMany({
-        where,
-        select: REFERRAL_LIST_SELECT,
-        orderBy,
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
-      this.prisma.referral.count({ where }),
-    ]);
+    // Reuse the fetch function — current page and total count in parallel.
+    const [referrals, total] = await fetchData(
+      this.prisma.referral,
+      where,
+      orderBy,
+      page,
+      limit,
+      { select: REFERRAL_LIST_SELECT },
+    );
 
     return {
       message: 'Referrals fetched successfully',

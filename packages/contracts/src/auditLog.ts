@@ -30,6 +30,7 @@ export const auditActionSchema = z.enum([
   'disbursement_item_remark_updated',
   'withdrawal_status_changed',
   'referral_code_generated',
+  'referral_code_updated',
   'referral_updated',
   'company_document_uploaded',
   'admin_login',

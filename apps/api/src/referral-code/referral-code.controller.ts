@@ -31,7 +31,7 @@ export class ReferralCodeController {
   constructor(private readonly refferalCodeService: ReferralCodeService) { }
 
   // GET /api/refferal-code?search=ABC123&referrerId=&referredId=&isUsed=false
-  //   &expiresAfter=&expiresBefore=&fromDate=&toDate=&page=1&limit=10&sortBy=createdAt&sortOrder=desc
+  //   &page=1&limit=10&sortBy=createdAt&sortOrder=desc
   @Get()
   findAll(@Query() query: ReferralCodeQueryDto) {
     return this.refferalCodeService.findAllReferralCode(query);

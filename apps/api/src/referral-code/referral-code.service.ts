@@ -23,8 +23,6 @@ export class ReferralCodeService {
       referrerId,
       referredId,
       isUsed,
-      expiresAfter,
-      expiresBefore,
       page,
       limit,
       sortBy,

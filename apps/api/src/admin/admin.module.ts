@@ -19,9 +19,10 @@ import { AdminNotificationModule } from './admin-notification/admin-notification
 import { PayoutWindowModule } from './payout-window/payout-window.module';
 import { BusinessSettingsModule } from './business-settings/business-settings.module';
 import { ReferralModule } from './referral/referral.module';
+import { ReferralCodeModule } from './referral-code/referral-code.module';
 
 @Module({
-  imports: [AdminAccountModule, InvestorModule, InvestmentModule, MonthlyRateSettingModule, AuditLogModule, DisbursementBatchModule, DisbursementItemModule, IncomingPaymentModule, InvestmentDocumentModule, ProjectModule, WithdrawalRequestModule, InvestorKycDocumentModule, MonthlyProfitLedgerModule, AdminNotificationModule, RoiCalculatorLeadModule, PayoutWindowModule, BusinessSettingsModule, ReferralModule],
+  imports: [AdminAccountModule, InvestorModule, InvestmentModule, MonthlyRateSettingModule, AuditLogModule, DisbursementBatchModule, DisbursementItemModule, IncomingPaymentModule, InvestmentDocumentModule, ProjectModule, WithdrawalRequestModule, InvestorKycDocumentModule, MonthlyProfitLedgerModule, AdminNotificationModule, RoiCalculatorLeadModule, PayoutWindowModule, BusinessSettingsModule, ReferralModule, ReferralCodeModule],
   controllers: [AdminController],
   providers: [AdminService]
 })
