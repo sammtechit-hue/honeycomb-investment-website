@@ -675,6 +675,7 @@ model Project {
     description String?
 
     status ProjectStatus @default(DRAFT)
+    projectRate                Decimal? @db.Decimal(3, 2)
 
     minimumInvestment Decimal  @default(10000) @db.Decimal(18, 2)
     maximumInvestment Decimal? @db.Decimal(18, 2)

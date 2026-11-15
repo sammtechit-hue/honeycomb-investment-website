@@ -8,19 +8,24 @@ import {
     AuditAction,
     IncomingPaymentStatus,
     InvestmentStatus,
+    InvestmentType,
     InvestorStatus,
     LogModule,
     LogSeverity,
     LogStatus,
     Prisma,
 } from '@investment-platform/db';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
+import type { Env } from '../../config/env';
 import { RequestAuditContext } from '../../utils/common types';
 import { CreateInvestmentDto } from './dto/create-investment.dto';
 import { UpdateInvestmentDto } from './dto/update-investment.dto';
 import { InvestmentQueryDto } from './dto/query-investment.dto';
 import { investmentPeriodDisbursementError } from '@investment-platform/contracts/investment';
 import { getDhakaDateOnly } from '../../utils/common/bangladeshTime.util';
+import { fetchData } from '../../utils/common/fetchData.util';
+import { assertProjectAcceptsInvestment } from '../../utils/common/project-investment.util';
 
 // Fields returned by both admin investment endpoints (list + detail). Defined
 // once so the two views can never drift apart.
@@ -122,7 +127,10 @@ function statusTransitionError(
 
 @Injectable()
 export class InvestmentService {
-    constructor(private readonly prisma: PrismaService) { }
+    constructor(
+        private readonly prisma: PrismaService,
+        private readonly config: ConfigService<Env, true>,
+    ) { }
 
     // For Getting All Investment's Data with filtering, searching, sorting & pagination
     // Example: GET /admin/investment?search=&status=active&investmentType=fixed&page=1&limit=10
@@ -220,17 +228,15 @@ export class InvestmentService {
             { id: 'desc' as const },
         ];
 
-        // 3. Fetch the current page and the total count in parallel.
-        const [investments, total] = await Promise.all([
-            this.prisma.investment.findMany({
-                where,
-                orderBy,
-                skip: (page - 1) * limit,
-                take: limit,
-                select: INVESTMENT_ADMIN_SELECT,
-            }),
-            this.prisma.investment.count({ where }),
-        ]);
+        // 3. Reuse the fetch function — current page and total count in parallel.
+        const [investments, total] = await fetchData(
+            this.prisma.investment,
+            where,
+            orderBy,
+            page,
+            limit,
+            { select: INVESTMENT_ADMIN_SELECT },
+        );
 
         return {
             message: 'Investments fetched successfully',
@@ -264,13 +270,167 @@ export class InvestmentService {
     }
 
 
-    // For Creating Investment
-    async create(createInvestmentDto: CreateInvestmentDto) {
-        const { projectId, amount } = createInvestmentDto;
+    // For Creating Investment (admin, on behalf of an investor)
+    async createInvestment(
+        createInvestmentDto: CreateInvestmentDto,
+        userId?: string,
+        context?: RequestAuditContext,
+    ) {
+        const {
+            investorId, projectId, amount, investmentType,
+            investmentPeriodMonths, disbursementPeriod, rate: requestedRate,
+            investmentDate, agreementEndDate, agreementPlace,
+            deedOffical, deedGoverment, chequeGiven, cashVoucharGiven,
+            souvenirGiven, isSouvenirApplicable, certificateGiven,
+            isCertificateApplicable, specialInstruction, status
+        } = createInvestmentDto;
 
-        return {
-            message: 'Investment Created Successfully',
+        // Cross-field contract rule, re-checked here so every caller of this
+        // service (not just the DTO-validated HTTP path) is covered.
+        const periodError = investmentPeriodDisbursementError({
+            investmentPeriodMonths,
+            disbursementPeriod,
+        });
+        if (periodError) {
+            throw new BadRequestException(periodError);
+        }
+
+        const [investor, project] = await Promise.all([
+            this.prisma.investor.findUnique({
+                where: { id: investorId },
+                select: { id: true, fullname: true },
+            }),
+            this.prisma.project.findUnique({
+                where: { id: projectId },
+                select: {
+                    id: true,
+                    status: true,
+                    isActive: true,
+                    isVisible: true,
+                    startDate: true,
+                    endDate: true,
+                    minimumInvestment: true,
+                    maximumInvestment: true,
+                    projectRate: true,
+                },
+            }),
+        ]);
+
+        if (!investor) {
+            throw new NotFoundException(`Investor with id ${investorId} not found`);
+        }
+        if (!project) {
+            throw new NotFoundException(`Project with id ${projectId} not found`);
+        }
+
+        assertProjectAcceptsInvestment(project, new Prisma.Decimal(amount));
+
+        // Fixed investments take the project's own rate. When the project has
+        // none, fall back to the active BusinessSettings rate, then to the env
+        // default. Unfixed investments keep the rate the admin supplied.
+        let rate =
+            requestedRate !== undefined
+                ? new Prisma.Decimal(requestedRate)
+                : undefined;
+
+        if (investmentType === InvestmentType.fixed) {
+            if (project.projectRate != null) {
+                rate = project.projectRate;
+            } else {
+                const settings = await this.prisma.businessSettings.findFirst({
+                    where: { isActive: true },
+                    select: { rate: true },
+                });
+
+                rate =
+                    settings?.rate ??
+                    new Prisma.Decimal(this.config.get('FIXED_RATE', { infer: true }));
+            }
+        }
+
+        const data: Prisma.InvestmentCreateInput = {
+            amount: new Prisma.Decimal(amount),
+            investmentType,
+            investmentPeriodMonths,
+            disbursementPeriod,
+            ...(rate !== undefined && { rate: new Prisma.Decimal(rate) }),
+            // Later slot math needs a date even if the admin omits one.
+            investmentDate: investmentDate ?? getDhakaDateOnly(),
+            ...(agreementEndDate !== undefined && { agreementEndDate }),
+            ...(agreementPlace !== undefined && { agreementPlace }),
+            ...(deedOffical !== undefined && { deedOffical }),
+            ...(deedGoverment !== undefined && { deedGoverment }),
+            ...(chequeGiven !== undefined && { chequeGiven }),
+            ...(cashVoucharGiven !== undefined && { cashVoucharGiven }),
+            ...(souvenirGiven !== undefined && { souvenirGiven }),
+            ...(isSouvenirApplicable !== undefined && { isSouvenirApplicable }),
+            ...(certificateGiven !== undefined && { certificateGiven }),
+            ...(status !== undefined && { status }),
+            ...(isCertificateApplicable !== undefined && { isCertificateApplicable }),
+            ...(specialInstruction !== undefined && { specialInstruction }),
+            // A new row always starts pending; status changes go through the
+            // audited update flow, which enforces the payment/investor rules.
+            ...(status !== undefined && {status}),
+            investor: { connect: { id: investorId } },
+            project: { connect: { id: projectId } },
         };
+
+        try {
+            const created = await this.prisma.$transaction(async (tx) => {
+                const investment = await tx.investment.create({
+                    data,
+                    select: INVESTMENT_ADMIN_SELECT,
+                });
+
+                const admin = userId
+                    ? await tx.adminProfile.findUnique({
+                        where: { userId },
+                        select: { id: true, name: true },
+                    })
+                    : null;
+
+                await tx.auditLog.create({
+                    data: {
+                        adminName: admin?.name ?? 'Admin',
+                        adminProfileId: admin?.id ?? null,
+                        action: AuditAction.investment_created,
+                        module: LogModule.INVESTMENT,
+                        severity: LogSeverity.INFO,
+                        status: LogStatus.SUCCESS,
+                        targetLabel: `Investment Created: ${investor.fullname}`,
+                        targetTable: 'investments',
+                        targetId: investment.id,
+                        oldValue: Prisma.DbNull,
+                        newValue: toInvestmentSnapshot(investment) as unknown as Prisma.InputJsonValue,
+                        ipAddress: context?.ipAddress ?? null,
+                        userAgent: context?.userAgent ?? null,
+                        sessionId: context?.sessionId ?? null,
+                    },
+                });
+
+                return investment;
+            });
+
+            return {
+                message: 'Investment Created Successfully',
+                success: true,
+                data: created,
+            };
+        } catch (err) {
+            if (err instanceof Prisma.PrismaClientKnownRequestError) {
+                if (err.code === 'P2003') {
+                    throw new BadRequestException(
+                        'One or more referenced records do not exist.',
+                    );
+                }
+                if (err.code === 'P2000') {
+                    throw new BadRequestException(
+                        'One of the provided values is too long for its field.',
+                    );
+                }
+            }
+            throw err;
+        }
     }
 
 
@@ -516,7 +676,7 @@ export class InvestmentService {
                     );
                 }
 
-                
+
                 await applyInvestorTotals(
                     tx,
                     existingInvestment.investorId,

@@ -47,9 +47,27 @@ export class InvestmentController {
   }
 
   // POST /api/admin/investment
+  // Creates an investment row on behalf of an investor (investorId is part of
+  // the payload) and records the action in the audit log.
   @Post()
-  create(@Body() createInvestmentDto: CreateInvestmentDto) {
-    return this.investmentService.create(createInvestmentDto);
+  create(
+    @Body() createInvestmentDto: CreateInvestmentDto,
+    @CurrentUser() user: AuthenticatedUser,
+    @Ip() ip?: string,
+    @Headers('user-agent') userAgent?: string,
+    @Headers('x-session-id') sessionId?: string,
+  ) {
+    const context = {
+      ipAddress: ip,
+      userAgent: userAgent,
+      sessionId: sessionId,
+    };
+
+    return this.investmentService.createInvestment(
+      createInvestmentDto,
+      user?.userId,
+      context,
+    );
   }
 
   // PATCH /api/admin/investment/:id

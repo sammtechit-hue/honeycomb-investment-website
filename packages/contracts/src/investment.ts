@@ -186,6 +186,46 @@ export const investmentAdminUpdateInputSchema = investmentCreateFieldsSchema
 
 export type InvestmentAdminUpdateInputSchema = z.infer<typeof investmentAdminUpdateInputSchema>;
 
+// For admin — creates an investment row on behalf of an investor, so the
+// owning investorId is required alongside the regular investment fields.
+// `status` is intentionally excluded: a new row starts as `pending` and moves
+// through the audited status transitions in the admin update endpoint.
+export const investmentAdminCreateInputSchema = investmentCreateFieldsSchema
+  .extend({
+    investorId: uuidSchema,
+
+    // rate is normally set during approval, but may be known upfront.
+    rate: percentSchema,
+    investmentDate: dateSchema,
+    agreementEndDate: dateSchema.optional(),
+    agreementPlace: z.string().trim().max(150).optional(),
+    deedOffical: z.string().trim().optional(),
+    deedGoverment: z.string().trim().optional(),
+    status: investmentStatusSchema,
+
+    // --- Physical Items Tracking ---
+    chequeGiven: z.boolean().optional(),
+    cashVoucharGiven: z.boolean().optional(),
+
+    souvenirGiven: z.boolean().optional(),
+    isSouvenirApplicable: z.boolean().optional(),
+
+    certificateGiven: z.boolean().optional(),
+    isCertificateApplicable: z.boolean().optional(),
+
+    // --- Notes ---
+    specialInstruction: z
+      .string()
+      .trim()
+      .max(1000, 'Special instruction cannot exceed 1000 characters')
+      .optional(),
+  })
+  .superRefine(refineInvestmentPeriodAgainstDisbursement);
+
+export type InvestmentAdminCreateInputSchema = z.infer<
+  typeof investmentAdminCreateInputSchema
+>;
+
 
 // For investor
 export const investmentUpdateInputSchema = investmentCreateFieldsSchema

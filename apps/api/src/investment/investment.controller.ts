@@ -66,7 +66,7 @@ export class InvestmentController {
         'Only investors can create an investment.',
       );
     }
-    return this.investmentService.create(createInvestmentDto, user?.userId);
+    return this.investmentService.createInvestment(createInvestmentDto, user?.userId);
   }
 
   // PATCH /api/investment/:id
