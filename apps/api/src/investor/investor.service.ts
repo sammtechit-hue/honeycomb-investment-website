@@ -23,6 +23,8 @@ import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import * as bcrypt from 'bcrypt';
 import { BCRYPT_ROUNDS } from '../auth/auth.constants';
 import { KycFilesService } from '../files/kyc-files.service';
+import { getDhakaNow } from '../utils/common/bangladeshTime.util';
+import { fetchData } from '../utils/common/fetchData.util';
 
 // Selected Field for investor can see
 const INVESTOR_PROFILE_SELECT = {
@@ -151,13 +153,13 @@ export class InvestorService {
       }
       if (
         referralCodeRecord.expiresAt &&
-        referralCodeRecord.expiresAt < new Date()
+        referralCodeRecord.expiresAt < getDhakaNow()
       ) {
         throw new BadRequestException('This referral code has expired');
       }
-      if (referralCodeRecord.isUsed) {
+      if (referralCodeRecord.isUsed && referralCodeRecord.isActive) {
         throw new BadRequestException(
-          'This referral code has already been used',
+          'This referral code has already been used or not active',
         );
       }
     }
@@ -248,7 +250,7 @@ export class InvestorService {
           // That's exactly the kind of race condition you want to protect against.
           // Conditional update closes the race: only succeeds if still unused.
           const { count } = await tx.referralCode.updateMany({
-            where: { id: referralCodeRecord.id, isUsed: false },
+            where: { id: referralCodeRecord.id, isUsed: false, isActive: true },
             data: {
               isUsed: true,
               usedAt: new Date(),
@@ -269,6 +271,7 @@ export class InvestorService {
               referredInvestorId: investor.id,
               referralCodeId: referralCodeRecord.id,
               bonusPercent: new Prisma.Decimal(1.0), // Standard 1.00% bonus
+              
               // bonus amount will added later by admin
             },
           });
@@ -601,8 +604,8 @@ export class InvestorService {
               type: 'investor_action' as AdminNotificationType,
               referenceId: investor.id,
               message: `${investor.fullname} submitted ${changedSections} changes and is waiting for your review.${overwritten.length
-                  ? ` Their earlier pending ${overwritten.join(', ')} edits were overwritten by this submission.`
-                  : ''
+                ? ` Their earlier pending ${overwritten.join(', ')} edits were overwritten by this submission.`
+                : ''
                 }`,
               isRead: false,
               clickLink: `/admin/investors/${investor.id}`,
@@ -702,9 +705,9 @@ export class InvestorService {
       throw err;
     }
   }
-// --------------------------------------------------------
-// ---------------------- INVESTOR -------------------------
-//----------------------------------------------------------
+  // --------------------------------------------------------
+  // ---------------------- INVESTOR -------------------------
+  //----------------------------------------------------------
   async findMyEditRequests(
     user: AuthenticatedUser,
     query: InvestorEditRequestQueryDto,
@@ -739,12 +742,13 @@ export class InvestorService {
       { id: 'asc' as const },
     ];
 
-    const [editRequests, total] = await Promise.all([
-      this.prisma.investorEditRequest.findMany({
-        where,
-        orderBy,
-        skip: (page - 1) * limit,
-        take: limit,
+    const [editRequests, total] = await fetchData(
+      this.prisma.investorEditRequest,
+      where,
+      orderBy,
+      page,
+      limit,
+      {
         select: {
           id: true,
           status: true,
@@ -770,13 +774,13 @@ export class InvestorService {
             select: { nidFront: true, nidBack: true, photo: true },
           },
           editableUser: {
-            select: { email: true, phone: true, passwordHash: true,
+            select: {
+              email: true, phone: true, passwordHash: true,
             },
           },
         },
-      }),
-      this.prisma.investorEditRequest.count({ where }),
-    ]);
+      },
+    );
 
     const data = editRequests.map(({ editableUser, ...request }) => ({
       ...request,

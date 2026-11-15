@@ -6,6 +6,7 @@ import type {
 } from '@investment-platform/contracts/auditLog';
 import { AuditAction, Prisma } from '@investment-platform/db';
 import { PrismaService } from '../../prisma/prisma.service';
+import { fetchData } from '../../utils/common/fetchData.util';
 
 @Injectable()
 export class AuditLogService {
@@ -65,15 +66,13 @@ export class AuditLogService {
 
         // A separate count() with the same WHERE keeps `total` accurate for
         // the filtered set rather than only the current page.
-        const [auditLogs, total] = await Promise.all([
-            this.prisma.auditLog.findMany({
-                where,
-                orderBy,
-                skip: (page - 1) * limit,
-                take: limit,
-            }),
-            this.prisma.auditLog.count({ where }),
-        ]);
+        const [auditLogs, total] = await fetchData(
+            this.prisma.auditLog,
+            where,
+            orderBy,
+            page,
+            limit,
+        );
 
         return {
             message: 'Audit logs fetched successfully',

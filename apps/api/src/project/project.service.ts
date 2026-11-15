@@ -3,6 +3,7 @@ import { CreateProjectDto } from '../admin/project/dto/create-project.dto';
 import { ProjectQueryDto } from '../admin/project/dto/query-project.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@investment-platform/db';
+import { fetchData } from '../utils/common/fetchData.util';
 
 const PUBLIC_PROJECT_SELECT = {
     id: true,
@@ -58,16 +59,14 @@ export class ProjectService {
         ];
 
 
-        const [projects, total] = await Promise.all([
-            this.prisma.project.findMany({
-                where,
-                orderBy,
-                skip: (page - 1) * limit,
-                take: limit,
-                select: PUBLIC_PROJECT_SELECT,
-            }),
-            this.prisma.project.count({ where }),
-        ]);
+        const [projects, total] = await fetchData(
+            this.prisma.project,
+            where,
+            orderBy,
+            page,
+            limit,
+            { select: PUBLIC_PROJECT_SELECT },
+        );
 
         const totalPages = Math.ceil(total / limit);
 

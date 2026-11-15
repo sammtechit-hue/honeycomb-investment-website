@@ -15,16 +15,6 @@ export const bonusPercentSchema = percentSchema;
 
 
 const referralBaseSchema = z.object({
-  // Investor who referred another investor (required in Prisma).
-  referrerId: uuidSchema,
-
-  // Investor who was referred. Unique in Prisma — an investor can only be
-  // referred once — which the database enforces.
-  referredInvestorId: uuidSchema,
-
-  // The ReferralCode row this referral was created with (required in Prisma).
-  referralCodeId: uuidSchema,
-
   // Referral bonus — mirrors the Prisma default of 1.00%.
   bonusPercent: bonusPercentSchema.default(1),
 
@@ -35,37 +25,24 @@ const referralBaseSchema = z.object({
 
 
 
-export const referralCreateInputSchema = referralBaseSchema.superRefine(
-  (data, ctx) => {
-    // Self-referrals would pay the bonus back to the referrer themselves.
-    if (data.referrerId === data.referredInvestorId) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'An investor cannot refer themselves',
-        path: ['referredInvestorId'],
-      });
-    }
-  },
-);
+// export const referralCreateInputSchema = referralBaseSchema.superRefine(
+//   (data, ctx) => {
+//     // Self-referrals would pay the bonus back to the referrer themselves.
+//     if (data.referrerId === data.referredInvestorId) {
+//       ctx.addIssue({
+//         code: z.ZodIssueCode.custom,
+//         message: 'An investor cannot refer themselves',
+//         path: ['referredInvestorId'],
+//       });
+//     }
+//   },
+// );
 
-export type ReferralCreateInput = z.infer<typeof referralCreateInputSchema>;
+// export type ReferralCreateInput = z.infer<typeof referralCreateInputSchema>;
 
 
 export const referralUpdateInputSchema = referralBaseSchema
   .partial()
-  .superRefine((data, ctx) => {
-    if (
-      data.referrerId != null &&
-      data.referredInvestorId != null &&
-      data.referrerId === data.referredInvestorId
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'An investor cannot refer themselves',
-        path: ['referredInvestorId'],
-      });
-    }
-  });
 
 export type ReferralUpdateInput = z.infer<typeof referralUpdateInputSchema>;
 
@@ -77,14 +54,10 @@ export const referralSortBySchema = z.enum([
 
 export const referralQuerySchema = z
   .object({
-    
-    // investor names (relation fields). VarChar(150) investor names.
-    search: searchValidationSchema,
-
+    search: searchValidationSchema,  // can be searched by referral code or investor full name
     // --- Filters ---
     referrerId: uuidSchema.optional(),
     referredInvestorId: uuidSchema.optional(),
-    referralCodeId: uuidSchema.optional(),
 
     // Bonus amount range (both ends inclusive and optional).
     minBonusAmount: nonNegativeNumberSchema.optional(),

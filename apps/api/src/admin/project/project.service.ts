@@ -5,6 +5,7 @@ import { ProjectQueryDto } from './dto/query-project.dto';
 import { RequestAuditContext } from '../../utils/common types';
 import { Prisma, LogModule, LogSeverity, LogStatus, AuditAction, InvestmentStatus, ProjectStatus } from '@investment-platform/db';
 import { PrismaService } from '../../prisma/prisma.service';
+import { fetchData } from '../../utils/common/fetchData.util';
 
 
 const STATUSES_BLOCKED_BY_ACTIVE_INVESTMENTS: ProjectStatus[] = [
@@ -60,16 +61,13 @@ export class ProjectService {
         ];
 
 
-        const [projects, total] = await Promise.all([
-            this.prisma.project.findMany({
-                where,
-                orderBy,
-                skip: (page - 1) * limit,
-                take: limit,
-                // select: { id: true, name: true, status: true, ... } // trim for list views
-            }),
-            this.prisma.project.count({ where }),
-        ]);
+        const [projects, total] = await fetchData(
+            this.prisma.project,
+            where,
+            orderBy,
+            page,
+            limit,
+        );
 
         const totalPages = Math.ceil(total / limit);
 
