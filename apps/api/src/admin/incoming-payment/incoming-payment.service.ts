@@ -16,6 +16,7 @@ import {
     Prisma,
 } from '@investment-platform/db';
 import { PrismaService } from '../../prisma/prisma.service';
+import { fetchData } from '../../utils/common/fetchData.util';
 
 // Selected Field
 const INCOMING_PAYMENT_ADMIN_SELECT = {
@@ -112,16 +113,14 @@ export class IncomingPaymentService {
             { id: 'asc' },
         ];
 
-        const [payments, total] = await Promise.all([
-            this.prisma.incomingPayment.findMany({
-                where,
-                orderBy,
-                skip: (page - 1) * limit,
-                take: limit,
-                select: INCOMING_PAYMENT_ADMIN_SELECT,
-            }),
-            this.prisma.incomingPayment.count({ where }),
-        ]);
+        const [payments, total] = await fetchData(
+            this.prisma.incomingPayment,
+            where,
+            orderBy,
+            page,
+            limit,
+            { select: INCOMING_PAYMENT_ADMIN_SELECT },
+        );
 
         return {
             message: 'Incoming payments fetched successfully',

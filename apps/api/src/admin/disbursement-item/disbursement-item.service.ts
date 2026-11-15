@@ -19,6 +19,7 @@ import {
 } from '@investment-platform/db';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RequestAuditContext } from '../../utils/common types';
+import { fetchData } from '../../utils/common/fetchData.util';
 import { AddItemsToBatchDto } from './dto/add-items-to-batch.dto';
 import { DisbursementItemQueryDto } from './dto/query-disbursement-item.dto';
 import { UpdateDisbursementItemDto } from './dto/update-disbursement-item.dto';
@@ -108,13 +109,14 @@ export class DisbursementItemService {
             { id: 'asc' as const },
         ];
 
-        // Current page and total count fetched in parallel.
-        const [items, total] = await Promise.all([
-            this.prisma.disbursementItem.findMany({
-                where,
-                orderBy,
-                skip: (page - 1) * limit,
-                take: limit,
+        // Reuse the fetch function — current page and total count in parallel.
+        const [items, total] = await fetchData(
+            this.prisma.disbursementItem,
+            where,
+            orderBy,
+            page,
+            limit,
+            {
                 include: {
                     investor: {
                         select: {
@@ -128,9 +130,8 @@ export class DisbursementItemService {
                         select: { slotLabel: true, batchDate: true, status: true },
                     },
                 },
-            }),
-            this.prisma.disbursementItem.count({ where }),
-        ]);
+            },
+        );
 
         const totalPages = Math.ceil(total / limit);
 

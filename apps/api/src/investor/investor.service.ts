@@ -24,6 +24,7 @@ import * as bcrypt from 'bcrypt';
 import { BCRYPT_ROUNDS } from '../auth/auth.constants';
 import { KycFilesService } from '../files/kyc-files.service';
 import { getDhakaNow } from '../utils/common/bangladeshTime.util';
+import { fetchData } from '../utils/common/fetchData.util';
 
 // Selected Field for investor can see
 const INVESTOR_PROFILE_SELECT = {
@@ -270,6 +271,7 @@ export class InvestorService {
               referredInvestorId: investor.id,
               referralCodeId: referralCodeRecord.id,
               bonusPercent: new Prisma.Decimal(1.0), // Standard 1.00% bonus
+              
               // bonus amount will added later by admin
             },
           });
@@ -740,12 +742,13 @@ export class InvestorService {
       { id: 'asc' as const },
     ];
 
-    const [editRequests, total] = await Promise.all([
-      this.prisma.investorEditRequest.findMany({
-        where,
-        orderBy,
-        skip: (page - 1) * limit,
-        take: limit,
+    const [editRequests, total] = await fetchData(
+      this.prisma.investorEditRequest,
+      where,
+      orderBy,
+      page,
+      limit,
+      {
         select: {
           id: true,
           status: true,
@@ -776,9 +779,8 @@ export class InvestorService {
             },
           },
         },
-      }),
-      this.prisma.investorEditRequest.count({ where }),
-    ]);
+      },
+    );
 
     const data = editRequests.map(({ editableUser, ...request }) => ({
       ...request,

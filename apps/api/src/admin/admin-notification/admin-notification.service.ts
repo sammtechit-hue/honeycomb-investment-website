@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import type { AdminNotificationQuery } from '@investment-platform/contracts/notification';
 import { Prisma } from '@investment-platform/db';
 import { PrismaService } from '../../prisma/prisma.service';
+import { fetchData } from '../../utils/common/fetchData.util';
 
 @Injectable()
 export class AdminNotificationService {
@@ -34,15 +35,13 @@ export class AdminNotificationService {
             { id: 'asc' },
         ];
 
-        const [notifications, total] = await Promise.all([
-            this.prisma.adminNotification.findMany({
-                where,
-                orderBy,
-                skip: (page - 1) * limit,
-                take: limit,
-            }),
-            this.prisma.adminNotification.count({ where }),
-        ]);
+        const [notifications, total] = await fetchData(
+            this.prisma.adminNotification,
+            where,
+            orderBy,
+            page,
+            limit,
+        );
 
         return {
             message: 'Notifications fetched successfully',

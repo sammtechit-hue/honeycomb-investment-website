@@ -8,6 +8,7 @@ import {
 } from '@investment-platform/db';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RequestAuditContext } from '../../utils/common types';
+import { fetchData } from '../../utils/common/fetchData.util';
 import {
     MONTH_NAMES,
     type MonthlyRateSettingCreateInput,
@@ -53,15 +54,13 @@ export class MonthlyRateSettingService {
             { id: 'asc' as const }, // deterministic pages
         ];
 
-        const [settings, total] = await Promise.all([
-            this.prisma.monthlyRateSetting.findMany({
-                where,
-                orderBy,
-                skip: (page - 1) * limit,
-                take: limit,
-            }),
-            this.prisma.monthlyRateSetting.count({ where }),
-        ]);
+        const [settings, total] = await fetchData(
+            this.prisma.monthlyRateSetting,
+            where,
+            orderBy,
+            page,
+            limit,
+        );
 
         return {
             message: 'Monthly rate settings fetched successfully',

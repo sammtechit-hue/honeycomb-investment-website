@@ -3,6 +3,7 @@ import { Prisma, AuditAction, LogModule, LogSeverity, LogStatus, PayoutStatus } 
 import { RequestAuditContext } from '../../utils/common types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { buildOrderBy } from '../../utils/common/build-order-by.util';
+import { fetchData } from '../../utils/common/fetchData.util';
 import { CreateDisbursementBatchDto } from './dto/create-disbursement-batch.dto';
 import { UpdateDisbursementBatchDto } from './dto/update-disbursement-batch.dto';
 import { DisbursementBatchQueryDto } from './dto/query-disbursement-batch.dto';
@@ -40,18 +41,14 @@ export class DisbursementBatchService {
             sortOrder,
         );
 
-        // Not reusing the shared fetchData helper: the list has to carry the
-        // batch's payout line items in the same response.
-        const [batches, total] = await Promise.all([
-            this.prisma.disbursementBatch.findMany({
-                where,
-                orderBy,
-                skip: (page - 1) * limit,
-                take: limit,
-                include: { items: true },
-            }),
-            this.prisma.disbursementBatch.count({ where }),
-        ]);
+        const [batches, total] = await fetchData(
+            this.prisma.disbursementBatch,
+            where,
+            orderBy,
+            page,
+            limit,
+            { include: { items: true } },
+        );
 
         return {
             message: 'Disbursement batches fetched successfully',

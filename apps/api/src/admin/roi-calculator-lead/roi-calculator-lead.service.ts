@@ -3,6 +3,7 @@ import { UpdateRoiCalculatorLeadDto } from './dto/update-roi-calculator-lead.dto
 import { RoiCalculatorLeadQueryDto } from './dto/query-roi-calculator-lead.dto';
 import { Prisma } from '@investment-platform/db';
 import { PrismaService } from '../../prisma/prisma.service';
+import { fetchData } from '../../utils/common/fetchData.util';
 
 @Injectable()
 export class RoiCalculatorLeadService {
@@ -42,15 +43,13 @@ export class RoiCalculatorLeadService {
             { id: 'asc' as const },
         ];
 
-        const [leads, total] = await Promise.all([
-            this.prisma.roiCalculatorLead.findMany({
-                where,
-                orderBy,
-                skip: (page - 1) * limit,
-                take: limit,
-            }),
-            this.prisma.roiCalculatorLead.count({ where }),
-        ]);
+        const [leads, total] = await fetchData(
+            this.prisma.roiCalculatorLead,
+            where,
+            orderBy,
+            page,
+            limit,
+        );
 
         return {
             message: 'ROI calculator leads fetched successfully',
