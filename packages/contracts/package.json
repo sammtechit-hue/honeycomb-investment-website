@@ -16,6 +16,10 @@
       "types": "./dist/investor.d.ts",
       "default": "./dist/investor.js"
     },
+    "./investor-bulk-import": {
+      "types": "./dist/investor-bulk-import.d.ts",
+      "default": "./dist/investor-bulk-import.js"
+    },
     "./investorEditRequest": {
       "types": "./dist/investorEditRequest.d.ts",
       "default": "./dist/investorEditRequest.js"
