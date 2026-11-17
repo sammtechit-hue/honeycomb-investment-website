@@ -278,7 +278,7 @@ export class InvestmentService {
     ) {
         const {
             investorId, projectId, amount, investmentType,
-            investmentPeriodMonths, disbursementPeriod, rate: requestedRate,
+            investmentPeriodMonths, disbursementPeriod,
             investmentDate, agreementEndDate, agreementPlace,
             deedOffical, deedGoverment, chequeGiven, cashVoucharGiven,
             souvenirGiven, isSouvenirApplicable, certificateGiven,
@@ -304,6 +304,7 @@ export class InvestmentService {
                 where: { id: projectId },
                 select: {
                     id: true,
+                    name: true,
                     status: true,
                     isActive: true,
                     isVisible: true,
@@ -325,13 +326,8 @@ export class InvestmentService {
 
         assertProjectAcceptsInvestment(project, new Prisma.Decimal(amount));
 
-        // Fixed investments take the project's own rate. When the project has
-        // none, fall back to the active BusinessSettings rate, then to the env
-        // default. Unfixed investments keep the rate the admin supplied.
-        let rate =
-            requestedRate !== undefined
-                ? new Prisma.Decimal(requestedRate)
-                : undefined;
+        
+        let rate: Prisma.Decimal | undefined;
 
         if (investmentType === InvestmentType.fixed) {
             if (project.projectRate != null) {
@@ -346,7 +342,31 @@ export class InvestmentService {
                     settings?.rate ??
                     new Prisma.Decimal(this.config.get('FIXED_RATE', { infer: true }));
             }
-        }
+        } 
+        // else {
+        //     const investmentMonth = investmentDate ?? getDhakaDateOnly();
+        //     const periodMonth = new Date(
+        //         Date.UTC(
+        //             investmentMonth.getUTCFullYear(),
+        //             investmentMonth.getUTCMonth(),
+        //             1,
+        //         ),
+        //     );
+
+        //     const monthlyRate = await this.prisma.monthlyRateSetting.findUnique({
+        //         where: { projectId_periodMonth: { projectId, periodMonth } },
+        //         select: { ratePercent: true, isActive: true },
+        //     });
+
+        //     // Never create an unfixed investment that can't accrue profit.
+        //     if (!monthlyRate || !monthlyRate.isActive) {
+        //         throw new BadRequestException(
+        //             `No active monthly rate setting found for project ${project.name} for ${periodMonth.toISOString().slice(0, 7)}`,
+        //         );
+        //     }
+
+        //     rate = monthlyRate.ratePercent;
+        // }
 
         const data: Prisma.InvestmentCreateInput = {
             amount: new Prisma.Decimal(amount),
@@ -445,7 +465,7 @@ export class InvestmentService {
     ) {
         const {
             projectId, investmentDate, amount, investmentType,
-            investmentPeriodMonths, disbursementPeriod, status, rate,
+            investmentPeriodMonths, disbursementPeriod, status,
             agreementEndDate, agreementPlace, deedOffical, deedGoverment,
             chequeGiven, cashVoucharGiven, souvenirGiven,
             isSouvenirApplicable, certificateGiven,
@@ -461,7 +481,6 @@ export class InvestmentService {
             ...(investmentPeriodMonths !== undefined && { investmentPeriodMonths }),
             ...(disbursementPeriod !== undefined && { disbursementPeriod }),
             ...(status !== undefined && { status }),
-            ...(rate !== undefined && { rate: new Prisma.Decimal(rate) }),
             ...(agreementEndDate !== undefined && { agreementEndDate }),
             ...(agreementPlace !== undefined && { agreementPlace }),
             ...(deedOffical !== undefined && { deedOffical }),

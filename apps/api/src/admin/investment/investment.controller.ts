@@ -24,9 +24,7 @@ import { UpdateInvestmentDto } from './dto/update-investment.dto';
 import { InvestmentQueryDto } from './dto/query-investment.dto';
 import { InvestmentService } from './investment.service';
 
-// Admin investment endpoints — full visibility plus approval-side fields
-// (status, rate, agreement fields, physical-item tracking flags).
-// Restricted to ADMIN and MODERATOR staff; SUPER_ADMIN passes via RolesGuard.
+
 @Controller('admin/investment')
 @UsePipes(ZodValidationPipe)
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -70,9 +68,7 @@ export class InvestmentController {
     );
   }
 
-  // PATCH /api/admin/investment/:id
-  // Admins may additionally set status, rate, agreement fields and the
-  // physical-item tracking flags — see investmentAdminUpdateInputSchema.
+
   @Patch(':id')
   update(
     @Param('id', ParseUUIDPipe) id: string,
