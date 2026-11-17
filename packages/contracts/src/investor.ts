@@ -1,9 +1,11 @@
 import { z } from 'zod';
 import {
+  addressSchema,
   bankAccountSchema,
   bankAccountTypeSchema,
   bankSelectedSchema,
   emailSchema,
+  fullNameSchema,
   fileUrlSchema,
   limitValidationSchema,
   maxAmountQuerySchema,
@@ -11,9 +13,11 @@ import {
   pageValidationSchema,
   passwordSchema,
   phoneNumberSchema,
+  professionSchema,
   searchValidationSchema,
   sortOrderSchema,
   uuidSchema,
+  workplaceSchema,
 } from './common.js';
 
 export {
@@ -94,26 +98,10 @@ export type KycDocumentsInput = z.infer<typeof kycDocumentsSchema>;
 // Create
 // ---------------------------------------------------------------------------
 export const investorCreateInputSchema = z.object({
-  fullName: z
-    .string()
-    .trim()
-    .min(3, 'Full name must be at least 3 characters')
-    .max(150, 'Full name cannot exceed 150 characters'),
-  address: z
-    .string()
-    .trim()
-    .max(500, 'Address cannot exceed 500 characters')
-    .optional(),
-  profession: z
-    .string()
-    .trim()
-    .max(150, 'Profession cannot exceed 150 characters')
-    .optional(),
-  workplace: z
-    .string()
-    .trim()
-    .max(150, 'Workplace cannot exceed 150 characters')
-    .optional(),
+  fullName: fullNameSchema,
+  address: addressSchema.optional(),
+  profession: professionSchema.optional(),
+  workplace: workplaceSchema.optional(),
 
   // Nested required objects — created in the same transaction as the Investor
   bankAccount: bankAccountSchema,
@@ -168,27 +156,10 @@ export type InvestorUpdateInput = z.infer<typeof investorUpdateInputSchema>;
 // set (in this request or earlier) before an investor can become `active`.
 // ---------------------------------------------------------------------------
 export const investorAdminUpdateInputSchema = z.object({
-  fullName: z
-    .string()
-    .trim()
-    .min(3, 'Full name must be at least 3 characters')
-    .max(150, 'Full name cannot exceed 150 characters')
-    .optional(),
-  address: z
-    .string()
-    .trim()
-    .max(500, 'Address cannot exceed 500 characters')
-    .optional(),
-  profession: z
-    .string()
-    .trim()
-    .max(150, 'Profession cannot exceed 150 characters')
-    .optional(),
-  workplace: z
-    .string()
-    .trim()
-    .max(150, 'Workplace cannot exceed 150 characters')
-    .optional(),
+  fullName: fullNameSchema.optional(),
+  address: addressSchema.optional(),
+  profession: professionSchema.optional(),
+  workplace: workplaceSchema.optional(),
   nidNumber: nidNumberSchema.optional(),
   status: investorStatusSchema.optional(),
   category: investorCategorySchema.optional(),
