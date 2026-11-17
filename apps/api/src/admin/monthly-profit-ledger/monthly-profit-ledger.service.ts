@@ -1,5 +1,5 @@
 
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type {
     MonthlyProfitLedgerQuery,
@@ -38,6 +38,8 @@ function computeProfit(
 
 @Injectable()
 export class MonthlyProfitLedgerService {
+    private readonly logger = new Logger(MonthlyProfitLedgerService.name);
+
     constructor(
         private readonly prisma: PrismaService,
         private readonly config: ConfigService<Env, true>,
@@ -198,6 +200,7 @@ export class MonthlyProfitLedgerService {
                 investmentType: true,
                 investmentDate: true,
                 rate: true,
+                projectId: true,
             },
         });
 
@@ -214,26 +217,37 @@ export class MonthlyProfitLedgerService {
             ),
         );
 
-        const monthlyRateRows =
-            await this.prisma.monthlyRateSetting.findFirst({
-                where: {
-                    periodMonth: previousMonth,
-                },
-                select: {
-                    periodMonth: true,
-                    ratePercent: true,
-                },
-            });
+        // Rates are per project now. Load every active rate for the month in
+        // one query and key it by project + month so the loop below does no
+        // per-investment lookups.
+        const monthlyRateRows = await this.prisma.monthlyRateSetting.findMany({
+            where: {
+                periodMonth: previousMonth,
+                isActive: true,
+            },
+            select: {
+                projectId: true,
+                periodMonth: true,
+                ratePercent: true,
+            },
+        });
 
-        if (!monthlyRateRows?.ratePercent) {
-            throw new NotFoundException(
-                `Monthly rate not found for ${previousMonth.toISOString().slice(0, 7)}`,
+        
+        const rateMonthKey = previousMonth.toISOString().slice(0, 10);
+        const rateMonthLabel = previousMonth.toISOString().slice(0, 7);
+
+        const rateByProjectMonth = new Map<string, Prisma.Decimal>();
+        for (const row of monthlyRateRows) {
+            rateByProjectMonth.set(
+                `${row.projectId}:${row.periodMonth.toISOString().slice(0, 10)}`,
+                row.ratePercent,
             );
         }
 
-        const rateMonth = monthlyRateRows.ratePercent;
-
         const candidates: Prisma.MonthlyProfitLedgerCreateManyInput[] = [];
+        // Projects whose unfixed investments were skipped because no active
+        // rate exists for this cycle's month.
+        const projectsMissingRate = new Set<string>();
 
         let skipped = 0;
         // Prefer the active settings row; fall back to the validated env default
@@ -282,10 +296,22 @@ export class MonthlyProfitLedgerService {
                 continue;
             }
 
-            const ratePercent =
-                inv.investmentType !== InvestmentType.fixed
-                    ? rateMonth
-                    : inv.rate;
+            let ratePercent = inv.rate;
+
+            if (inv.investmentType !== InvestmentType.fixed) {
+                ratePercent =
+                    rateByProjectMonth.get(
+                        `${inv.projectId}:${rateMonthKey}`,
+                    ) ?? null;
+
+                if (ratePercent === null) {
+                    // Never accrue 0 — leave the investment out of this run
+                    // and surface the missing rate to the admins below.
+                    projectsMissingRate.add(inv.projectId);
+                    skipped++;
+                    continue;
+                }
+            }
 
             if (ratePercent === null) {
                 skipped++;
@@ -309,28 +335,66 @@ export class MonthlyProfitLedgerService {
             });
         }
 
-        // Create all ledger rows together. The admin notification goes in the
+        let missingRateProjectNames: string[] = [];
+
+        if (projectsMissingRate.size > 0) {
+            const missingProjects = await this.prisma.project.findMany({
+                where: { id: { in: [...projectsMissingRate] } },
+                select: { name: true },
+            });
+
+            missingRateProjectNames = missingProjects.map(
+                (project) => project.name,
+            );
+            this.logger.warn(
+                `No active monthly rate for ${rateMonthLabel} — skipped investments for project(s): ${missingRateProjectNames.join(', ') || [...projectsMissingRate].join(', ')}`,
+            );
+        }
+
+        // Create all ledger rows together. Notifications go in the same
+        // transaction so a run leaves either all of its bookkeeping or none.
         let created = 0;
 
-        if (candidates.length > 0) {
+        if (candidates.length > 0 || projectsMissingRate.size > 0) {
             created = await this.prisma.$transaction(async (tx) => {
-                const result = await tx.monthlyProfitLedger.createMany({
-                    data: candidates,
-                    skipDuplicates: true,
-                });
+                let count = 0;
 
-                // A run has no single row id to reference, so the notification
-                // summarizes the whole batch.
-                await tx.adminNotification.create({
-                    data: {
-                        type: 'monthly_profit_cycle' as AdminNotificationType,
-                        message: `Profit accrual run completed for cycle ending ${fmt(cycleEnd)}: ${result.count} ledger entries created, ${skipped} skipped.`,
-                        isRead: false,
-                        clickLink: '/admin/monthly-profit-ledger',
-                    },
-                });
+                if (candidates.length > 0) {
+                    const result = await tx.monthlyProfitLedger.createMany({
+                        data: candidates,
+                        skipDuplicates: true,
+                    });
+                    count = result.count;
 
-                return result.count;
+                    // A run has no single row id to reference, so the
+                    // notification summarizes the whole batch.
+                    await tx.adminNotification.create({
+                        data: {
+                            type: 'monthly_profit_cycle' as AdminNotificationType,
+                            message: `Profit accrual run completed for cycle ending ${fmt(cycleEnd)}: ${result.count} ledger entries created, ${skipped} skipped.`,
+                            isRead: false,
+                            clickLink: '/admin/monthly-profit-ledger',
+                        },
+                    });
+                }
+
+                if (projectsMissingRate.size > 0) {
+                    const projectNames =
+                        missingRateProjectNames.length > 0
+                            ? missingRateProjectNames.join(', ')
+                            : [...projectsMissingRate].join(', ');
+
+                    await tx.adminNotification.create({
+                        data: {
+                            type: 'monthly_profit_cycle' as AdminNotificationType,
+                            message: `Profit accrual run for cycle ending ${fmt(cycleEnd)} skipped investments in project(s) with no active monthly rate for ${rateMonthLabel}: ${projectNames}.`,
+                            isRead: false,
+                            clickLink: '/admin/monthly-rate-setting',
+                        },
+                    });
+                }
+
+                return count;
             });
         }
 

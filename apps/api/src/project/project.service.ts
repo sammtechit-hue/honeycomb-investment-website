@@ -12,6 +12,18 @@ const PUBLIC_PROJECT_SELECT = {
     status: true,
     minimumInvestment: true,
     startDate: true,
+    // monthlyRateSettings: {
+    //     where: {
+    //         isActive: true,
+    //     },
+    //     select: {
+    //         ratePercent: true,
+    //         periodMonth: true,
+    //     },
+    //     orderBy: {
+    //         periodMonth: 'desc',
+    //     },
+    // },
 } satisfies Prisma.ProjectSelect;
 
 @Injectable()
@@ -19,7 +31,7 @@ export class ProjectService {
     constructor(private readonly prisma: PrismaService) { }
 
     // GET /api/admin/project
-    async findAll(query: ProjectQueryDto) {
+    async findAllProject(query: ProjectQueryDto) {
         const {
             search,
             status,
@@ -55,7 +67,7 @@ export class ProjectService {
         // Tie-breaker on id keeps pagination deterministic.
         const orderBy: Prisma.ProjectOrderByWithRelationInput[] = [
             { [sortBy]: sortOrder },
-            ...(sortBy !== 'id' ? [{ id: 'asc' as const }] : []),
+            { id: 'asc' },
         ];
 
 
@@ -86,7 +98,7 @@ export class ProjectService {
     }
 
     // For Getting One Project's Data
-    async findOne(id: string) {
+    async findOneProject(id: string) {
         const project = await this.prisma.project.findUnique({
             where: { id },
             select: PUBLIC_PROJECT_SELECT,

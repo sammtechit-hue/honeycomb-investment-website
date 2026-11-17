@@ -20,6 +20,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { RequestAuditContext } from '../../utils/common types';
 import { generateUniqueReferralCode } from '../../utils/common/generateReferralCode.utils';
+import { fetchData } from '../../utils/common/fetchData.util';
 import { CreateInvestorDto } from './dto/create-investor.dto';
 import { UpdateInvestorDto } from './dto/update-investor.dto';
 import { InvestorQueryDto } from './dto/query-investor.dto';
@@ -136,21 +137,21 @@ export class InvestorService {
       { id: 'asc' as const },
     ];
 
-    const [investors, total] = await Promise.all([
-      this.prisma.investor.findMany({
-        where,
-        orderBy,
-        skip: (page - 1) * limit,
-        take: limit,
+    const [investors, total] = await fetchData(
+      this.prisma.investor,
+      where,
+      orderBy,
+      page,
+      limit,
+      {
         include: {
           user: { select: { email: true, phone: true } },
           nominee: true,
           kycDocuments: true,
           bankAccount: true,
         },
-      }),
-      this.prisma.investor.count({ where }),
-    ]);
+      },
+    );
 
     const totalPages = Math.ceil(total / limit);
 
@@ -198,12 +199,13 @@ export class InvestorService {
       { id: 'asc' },
     ];
 
-    const [bankAccounts, total] = await Promise.all([
-      this.prisma.investorBankAccount.findMany({
-        where,
-        orderBy,
-        skip: (page - 1) * limit,
-        take: limit,
+    const [bankAccounts, total] = await fetchData(
+      this.prisma.investorBankAccount,
+      where,
+      orderBy,
+      page,
+      limit,
+      {
         select: {
           id: true,
           selectedBank: true,
@@ -216,9 +218,8 @@ export class InvestorService {
           isActive: true,
           investorId: true,
         },
-      }),
-      this.prisma.investorBankAccount.count({ where }),
-    ]);
+      },
+    );
 
     return {
       message: 'Investor bank accounts fetched successfully',
@@ -393,12 +394,13 @@ export class InvestorService {
       { id: 'asc' as const },
     ];
 
-    const [editRequests, total] = await Promise.all([
-      this.prisma.investorEditRequest.findMany({
-        where,
-        orderBy,
-        skip: (page - 1) * limit,
-        take: limit,
+    const [editRequests, total] = await fetchData(
+      this.prisma.investorEditRequest,
+      where,
+      orderBy,
+      page,
+      limit,
+      {
         // Explicit select so credential fields (passwordHash etc.) never leak.
         include: {
           investor: {
@@ -409,9 +411,8 @@ export class InvestorService {
             },
           },
         },
-      }),
-      this.prisma.investorEditRequest.count({ where }),
-    ]);
+      },
+    );
 
     const totalPages = Math.ceil(total / limit);
 
@@ -1139,6 +1140,8 @@ export class InvestorService {
     tx: Prisma.TransactionClient,
     investorId: string,
   ) {
+
+    //first find existing referralCode
     const reusable = await tx.referralCode.findFirst({
       where: { referrerId: investorId, isUsed: false, isActive: true },
       select: { id: true },

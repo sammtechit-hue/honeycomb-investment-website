@@ -6,6 +6,7 @@ import { RequestAuditContext } from '../../utils/common types';
 import { Prisma, LogModule, LogSeverity, LogStatus, AuditAction, InvestmentStatus, ProjectStatus } from '@investment-platform/db';
 import { PrismaService } from '../../prisma/prisma.service';
 import { fetchData } from '../../utils/common/fetchData.util';
+import { buildOrderBy } from '../../utils/common/build-order-by.util';
 
 
 const STATUSES_BLOCKED_BY_ACTIVE_INVESTMENTS: ProjectStatus[] = [
@@ -55,10 +56,10 @@ export class ProjectService {
         };
 
         // Tie-breaker on id keeps pagination deterministic.
-        const orderBy: Prisma.ProjectOrderByWithRelationInput[] = [
-            { [sortBy]: sortOrder },
-            ...(sortBy !== 'id' ? [{ id: 'asc' as const }] : []),
-        ];
+        const orderBy = buildOrderBy<Prisma.ProjectOrderByWithRelationInput>(
+            sortBy,
+            sortOrder,
+        );
 
 
         const [projects, total] = await fetchData(
@@ -67,6 +68,7 @@ export class ProjectService {
             orderBy,
             page,
             limit,
+            { include: { monthlyRateSettings: true } },
         );
 
         const totalPages = Math.ceil(total / limit);
@@ -110,7 +112,6 @@ export class ProjectService {
     ) {
         try {
             await this.prisma.$transaction(async (tx) => {
-
                 const project = await tx.project.create({
                     data: {
                         name: createProjectDto.name,
@@ -118,6 +119,7 @@ export class ProjectService {
                         status: createProjectDto.status,
                         minimumInvestment: createProjectDto.minimumInvestment,
                         maximumInvestment: createProjectDto.maximumInvestment,
+                        projectRate:createProjectDto.projectRate,
                         targetAmount: createProjectDto.targetAmount,
                         startDate: createProjectDto.startDate,
                         endDate: createProjectDto.endDate,
