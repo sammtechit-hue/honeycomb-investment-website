@@ -282,16 +282,17 @@ export class InvestmentService {
     if (dto.investmentType === InvestmentType.fixed) {
       if (project.projectRate != null) {
         rate = project.projectRate;
-      } else {
-        const settings = await this.prisma.businessSettings.findFirst({
-          where: { isActive: true },
-          select: { rate: true },
-        });
+      } 
+      // else {
+      //   const settings = await this.prisma.businessSettings.findFirst({
+      //     where: { isActive: true },
+      //     select: { rate: true },
+      //   });
 
-        rate =
-          settings?.rate ??
-          new Prisma.Decimal(this.config.get('FIXED_RATE', { infer: true }));
-      }
+      //   rate =
+      //     settings?.rate ??
+      //     new Prisma.Decimal(this.config.get('FIXED_RATE', { infer: true }));
+      // }
     }
 
     // for setting investmentDate

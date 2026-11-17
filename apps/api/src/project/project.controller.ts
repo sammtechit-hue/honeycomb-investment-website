@@ -12,12 +12,12 @@ export class ProjectController {
   findAll(@Query() query: ProjectQueryDto
   ) {
     // GET /project?search=honeycomb&status=active&category=residential&page=1&limit=10&sortBy=createdAt&sortOrder=desc
-    return this.projectService.findAll(query);
+    return this.projectService.findAllProject(query);
   }
 
   @Get(':id')
   findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.projectService.findOne(id);
+    return this.projectService.findOneProject(id);
   }
 
 }

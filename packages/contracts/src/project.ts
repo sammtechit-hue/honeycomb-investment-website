@@ -6,6 +6,7 @@ import {
   minAmountQuerySchema,
   moneySchema,
   pageValidationSchema,
+  percentSchema,
   queryBooleanSchema,
   searchValidationSchema,
   sortOrderSchema,
@@ -45,7 +46,7 @@ const projectBaseSchema = z.object({
     .max(5000, 'Description cannot exceed 5000 characters'),
 
   status: projectStatusSchema.default('DRAFT'),
-
+  projectRate: percentSchema.optional(),
   // Money fields — Decimal(18, 2) in Prisma
   minimumInvestment: moneySchema.default(10_000),
   maximumInvestment: moneySchema.optional(),
@@ -165,7 +166,6 @@ export const projectQuerySchema = z.object({
   // Sorting
   sortBy: z
     .enum([
-      'id',
       'name',
       'status',
       'minimumInvestment',

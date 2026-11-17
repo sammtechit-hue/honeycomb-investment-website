@@ -66,18 +66,7 @@ const disbursementPeriodLabels: Record<
   yearly: 'yearly',
 };
 
-/**
- * Cross-field rule: investmentPeriodMonths must be a positive whole number
- * of months AND an exact multiple of the profit disbursement period (so every
- * disbursement lands on a real cycle). Returns the error message, or null
- * when the combination is valid.
- *
- * Shared by the zod refinements below and the Nest service layer (which turns
- * a non-null result into a BadRequestException) so the rule lives in one place.
- *
- * When disbursementPeriod is absent (partial update payloads) the check is
- * skipped here — callers must re-run it with the merged final values.
- */
+
 export function investmentPeriodDisbursementError(input: {
   investmentPeriodMonths?: number | null;
   disbursementPeriod?: string | null;
@@ -154,9 +143,8 @@ export type InvestmentCreateInput = z.infer<typeof investmentCreateInputSchema>;
 export const investmentAdminUpdateInputSchema = investmentCreateFieldsSchema
   .extend({
     status: investmentStatusSchema.optional(),
-    // rate is intentionally excluded — admin sets it during approval
-    rate: percentSchema.optional(),
     investmentDate: dateSchema.optional(),
+    rate: percentSchema.optional(),
     agreementEndDate: dateSchema.optional(),
     agreementPlace: z.string().trim().max(150).optional(),
     deedOffical: z.string().trim().optional(),
@@ -194,8 +182,8 @@ export const investmentAdminCreateInputSchema = investmentCreateFieldsSchema
   .extend({
     investorId: uuidSchema,
 
-    // rate is normally set during approval, but may be known upfront.
-    rate: percentSchema,
+    // rate is intentionally excluded — it is derived from the project's
+    // configured rate / monthly rate setting, never supplied by the admin.
     investmentDate: dateSchema,
     agreementEndDate: dateSchema.optional(),
     agreementPlace: z.string().trim().max(150).optional(),
