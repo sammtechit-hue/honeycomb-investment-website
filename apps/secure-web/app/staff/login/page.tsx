@@ -7,7 +7,7 @@ import { redirectIfSignedIn } from '@/lib/session';
 
 export const metadata: Metadata = {
   title: 'Staff sign in · HoneyComb Investor',
-  // Not linked from the shareholder pages; keep it out of search results too.
+  // Not linked from the investor pages; keep it out of search results too.
   robots: { index: false, follow: false },
 };
 

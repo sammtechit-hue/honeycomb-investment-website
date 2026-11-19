@@ -948,8 +948,6 @@ model IncomingPayment {
     paymentMethod     IncomingPaymentMethod @map("payment_method")
     screenshotUrl     String                @map("screenshot_url")
     senderAccountInfo String?               @map("sender_account_info") @db.VarChar(150)
-    installmentNumber Int?                  @map("installment_number")
-    dueDate           DateTime?             @map("due_date") @db.Date
     confirmedAt       DateTime?             @map("confirmed_at")
     status            IncomingPaymentStatus @default(pending)
 

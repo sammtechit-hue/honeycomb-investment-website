@@ -36,7 +36,7 @@ export class IncomingPaymentController {
         private readonly incomingPaymentService: IncomingPaymentService,
     ) { }
 
-    // GET /admin/incoming-payment?page=1&limit=20&sortBy=dueDate&sortOrder=desc&status=pending
+    // GET /admin/incoming-payment?page=1&limit=20&sortBy=createdAt&sortOrder=desc&status=pending
     @Get()
     findAll(@Query() query: IncomingPaymentQueryDto) {
         return this.incomingPaymentService.findAllIncomingPayment(query);

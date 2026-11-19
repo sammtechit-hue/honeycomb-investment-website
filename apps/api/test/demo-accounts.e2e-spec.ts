@@ -15,7 +15,7 @@ import request from 'supertest';
 import { Role } from '@investment-platform/db';
 import {
   DEMO_PASSWORD,
-  DEMO_SHAREHOLDERS,
+  DEMO_INVESTORS,
   DEMO_STAFF,
 } from '@investment-platform/contracts/demo-accounts';
 import { validateEnv } from '../src/config/env';
@@ -30,7 +30,7 @@ const TEST_DB = process.env.TEST_DATABASE_URL;
 const describeIfDb = TEST_DB ? describe : describe.skip;
 
 const ORIGIN = 'http://localhost:3001';
-const shareholder = DEMO_SHAREHOLDERS[0];
+const investor = DEMO_INVESTORS[0];
 const staff = DEMO_STAFF[0];
 
 async function bootApp(nodeEnv: 'production' | 'test') {
@@ -83,7 +83,7 @@ describeIfDb('Demo accounts (e2e)', () => {
     ]);
     const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 4);
     await prisma.user.create({
-      data: { email: shareholder.email, phone: shareholder.phone, passwordHash, role: Role.INVESTOR },
+      data: { email: investor.email, phone: investor.phone, passwordHash, role: Role.INVESTOR },
     });
     await prisma.user.create({
       data: {
@@ -112,10 +112,10 @@ describeIfDb('Demo accounts (e2e)', () => {
       await seed();
     });
 
-    it('refuses demo shareholders and staff exactly like an unknown account', async () => {
+    it('refuses demo investors and staff exactly like an unknown account', async () => {
       const unknown = await login('nobody@example.com').expect(401);
-      const byPhone = await login(shareholder.phone!).expect(401);
-      const byEmail = await login(shareholder.email).expect(401);
+      const byPhone = await login(investor.phone!).expect(401);
+      const byEmail = await login(investor.email).expect(401);
       const staffLogin = await login(staff.email).expect(401);
 
       for (const res of [byPhone, byEmail, staffLogin]) {
@@ -137,8 +137,8 @@ describeIfDb('Demo accounts (e2e)', () => {
       await seed();
     });
 
-    it('logs demo shareholders and staff in', async () => {
-      await login(shareholder.phone!).expect(200);
+    it('logs demo investors and staff in', async () => {
+      await login(investor.phone!).expect(200);
       await login(staff.email).expect(200);
     });
   });

@@ -20,10 +20,10 @@ import {
 } from './auth-fields';
 import { DemoLoginsPanel } from './demo-logins-panel';
 
-// Shareholders sign in with their mobile number (/login); staff have no
+// Investors sign in with their mobile number (/login); staff have no
 // phone and sign in with email (/staff/login). Both post to the same
 // endpoint — the API matches on email when the identifier contains '@'.
-export type LoginVariant = 'shareholder' | 'staff';
+export type LoginVariant = 'investor' | 'staff';
 
 const staffEmailSchema = z
   .string()
@@ -33,7 +33,7 @@ const staffEmailSchema = z
   .email('Enter a valid email address');
 
 const loginFormSchemas = {
-  shareholder: z.object({ identifier: localMobileSchema, password: loginInputSchema.shape.password }),
+  investor: z.object({ identifier: localMobileSchema, password: loginInputSchema.shape.password }),
   staff: z.object({ identifier: staffEmailSchema, password: loginInputSchema.shape.password }),
 };
 
@@ -42,7 +42,7 @@ type LoginFormValues = { identifier: string; password: string };
 type FormError = { message: string; badCredentials: boolean };
 
 const COPY = {
-  shareholder: {
+  investor: {
     badCredentials: "That mobile number and password don't match. Check both and try again.",
     forgotHref: '/forgot-password',
   },
@@ -84,7 +84,7 @@ export function LoginForm({
   const onSubmit = async ({ identifier, password }: LoginFormValues) => {
     setFormError(null);
     const body: LoginInput = {
-      identifier: variant === 'shareholder' ? withCountryCode(identifier) : identifier.trim(),
+      identifier: variant === 'investor' ? withCountryCode(identifier) : identifier.trim(),
       password,
     };
 
@@ -159,18 +159,18 @@ export function LoginForm({
 
         <div className="flex flex-col">
           <label htmlFor="identifier" className="flex gap-1 text-sm leading-5">
-            {variant === 'shareholder' ? 'Mobile number' : 'Email address'}{' '}
+            {variant === 'investor' ? 'Mobile number' : 'Email address'}{' '}
             <span aria-hidden className="font-bold">*</span>
           </label>
           <div className={inputFrameClass(!!errors.identifier)}>
-            {variant === 'shareholder' && (
+            {variant === 'investor' && (
               <span className="flex h-full items-center rounded-l-md bg-addon px-3 text-sm leading-5">
                 +880
               </span>
             )}
             <input
               id="identifier"
-              {...(variant === 'shareholder'
+              {...(variant === 'investor'
                 ? ({ type: 'tel', inputMode: 'tel', autoComplete: 'tel-national', placeholder: '1712 345678' } as const)
                 : ({ type: 'email', inputMode: 'email', autoComplete: 'username', placeholder: 'name@company.com' } as const))}
               aria-required
@@ -184,7 +184,7 @@ export function LoginForm({
             <FieldError id="identifier-error" message={errors.identifier.message} />
           ) : (
             <p id="identifier-hint" className="pt-1.5 text-xs leading-4 text-muted">
-              {variant === 'shareholder'
+              {variant === 'investor'
                 ? 'The mobile number you registered with.'
                 : 'The email address your staff account was created with.'}
             </p>
@@ -198,7 +198,7 @@ export function LoginForm({
           <PasswordInput
             id="password"
             autoComplete="current-password"
-            placeholder={variant === 'shareholder' ? 'Enter shareholder password' : 'Enter staff password'}
+            placeholder={variant === 'investor' ? 'Enter your password' : 'Enter staff password'}
             invalid={!!passwordError}
             describedBy={passwordError ? 'password-error' : undefined}
             registration={register('password')}

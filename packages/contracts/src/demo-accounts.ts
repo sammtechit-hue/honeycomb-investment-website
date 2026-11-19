@@ -29,20 +29,20 @@ export interface DemoAccount {
   investorStatus?: null | 'active';
 }
 
-export const DEMO_SHAREHOLDERS: readonly DemoAccount[] = [
+export const DEMO_INVESTORS: readonly DemoAccount[] = [
   {
     role: 'INVESTOR',
-    email: `shareholder.new@${DEMO_EMAIL_DOMAIN}`,
+    email: `investor.new@${DEMO_EMAIL_DOMAIN}`,
     phone: '01700000001',
-    name: 'Demo New Shareholder',
+    name: 'Demo New Investor',
     description: 'Just signed up, verification not started',
     investorStatus: null,
   },
   {
     role: 'INVESTOR',
-    email: `shareholder.verified@${DEMO_EMAIL_DOMAIN}`,
+    email: `investor.verified@${DEMO_EMAIL_DOMAIN}`,
     phone: '01700000002',
-    name: 'Demo Verified Shareholder',
+    name: 'Demo Verified Investor',
     description: 'Verified and active',
     investorStatus: 'active',
   },
@@ -72,7 +72,7 @@ export const DEMO_STAFF: readonly DemoAccount[] = [
   },
 ];
 
-export const DEMO_ACCOUNTS: readonly DemoAccount[] = [...DEMO_SHAREHOLDERS, ...DEMO_STAFF];
+export const DEMO_ACCOUNTS: readonly DemoAccount[] = [...DEMO_INVESTORS, ...DEMO_STAFF];
 
 // Matches on the account's email, whichever identifier was used to log in.
 export function isDemoEmail(email: string): boolean {

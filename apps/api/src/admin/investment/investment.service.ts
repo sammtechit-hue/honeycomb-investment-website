@@ -38,6 +38,7 @@ const INVESTMENT_ADMIN_SELECT = {
     investorId: true,
     investor: { select: { fullname: true } },
     projectId: true,
+    project: { select: { name: true } },
     createdAt: true,
     updatedAt: true,
     isCertificateApplicable: true,

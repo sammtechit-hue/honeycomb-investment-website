@@ -29,7 +29,7 @@ export default async function SignupPage() {
               HoneyComb Inc.
             </p>
             <p className="pt-0.5 text-center text-xs leading-4 tracking-[1.92px] text-secondary uppercase">
-              Project Shareholder Platform
+              Investor Platform
             </p>
           </div>
 

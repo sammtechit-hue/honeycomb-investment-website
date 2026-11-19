@@ -18,7 +18,7 @@ export default async function LoginPage({ searchParams }: PageProps<'/login'>) {
   return (
     <AuthShell
       title="Sign in"
-      subtitle="Access your shareholder dashboard."
+      subtitle="Access your investor dashboard."
       below={
         <p className="flex gap-1 pt-6 text-center text-sm leading-5">
           <span className="text-muted">New here?</span>
@@ -28,7 +28,7 @@ export default async function LoginPage({ searchParams }: PageProps<'/login'>) {
         </p>
       }
     >
-      <LoginForm variant="shareholder" next={nextPath} demoLogins={demoLogins('shareholder')} />
+      <LoginForm variant="investor" next={nextPath} demoLogins={demoLogins('investor')} />
     </AuthShell>
   );
 }

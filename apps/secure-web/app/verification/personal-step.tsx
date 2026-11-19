@@ -82,7 +82,7 @@ export function PersonalStep({
           id="referralCode"
           label="Referral code"
           optional
-          hint="If another shareholder referred you, enter their code."
+          hint="If another investor referred you, enter their code."
           error={errors.referralCode?.message}
         >
           <input

@@ -2,7 +2,7 @@ import Image from 'next/image';
 import type { ReactNode } from 'react';
 
 // Building blocks shared by the four verification steps (Figma: "Project
-// Shareholder Verification – Bank Details / Documents").
+// Investor Verification – Bank Details / Documents").
 
 export const inputClass =
   'h-10 w-full rounded-md border border-hairline bg-canvas px-[13px] text-sm text-ink outline-none placeholder:text-placeholder focus:border-black aria-invalid:border-2 aria-invalid:border-emphasis aria-invalid:px-3';

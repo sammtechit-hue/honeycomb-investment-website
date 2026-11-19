@@ -34,7 +34,7 @@ import { IncomingPaymentService } from './incoming-payment.service';
 export class IncomingPaymentController {
   constructor(private readonly incomingPaymentService: IncomingPaymentService) {}
 
-  // GET /incoming-payment?page=1&limit=20&sortBy=dueDate&sortOrder=desc&status=pending
+  // GET /incoming-payment?page=1&limit=20&sortBy=createdAt&sortOrder=desc&status=pending
   @Get()
   findAll(@Query() query: IncomingPaymentQueryDto) {
     return this.incomingPaymentService.findAll(query);

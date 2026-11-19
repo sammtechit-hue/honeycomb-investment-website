@@ -47,7 +47,7 @@ function VerificationHeader() {
           <span className="flex flex-col">
             <span className="text-base leading-6 font-bold tracking-[-0.4px] uppercase">HoneyComb Inc.</span>
             <span className="text-[11px] leading-4 tracking-[0.3px] text-muted uppercase sm:text-xs">
-              Shareholder verification
+              Investor verification
             </span>
           </span>
         </Link>

@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   title: 'Forgot password · HoneyComb Investor',
 };
 
-// /forgot-password        — shareholders (mobile number, email optional)
+// /forgot-password        — investors (mobile number, email optional)
 // /forgot-password?as=staff — linked from /staff/login (email)
 export default async function ForgotPasswordPage({ searchParams }: PageProps<'/forgot-password'>) {
   const { as } = await searchParams;

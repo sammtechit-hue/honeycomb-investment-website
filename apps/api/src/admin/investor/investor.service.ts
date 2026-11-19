@@ -344,9 +344,17 @@ export class InvestorService {
   }
 
   // GET /api/admin/investor/:id
+  // Includes everything the admin review page shows: contact details, KYC
+  // documents, nominee and every bank account (active and awaiting review).
   async findOne(id: string) {
     const investor = await this.prisma.investor.findUnique({
       where: { id },
+      include: {
+        user: { select: { email: true, phone: true, lastLoginAt: true } },
+        nominee: true,
+        kycDocuments: true,
+        bankAccount: { orderBy: [{ isActive: 'desc' }, { id: 'asc' }] },
+      },
     });
 
     if (!investor) {

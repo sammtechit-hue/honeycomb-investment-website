@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import {
-  dateSchema,
   fileUrlSchema,
   incomingPaymentMethodSchema,
   incomingPaymentStatusSchema,
@@ -27,12 +26,6 @@ export const incomingPaymentCreateSchema = z.object({
     .trim()
     .max(150, "Sender account info must be under 150 characters")
     .optional(),
-  installmentNumber: z
-    .number()
-    .int("Installment number must be a whole number")
-    .positive("Installment number must be positive")
-    .optional(),
-  dueDate: dateSchema.optional(),
 })
 
 export type IncomingPaymentCreateInput = z.infer<typeof incomingPaymentCreateSchema>;
@@ -54,9 +47,7 @@ export type IncomingPaymentUpdateInput = z.infer<
 export const incomingPaymentSortByEnum = z.enum([
   "amount",
   "createdAt",
-  "dueDate",
   "confirmedAt",
-  "installmentNumber",
   "status",
 ])
 
@@ -65,7 +56,7 @@ export const incomingPaymentQuerySchema = z.object({
   page: pageValidationSchema,
   limit: limitValidationSchema,
   // --- Sorting ---
-  sortBy: incomingPaymentSortByEnum.default("dueDate"),
+  sortBy: incomingPaymentSortByEnum.default("createdAt"),
   sortOrder: sortOrderSchema,
 
   //--- Filters ---
@@ -77,10 +68,6 @@ export const incomingPaymentQuerySchema = z.object({
   // Amount range
   minAmount: nonNegativeNumberSchema.optional(),
   maxAmount: nonNegativeNumberSchema.optional(),
-
-  // Due date range (installment due, not record creation — see note)
-  dueDateFrom: dateSchema.optional(),
-  dueDateTo: dateSchema.optional(),
 
   // Free-text search over sender account info
   search: searchValidationSchema,

@@ -47,7 +47,6 @@ const INVESTMENT_LIST_SELECT = {
       amount: true,
       paymentMethod: true,
       status: true,
-      dueDate: true,
       confirmedAt: true,
       // createdAt: true,
     },

@@ -52,7 +52,7 @@ type Localized<T> = Record<Locale, T>;
 // Document labels shared by the sample projects.
 const DOC = {
   summary: { en: 'Project summary', bn: 'প্রকল্পের সারসংক্ষেপ' },
-  shareholderAgreement: { en: 'Shareholder agreement', bn: 'শেয়ারহোল্ডার চুক্তি' },
+  investmentAgreement: { en: 'Investment agreement', bn: 'বিনিয়োগ চুক্তি' },
   leaseDeed: { en: 'Lease deed', bn: 'লিজ দলিল' },
 } satisfies Record<string, Localized<string>>;
 
@@ -70,7 +70,7 @@ const SAMPLE_PROJECTS = [
       en: 'Fit-out and opening stock for new brick-and-mortar outlets in Dhaka.',
       bn: 'ঢাকায় নতুন দোকানের সাজসজ্জা ও প্রাথমিক পণ্য মজুত।',
     },
-    documents: [DOC.summary, DOC.shareholderAgreement],
+    documents: [DOC.summary, DOC.investmentAgreement],
   },
   {
     id: 'sammtech-infrastructure',
@@ -84,7 +84,7 @@ const SAMPLE_PROJECTS = [
       en: 'Server hardware and delivery-team capacity for offshore client contracts.',
       bn: 'বিদেশি ক্লায়েন্টের চুক্তির জন্য সার্ভার হার্ডওয়্যার ও ডেলিভারি টিমের সক্ষমতা।',
     },
-    documents: [DOC.summary, DOC.shareholderAgreement],
+    documents: [DOC.summary, DOC.investmentAgreement],
   },
   {
     id: 'mars-tile-showroom',
@@ -98,7 +98,7 @@ const SAMPLE_PROJECTS = [
       en: 'Showroom lease, fit-out and opening tile stock.',
       bn: 'শোরুম লিজ, সাজসজ্জা ও প্রাথমিক টাইলস মজুত।',
     },
-    documents: [DOC.summary, DOC.leaseDeed, DOC.shareholderAgreement],
+    documents: [DOC.summary, DOC.leaseDeed, DOC.investmentAgreement],
   },
 ] satisfies (Omit<PublicProject, 'name' | 'useOfFunds' | 'documents'> & {
   name: Localized<string>;
@@ -117,7 +117,7 @@ const GROUP_COMPANIES: (Omit<GroupCompany, 'sector'> & { sector: Localized<strin
   },
 ];
 
-// SAMPLE — must be replaced with real, consented shareholder quotes before
+// SAMPLE — must be replaced with real, consented investor quotes before
 // launch. Publishing invented testimonials would be misleading.
 const TESTIMONIALS: Localized<Testimonial>[] = [
   {

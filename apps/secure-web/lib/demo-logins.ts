@@ -1,4 +1,4 @@
-import { DEMO_PASSWORD, DEMO_SHAREHOLDERS, DEMO_STAFF } from '@investment-platform/contracts/demo-accounts';
+import { DEMO_PASSWORD, DEMO_INVESTORS, DEMO_STAFF } from '@investment-platform/contracts/demo-accounts';
 
 // What the sign-in pages offer as one-click demo logins. Server-only, and
 // undefined outside `next dev`, so a production build never renders or
@@ -13,10 +13,10 @@ export type DemoLogin = {
   description: string;
 };
 
-export function demoLogins(kind: 'shareholder' | 'staff'): DemoLogin[] | undefined {
+export function demoLogins(kind: 'investor' | 'staff'): DemoLogin[] | undefined {
   if (process.env.NODE_ENV !== 'development') return undefined;
 
-  const accounts = kind === 'shareholder' ? DEMO_SHAREHOLDERS : DEMO_STAFF;
+  const accounts = kind === 'investor' ? DEMO_INVESTORS : DEMO_STAFF;
   return accounts.map((account) => ({
     identifier: account.phone ? account.phone.replace(/^0/, '') : account.email,
     password: DEMO_PASSWORD,

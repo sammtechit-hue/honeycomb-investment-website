@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -18,8 +19,6 @@ const INCOMING_PAYMENT_CREATE_SELECT = {
   paymentMethod: true,
   screenshotUrl: true,
   senderAccountInfo: true,
-  installmentNumber: true,
-  dueDate: true,
   status: true,
   createdAt: true,
 } satisfies Prisma.IncomingPaymentSelect;
@@ -29,7 +28,7 @@ export class IncomingPaymentService {
   constructor(private readonly prisma: PrismaService) { }
 
   // For Getting All IncomingPayment's Data with filtering, searching, sorting & pagination
-  // Example: GET /incoming-payment?status=pending&page=1&limit=20&sortBy=dueDate&sortOrder=desc
+  // Example: GET /incoming-payment?status=pending&page=1&limit=20&sortBy=createdAt&sortOrder=desc
   async findAll(query: IncomingPaymentQueryDto) {
     return {
       message: "HelloWorld Return all IncomingPayment's data",
@@ -54,6 +53,7 @@ export class IncomingPaymentService {
       select: {
         id: true,
         investor: { select: { userId: true } },
+        incomingPayments: { select: { id: true } },
       },
     });
 
@@ -69,6 +69,13 @@ export class IncomingPaymentService {
       );
     }
 
+    // An investment takes exactly one payment (no installments).
+    if (investment.incomingPayments) {
+      throw new ConflictException(
+        'A payment has already been recorded for this investment.',
+      );
+    }
+
     try {
       return await this.prisma.$transaction(async (tx) => {
         const payment = await tx.incomingPayment.create({
@@ -77,8 +84,6 @@ export class IncomingPaymentService {
             paymentMethod: dto.paymentMethod,
             screenshotUrl: dto.screenshotUrl,
             senderAccountInfo: dto.senderAccountInfo ?? null,
-            installmentNumber: dto.installmentNumber ?? null,
-            dueDate: dto.dueDate ?? null,
             status: 'pending',
             investment: { connect: { id: investment.id } },
           },
@@ -102,6 +107,17 @@ export class IncomingPaymentService {
         };
       });
     } catch (err) {
+      // Two submissions racing past the check above: the unique
+      // investment_id rejects the second (P2002, or P2014 when Prisma
+      // catches it as a one-to-one relation violation).
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        (err.code === 'P2002' || err.code === 'P2014')
+      ) {
+        throw new ConflictException(
+          'A payment has already been recorded for this investment.',
+        );
+      }
       if (
         err instanceof Prisma.PrismaClientKnownRequestError &&
         err.code === 'P2003'

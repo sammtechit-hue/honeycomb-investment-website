@@ -58,7 +58,7 @@ export const bankFormSchema = z
     accountName: accountNameSchema,
     accountNumber: accountNumberSchema,
     routingNumber: z.string().trim(),
-    // Starts unselected ('') so the shareholder has to choose. Kept a string
+    // Starts unselected ('') so the investor has to choose. Kept a string
     // (no transform) because zodResolver can't type a changed output.
     accountType: z.string().refine((value) => bankAccountTypeSchema.safeParse(value).success, {
       message: 'Choose an account type',
@@ -124,6 +124,21 @@ const blankToUndefined = (value: string) => (value === '' ? undefined : value);
 
 // Assembles POST /api/investor's body and re-checks it against the
 // contract, so a mismatch surfaces here rather than as a server 400.
+// Form values → the API's bank account shape (also used by the dashboard's
+// "Add a bank account" form).
+export function toBankPayload(bank: BankValues): InvestorCreateInput['bankAccount'] {
+  return {
+    selectedBank: bank.selectedBank,
+    bankName: bank.selectedBank === 'city_bank' ? CITY_BANK_NAME : bank.bankName,
+    accountName: bank.accountName,
+    accountNumber: bank.accountNumber,
+    routingNumber: bank.selectedBank === 'others' ? bank.routingNumber : undefined,
+    // Checked by bankFormSchema's refine; the API re-validates it.
+    accountType: bank.accountType as z.infer<typeof bankAccountTypeSchema>,
+    branchName: bank.branchName,
+  };
+}
+
 export function toInvestorPayload(data: WizardData): InvestorCreateInput | null {
   const { personal, nominee, bank, documents } = data;
   if (!personal || !nominee || !bank) return null;
@@ -135,16 +150,7 @@ export function toInvestorPayload(data: WizardData): InvestorCreateInput | null 
     profession: blankToUndefined(personal.profession),
     workplace: blankToUndefined(personal.workplace),
     referralCode: blankToUndefined(personal.referralCode),
-    bankAccount: {
-      selectedBank: bank.selectedBank,
-      bankName: bank.selectedBank === 'city_bank' ? CITY_BANK_NAME : bank.bankName,
-      accountName: bank.accountName,
-      accountNumber: bank.accountNumber,
-      routingNumber: bank.selectedBank === 'others' ? bank.routingNumber : undefined,
-      // Checked by bankFormSchema's refine; safeParse below re-checks it.
-      accountType: bank.accountType as z.infer<typeof bankAccountTypeSchema>,
-      branchName: bank.branchName,
-    },
+    bankAccount: toBankPayload(bank),
     nominee: {
       nomineeName: nominee.nomineeName,
       nomineePhone: withCountryCode(nominee.nomineePhone),
