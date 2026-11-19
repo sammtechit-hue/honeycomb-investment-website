@@ -329,7 +329,6 @@ export class MonthlyProfitLedgerService {
                 principalAmount: inv.amount,
                 cycleStart: actualCycleStart,
                 cycleEnd,
-                principalAmount: inv.amount,
                 profitAmount,
                 daysCounted,
                 rateApplied: ratePercent,
