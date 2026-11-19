@@ -23,6 +23,7 @@ import { Roles } from '../../auth/decorators/roles.decorator';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../auth/types/jwt-payload.interface';
 import { CreateInvestorDto } from './dto/create-investor.dto';
+import { CreateBulkInvestorDto } from './dto/create-bulk-investor.dto';
 import { UpdateInvestorDto } from './dto/update-investor.dto';
 import { InvestorQueryDto } from './dto/query-investor.dto';
 import {
@@ -45,7 +46,7 @@ export class InvestorController {
   // GET /api/admin/investor?search=john&status=active&category=gold&page=1&limit=10&sortBy=createdAt&sortOrder=desc
   @Get()
   findAll(@Query() query: InvestorQueryDto) {
-    return this.investorService.findAll(query);
+    return this.investorService.findAllInvestor(query);
   }  // GET /api/admin/investor/edit-requests?search=&status=PENDING&investorId=&page=1&limit=10&sortBy=createdAt&sortOrder=desc
 
 
@@ -93,7 +94,7 @@ export class InvestorController {
   // GET /api/admin/investor/:id
   @Get(':id')
   findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.investorService.findOne(id);
+    return this.investorService.findOneInvestor(id);
   }
 
 
@@ -124,7 +125,31 @@ export class InvestorController {
   // POST /api/admin/investor
   @Post()
   create(@Body() createInvestorDto: CreateInvestorDto) {
-    return this.investorService.create(createInvestorDto);
+    return this.investorService.createInvestor(createInvestorDto);
+  }
+
+  // POST /api/admin/investor/bulk — create one investor per CSV row. The import
+  // is all-or-nothing: if any row is invalid nothing is written (422), and the
+  // response reports every row's status.
+  @Post('bulk')
+  @Roles(Role.ADMIN)
+  createBulk(
+    @Body() createBulkInvestorDto: CreateBulkInvestorDto,
+    @CurrentUser() user: AuthenticatedUser,
+    @Ip() ip?: string,
+    @Headers('user-agent') userAgent?: string,
+    @Headers('x-session-id') sessionId?: string,
+  ) {
+    const context = {
+      ipAddress: ip,
+      userAgent: userAgent,
+      sessionId: sessionId,
+    };
+    return this.investorService.createBulkInvestor(
+      createBulkInvestorDto,
+      user?.userId,
+      context,
+    );
   }
 
   // PATCH /api/admin/investor/:id

@@ -8,6 +8,7 @@ import {
   bankSelectedSchema,
   branchNameSchema,
   emailSchema,
+  fileUrlSchema,
   fullNameSchema,
   phoneNumberSchema,
   professionSchema,
@@ -28,10 +29,6 @@ const emptyToUndefined = (value: unknown) =>
 // ============================================================================
 // Bulk Import Limits
 // ============================================================================
-// Row cap per import. Configurable through INVESTOR_BULK_IMPORT_MAX_ROWS so ops
-// can raise it without a rebuild; anything unset or malformed falls back to the
-// safe default. Read defensively because this file is also bundled for the
-// browser, where `process` may not exist.
 const DEFAULT_BULK_IMPORT_MAX_ROWS = 100;
 const BULK_IMPORT_MAX_ROWS_ENV_KEY = 'INVESTOR_BULK_IMPORT_MAX_ROWS';
 
@@ -76,7 +73,7 @@ export const bulkInvestorRowSchema = z
 
     // --- Investor profile (optional) ---
     // কারণ CSV-তে optional field খালি থাকলে সেটি অনেক সময় undefined না হয়ে empty string ('') হিসেবে আসে।
-    nidNumber: z.preprocess(emptyToUndefined, nidNumberSchema.optional()),
+    nidNumber: nidNumberSchema,
 
     address: z.preprocess(emptyToUndefined, addressSchema.optional()),
     profession: z.preprocess(emptyToUndefined, professionSchema.optional()),
@@ -115,6 +112,11 @@ export const bulkInvestorRowSchema = z
       emptyToUndefined,
       nidNumberSchema.optional(),
     ),
+
+    // --- KYC documents (required) ---
+    nidFront: fileUrlSchema,
+    nidBack: fileUrlSchema,
+    photo: fileUrlSchema,
   })
   //  এর কাজ হলো CSV-তে এমন কোনো column থাকলে যেটি তোমার Zod schema-তে define করা নেই, সেটি reject করা।
   .strict()
@@ -130,6 +132,15 @@ export const bulkInvestorRowSchema = z
     ].some((value) => value !== undefined);
 
     if (hasBankField) {
+      // The bank account row cannot be created without this enum, so it belongs
+      // to the required group as well.
+      if (row.selectedBank === undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['selectedBank'],
+          message: 'Bank selection is required when any bank detail is provided',
+        });
+      }
       if (row.bankName === undefined) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -268,26 +279,16 @@ export type BulkInvestorImportRequest = z.infer<
 // ============================================================================
 
 // `created` = written; `valid` = dry run, row would be created;
-// `skipped` = valid_only mode and the row had errors; `failed` = write failed.
+// `skipped` = valid row, not imported because another row failed;
+// `failed` = the row was rejected.
 export const bulkInvestorRowStatusSchema = z.enum([
   'created',
-  'valid',
+  // 'valid',
   'skipped',
   'failed',
 ]);
 
 export type BulkInvestorRowStatus = z.infer<typeof bulkInvestorRowStatusSchema>;
-
-export const bulkInvestorInviteStatusSchema = z.enum([
-  'queued',
-  'sent',
-  'failed',
-  'not_requested',
-]);
-
-export type BulkInvestorInviteStatus = z.infer<
-  typeof bulkInvestorInviteStatusSchema
->;
 
 export const bulkInvestorRowIssueSchema = z.object({
   // Absent for row-level problems that don't belong to one column.
@@ -306,18 +307,18 @@ export const bulkInvestorRowResultSchema = z.object({
   // Present once the investor row exists (created, or matched in a dry run).
   investorId: uuidSchema.optional(),
   errors: z.array(bulkInvestorRowIssueSchema),
-  warnings: z.array(bulkInvestorRowIssueSchema),
-  inviteStatus: bulkInvestorInviteStatusSchema.optional(),
+  // warnings: z.array(bulkInvestorRowIssueSchema),
+  // inviteStatus: bulkInvestorInviteStatusSchema.optional(),
 });
 
 export type BulkInvestorRowResult = z.infer<typeof bulkInvestorRowResultSchema>;
 
 export const bulkInvestorImportResponseSchema = z.object({
-  dryRun: z.boolean(),
+  // dryRun: z.boolean(),
   totals: z.object({
     total: z.number().int().nonnegative(),
     created: z.number().int().nonnegative(),
-    valid: z.number().int().nonnegative(),
+    // valid: z.number().int().nonnegative(),
     skipped: z.number().int().nonnegative(),
     failed: z.number().int().nonnegative(),
   }),
