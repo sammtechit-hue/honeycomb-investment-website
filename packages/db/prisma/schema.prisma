@@ -24,6 +24,8 @@ enum AuditAction {
     project_updated // any edit to an existing project (fields and/or status)
     project_deleted
     investor_registered
+    investor_bulk_imported // one entry per investor row created by POST /admin/investor/bulk
+    investor_bulk_import_rejected // the whole batch was rejected and nothing was written
     investor_kyc_uploaded
     investor_kyc_status_changed // e.g. Kamal changed KYC doc status to verified
     investor_status_changed // e.g. investor approved/suspended
@@ -32,6 +34,8 @@ enum AuditAction {
     incoming_payment_updated // any admin edit to an incoming-payment record (fields only; status flows via confirm)
     investment_created
     investment_status_changed
+    investment_bulk_created // one entry per investment row created by POST /admin/investment/bulk
+    investment_bulk_create_rejected // the whole batch was rejected and nothing was written
     monthly_rate_set
     monthly_rate_updated // any admin edit to an existing monthly rate setting (rate, active flag, period)
     business_settings_set // business settings (rate, cycle day, counting start) created
@@ -69,7 +73,7 @@ enum InvestorCategory {
 
 enum InvestorStatus {
     pending
-    uploaded_kyc
+    // uploaded_kyc
     active
     suspended //cant suspended until all investment closed
     deactivated

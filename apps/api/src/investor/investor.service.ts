@@ -107,7 +107,7 @@ export class InvestorService {
     const { userId: _ownerUserId, ...profile } = investor;
 
     // Don't expose category until investor is beyond the initial KYC stages
-    if (profile.status === 'pending' || profile.status === 'uploaded_kyc') {
+    if (profile.status === 'pending') {
       const { category, ...publicProfile } = profile;
 
       return publicProfile;
@@ -179,9 +179,7 @@ export class InvestorService {
     const hasKycDocuments =
       !!kycInput?.nidFront && !!kycInput?.nidBack && !!kycInput?.photo;
 
-    const investorStatus: InvestorStatus = hasKycDocuments
-      ? 'uploaded_kyc'
-      : 'pending';
+    const investorStatus: InvestorStatus = 'pending';
 
     try {
       return await this.prisma.$transaction(async (tx) => {

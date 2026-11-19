@@ -33,7 +33,7 @@ export {
 // ---------------------------------------------------------------------------
 export const investorStatusSchema = z.enum([
   'pending',
-  'uploaded_kyc',
+  // 'uploaded_kyc',
   'active',
   'suspended',
 ]);

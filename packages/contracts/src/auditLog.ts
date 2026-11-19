@@ -14,6 +14,8 @@ export const auditActionSchema = z.enum([
   'project_updated',
   'project_deleted',
   'investor_registered',
+  'investor_bulk_imported',
+  'investor_bulk_import_rejected',
   'investor_kyc_uploaded',
   'investor_kyc_status_changed',
   'investor_status_changed',

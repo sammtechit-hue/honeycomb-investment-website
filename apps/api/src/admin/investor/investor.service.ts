@@ -2,11 +2,20 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
+  ServiceUnavailableException,
   UnauthorizedException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import type {
+  BulkInvestorImportRequest,
+  BulkInvestorRowInput,
+  BulkInvestorRowIssue,
+  BulkInvestorRowResult,
+} from '@investment-platform/contracts/investor-bulk-import';
 import {
-  AdminNotificationType,
   AuditAction,
   EditRequestStatus,
   InvestmentStatus,
@@ -15,8 +24,11 @@ import {
   LogSeverity,
   LogStatus,
   Prisma,
+  Role,
   VerificationStatus,
 } from '@investment-platform/db';
+import { PasswordService } from '../../auth/password.service';
+import type { Env } from '../../config/env';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RequestAuditContext } from '../../utils/common types';
 import { generateUniqueReferralCode } from '../../utils/common/generateReferralCode.utils';
@@ -72,10 +84,29 @@ type ReviewEditRequest = Prisma.InvestorEditRequestGetPayload<{
 
 @Injectable()
 export class InvestorService {
-  constructor(private readonly prisma: PrismaService) { }
+  private readonly logger = new Logger(InvestorService.name);
+  private readonly initialInvestorPassword?: string;
 
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly passwords: PasswordService,
+    config: ConfigService<Env, true>,
+  ) {
+    this.initialInvestorPassword = config.get('INITIAL_PASSWORD_INVESTOR', {
+      infer: true,
+    });
+    if (!this.initialInvestorPassword) {
+      this.logger.warn(
+        'INITIAL_PASSWORD_INVESTOR is not set — investor bulk import is disabled',
+      );
+    }
+  }
+
+  // ----------------------------------------------------------
+  // -------------------------- findAll -----------------------
+  // ----------------------------------------------------------
   // GET /api/admin/investor
-  async findAll(query: InvestorQueryDto) {
+  async findAllInvestor(query: InvestorQueryDto) {
     const {
       search,
       status,
@@ -168,6 +199,9 @@ export class InvestorService {
     };
   }
 
+  // ----------------------------------------------------------
+  // ---------------- findInvestorBankAccounts ----------------
+  // ----------------------------------------------------------
   // GET /api/admin/investor/:id/bank-account
   async findInvestorBankAccounts(id: string, query: BankAccountQueryDto) {
     const investor = await this.prisma.investor.findUnique({
@@ -234,6 +268,9 @@ export class InvestorService {
     };
   }
 
+  // ----------------------------------------------------------
+  // ---------------- updateInvestorBankAccount ---------------
+  // ----------------------------------------------------------
   // PATCH /api/admin/investor/bank-account/:bankAccountId
   async updateInvestorBankAccount(
     bankAccountId: string,
@@ -301,9 +338,9 @@ export class InvestorService {
         },
       });
 
-      // ---------------------------------------------------------
-      // ---------------------- AUDITLOG -------------------------
-      //----------------------------------------------------------
+      // ----------------------------------------------------------
+      // ------------------------- AUDITLOG -----------------------
+      // ----------------------------------------------------------
 
       await tx.auditLog.create({
         data: {
@@ -345,8 +382,11 @@ export class InvestorService {
     };
   }
 
+  // ----------------------------------------------------------
+  // -------------------------- findOne -----------------------
+  // ----------------------------------------------------------
   // GET /api/admin/investor/:id
-  async findOne(id: string) {
+  async findOneInvestor(id: string) {
     const investor = await this.prisma.investor.findUnique({
       where: { id },
     });
@@ -362,6 +402,9 @@ export class InvestorService {
     };
   }
 
+  // ----------------------------------------------------------
+  // -------------------- findAllEditRequests -----------------
+  // ----------------------------------------------------------
   // GET /api/admin/investor/edit-requests
   async findAllEditRequests(query: InvestorEditRequestQueryDto) {
     const {
@@ -429,6 +472,9 @@ export class InvestorService {
     };
   }
 
+  // ----------------------------------------------------------
+  // ----------------- findInvestorEditRequests ---------------
+  // ----------------------------------------------------------
   // GET /api/admin/investor/edit-requests/:id
   async findInvestorEditRequests(id: string) {
     const editRequest = await this.prisma.investorEditRequest.findUnique({
@@ -511,6 +557,9 @@ export class InvestorService {
     };
   }
 
+  // ----------------------------------------------------------
+  // ---------------- reviewInvestorEditRequests --------------
+  // ----------------------------------------------------------
   // Merge investor Edit Request
   // ----------------------------------------------
   async reviewInvestorEditRequests(
@@ -622,6 +671,9 @@ export class InvestorService {
           ]);
         }
 
+        // ----------------------------------------------------------
+        // ------------------------- AUDITLOG -----------------------
+        // ----------------------------------------------------------
         await tx.auditLog.create({
           data: {
             adminName: admin?.name ?? 'Admin',
@@ -690,6 +742,9 @@ export class InvestorService {
     }
   }
 
+  // ----------------------------------------------------------
+  // ---------------------- mergeStagedRows -------------------
+  // ----------------------------------------------------------
   private async mergeStagedRows(
     tx: Prisma.TransactionClient,
     request: ReviewEditRequest,
@@ -772,10 +827,395 @@ export class InvestorService {
     return merged;
   }
 
-  async create(dto: CreateInvestorDto) {
+  // ----------------------------------------------------------
+  // --------------------------- create Investor --------------
+  // ----------------------------------------------------------
+  async createInvestor(_dto: CreateInvestorDto) {
     return 'Investor Data';
   }
 
+  // ----------------------------------------------------------
+  // ---------------------- createBulkInvestor ----------------
+  // ----------------------------------------------------------
+  // POST /api/admin/investor/bulk
+  async createBulkInvestor(
+    dto: BulkInvestorImportRequest,
+    userId: string | undefined,
+    context?: RequestAuditContext,
+  ) {
+    if (!userId) {
+      throw new UnauthorizedException('Session is no longer valid');
+    }
+
+    if (!this.initialInvestorPassword) {
+      throw new ServiceUnavailableException(
+        'Investor bulk import is not available right now',
+      );
+    }
+
+    // Need these for checking existing emails, phones and NID numbers
+    const emails = [...new Set(dto.rows.map((row) => row.email))];
+    const phones = [...new Set(dto.rows.map((row) => row.phone))];
+    const nids = [...new Set(dto.rows.map((row) => row.nidNumber))];
+
+    // Independent lookups, run in parallel
+    const [admin, takenUsers, takenNidOwners] = await Promise.all([
+      this.prisma.adminProfile.findUnique({
+        where: { userId },
+        select: { id: true, name: true },
+      }),
+
+      // Accounts that already own one of these identifiers are reported as
+      // row errors before anything is written.
+      this.prisma.user.findMany({
+        where: {
+          OR: [
+            { email: { in: emails, mode: 'insensitive' } },
+            { phone: { in: phones } },
+          ],
+        },
+        select: { email: true, phone: true },
+      }),
+
+      // NID is not unique in the schema, but an import must not stamp a number
+      // that already belongs to another investor.
+      this.prisma.investor.findMany({
+        where: { nidNumber: { in: nids } },
+        select: { nidNumber: true },
+      }),
+    ]);
+
+    const takenEmails = new Set(
+      takenUsers.map((user) => user.email.toLowerCase()),
+    );
+    const takenPhones = new Set(
+      takenUsers
+        .map((user) => user.phone)
+        .filter((phone): phone is string => phone !== null),
+    );
+    const takenNids = new Set(
+      takenNidOwners
+        .map((investor) => investor.nidNumber)
+        .filter((nid): nid is string => nid !== null),
+    );
+
+    // Every imported investor starts on the same initial password
+    const passwordHash = await this.passwords.hash(
+      this.initialInvestorPassword,
+    );
+
+    // ---- Phase 1: validate every row, write nothing ----
+
+    const prepared = dto.rows.map((row) =>
+      prepareBulkRow(row, {
+        emails: takenEmails,
+        phones: takenPhones,
+        nids: takenNids,
+      }),
+    );
+
+    const failedRows = prepared.filter((row) => row.errors.length > 0);
+
+    if (failedRows.length > 0) {
+      // The request schema already rejects duplicates inside one file, so
+      // every problem below is a database conflict or a malformed row.
+      await this.auditRejectedBulkImport(
+        prepared,
+        failedRows.length,
+        userId,
+        admin,
+        context,
+      );
+
+      const results: BulkInvestorRowResult[] = prepared.map((row) =>
+        row.errors.length > 0
+          ? {
+            rowNumber: row.row.rowNumber,
+            status: 'failed',
+            errors: row.errors,
+            // warnings: row.warnings,
+          }
+          : {
+            rowNumber: row.row.rowNumber,
+            status: 'skipped',
+            errors: [],
+            // warnings: [...row.warnings, { message: SKIPPED_ROW_WARNING }],
+          },
+      );
+
+      throw new UnprocessableEntityException({
+        message: 'Investor bulk import rejected: no investors were created',
+        success: false,
+        data: {
+          totals: {
+            total: results.length,
+            created: 0,
+            failed: failedRows.length,
+            skipped: results.length - failedRows.length,
+          },
+          results,
+        },
+      });
+    }
+
+    // ---- Phase 2: create the whole batch in one transaction ----
+
+    // Tracks the row being written so a database error can be attributed to a
+    // row number instead of the batch as a whole.
+    let currentRow = 0;
+    const results: BulkInvestorRowResult[] = [];
+
+    try {
+      await this.prisma.$transaction(
+        async (tx) => {
+          for (const row of prepared) {
+            currentRow = row.row.rowNumber;
+            const investorId = await this.createInvestorInTx(tx, row, {
+              passwordHash,
+              admin,
+              context,
+            });
+
+            results.push({
+              rowNumber: row.row.rowNumber,
+              status: 'created',
+              investorId,
+              errors: [],
+              // warnings: row.warnings,
+            });
+          }
+        },
+        // Maximum time the transaction is allowed to run before Prisma cancels it timeout: 30s.
+        // Maximum time Prisma waits to acquire a database connection and start the transaction. maxWait: 5s
+        { timeout: 20_000, maxWait: 5_000 },
+      );
+    } catch (err) {
+      // P2002 here means another account took the email, phone or NID after
+      // phase 1 checked it. The transaction has rolled back, so nothing is
+      // saved — report which row lost the race.
+      if (err instanceof Prisma.PrismaClientKnownRequestError) {
+        if (err.code === 'P2002') {
+          throw new ConflictException(
+            `Row ${currentRow}: ${uniqueTargetLabel(err.meta?.target)} is already in use by another account.`,
+          );
+        }
+        if (err.code === 'P2000') {
+          throw new BadRequestException(
+            `Row ${currentRow}: one of the provided values is too long for its field.`,
+          );
+        }
+        if (err.code === 'P2003') {
+          throw new BadRequestException(
+            `Row ${currentRow}: one or more referenced records do not exist.`,
+          );
+        }
+      }
+
+      // Anything else (database down, bug) is not a row-level problem — fail
+      // the request so it is not silently reported as a bad CSV row.
+      throw err;
+    }
+
+    return {
+      message: 'Investor bulk import completed',
+      success: true,
+      data: {
+        totals: {
+          total: results.length,
+          created: results.length,
+        },
+        results,
+      },
+    };
+  }
+
+  // ----------------------------------------------------------
+  // -------------------- createInvestorInTx ------------------
+  // ----------------------------------------------------------
+  // Writes one prepared row: user, investor (with nested bank account, nominee
+  // and KYC documents) and its audit log. Called from the batch transaction, so
+  // all of it rolls back together if any row fails.
+  private async createInvestorInTx(
+    tx: Prisma.TransactionClient,
+    prepared: PreparedBulkRow,
+    batch: BulkImportBatch,
+  ): Promise<string> {
+    const { row } = prepared;
+
+    // The row schema validates each group as all-or-nothing, so the nested
+    // payloads are built only when the whole group is present.
+    const bankAccount =
+      row.selectedBank !== undefined &&
+        row.bankName !== undefined &&
+        row.accountName !== undefined &&
+        row.accountNumber !== undefined
+        ? {
+          selectedBank: row.selectedBank,
+          bankName: row.bankName,
+          accountName: row.accountName,
+          accountNumber: row.accountNumber,
+          routingNumber: row.routingNumber,
+          accountType: row.accountType,
+          branchName: row.branchName,
+          // Same as investor self-registration: an admin reviews and
+          // activates the account before any payout uses it.
+          isActive: true,
+        }
+        : undefined;
+
+    const nominee =
+      row.nomineeName !== undefined &&
+        row.nomineePhone !== undefined &&
+        row.relation !== undefined
+        ? {
+          nomineeName: row.nomineeName,
+          nomineePhone: row.nomineePhone,
+          relation: row.relation,
+          nomineeNidNumber: row.nomineeNidNumber,
+        }
+        : undefined;
+
+    // KYC documents are required on every bulk row.
+    const kycDocuments = {
+      nidFront: row.nidFront,
+      nidBack: row.nidBack,
+      photo: row.photo,
+      verificationStatus: VerificationStatus.verified
+    };
+
+    let password = "";
+
+    if (row.password) {
+      password = await this.passwords.hash(
+        row.password
+      );
+    } else {
+      password = batch.passwordHash;
+    }
+
+
+    const user = await tx.user.create({
+      data: {
+        email: row.email,
+        phone: row.phone,
+        passwordHash: password,
+        role: Role.INVESTOR,
+      },
+      select: { id: true },
+    });
+
+    const created = await tx.investor.create({
+      data: {
+        fullname: row.fullname,
+        address: row.address,
+        profession: row.profession,
+        workplace: row.workplace,
+        nidNumber: row.nidNumber,
+        category: row.category,
+        // Imported profiles start where signup leaves them: pending KYC.
+        status: InvestorStatus.active,
+        user: { connect: { id: user.id } },
+        ...(bankAccount && { bankAccount: { create: [bankAccount] } }),
+        ...(nominee && { nominee: { create: nominee } }),
+        kycDocuments: { create: kycDocuments },
+      },
+      select: { id: true, fullname: true },
+    });
+
+    // ----------------------------------------------------------
+    // ------------------------- AUDITLOG -----------------------
+    // ----------------------------------------------------------
+    await tx.auditLog.create({
+      data: {
+        adminName: batch.admin?.name ?? 'Admin',
+        adminProfileId: batch.admin?.id ?? null,
+        action: AuditAction.investor_bulk_imported,
+        module: LogModule.INVESTOR,
+        severity: LogSeverity.INFO,
+        status: LogStatus.SUCCESS,
+        targetLabel: `Investor Imported: ${created.fullname}`,
+        targetTable: 'investors',
+        targetId: created.id,
+        newValue: {
+          fullName: row.fullname,
+          email: row.email,
+          phone: row.phone,
+          nidNumber: row.nidNumber ?? null,
+          category: row.category,
+          status: InvestorStatus.pending,
+          bankAccount: Boolean(bankAccount),
+          nominee: Boolean(nominee),
+          kycDocuments: true,
+        } as unknown as Prisma.InputJsonValue,
+        metadata: {
+          source: 'bulk_import',
+          rowNumber: row.rowNumber,
+        } as unknown as Prisma.InputJsonValue,
+        ipAddress: batch.context?.ipAddress ?? null,
+        userAgent: batch.context?.userAgent ?? null,
+        sessionId: batch.context?.sessionId ?? null,
+      },
+    });
+
+    return created.id;
+  }
+
+  // ----------------------------------------------------------
+  // ------------------ auditRejectedBulkImport ---------------
+  // ----------------------------------------------------------
+  // Written outside any transaction: a rejected import created no investor row,
+  // but the attempt must still leave a trail.
+  private async auditRejectedBulkImport(
+    prepared: PreparedBulkRow[],
+    failedCount: number,
+    userId: string,
+    admin: { id: string; name: string | null } | null,
+    context?: RequestAuditContext,
+  ): Promise<void> {
+    try {
+      await this.prisma.auditLog.create({
+        data: {
+          adminName: admin?.name ?? 'Admin',
+          adminProfileId: admin?.id ?? null,
+          action: AuditAction.investor_bulk_import_rejected,
+          module: LogModule.INVESTOR,
+          severity: LogSeverity.WARNING,
+          status: LogStatus.FAILED,
+          targetLabel: `Bulk import rejected: ${failedCount} of ${prepared.length} rows invalid`,
+          // No investor row was created, so the acting admin's user row is what
+          // the trail points at.
+          targetTable: 'users',
+          targetId: userId,
+          metadata: {
+            source: 'bulk_import',
+            totalRows: prepared.length,
+            failedRows: failedCount,
+            errorCount: prepared.reduce(
+              (count, row) => count + row.errors.length,
+              0,
+            ),
+            failedRowNumbers: prepared
+              .filter((row) => row.errors.length > 0)
+              .map((row) => row.row.rowNumber),
+          } as unknown as Prisma.InputJsonValue,
+          ipAddress: context?.ipAddress ?? null,
+          userAgent: context?.userAgent ?? null,
+          sessionId: context?.sessionId ?? null,
+        },
+      });
+    } catch (err) {
+      // The 422 is the answer the admin needs; the trail is best-effort.
+      this.logger.error(
+        'Failed to write bulk import rejected audit log',
+        err as Error,
+      );
+    }
+  }
+
+  // ----------------------------------------------------------
+  // ---------------------- updateInvestor --------------------
+  // ----------------------------------------------------------
+  // PATCH /api/admin/investor/:id
   async updateInvestor(
     id: string,
     dto: UpdateInvestorDto,
@@ -858,11 +1298,10 @@ export class InvestorService {
     // only permitted status change from active is suspension.
     if (
       existing.status === InvestorStatus.active &&
-      (status === InvestorStatus.pending ||
-        status === InvestorStatus.uploaded_kyc)
+      (status === InvestorStatus.pending)
     ) {
       throw new BadRequestException(
-        'An active investor cannot go back to pending or uploaded_kyc. The only permitted status change is suspension.',
+        'An active investor cannot go back to pending. The only permitted status change is suspension.',
       );
     }
 
@@ -965,6 +1404,9 @@ export class InvestorService {
           await this.ensureReferralCode(tx, id);
         }
 
+        // ----------------------------------------------------------
+        // ------------------------- AUDITLOG -----------------------
+        // ----------------------------------------------------------
         await tx.auditLog.create({
           data: {
             adminName: admin?.name ?? 'Admin',
@@ -1017,6 +1459,9 @@ export class InvestorService {
     }
   }
 
+  // ----------------------------------------------------------
+  // --------------------- deactiveInvestor -------------------
+  // ----------------------------------------------------------
   // PATCH /api/admin/investor/:id/deactivate
   async deactiveInvestor(
     id: string,
@@ -1091,6 +1536,9 @@ export class InvestorService {
           throw e;
         }
 
+        // ----------------------------------------------------------
+        // ------------------------- AUDITLOG -----------------------
+        // ----------------------------------------------------------
         await tx.auditLog.create({
           data: {
             adminName: admin?.name ?? 'Admin',
@@ -1134,6 +1582,9 @@ export class InvestorService {
     }
   }
 
+  // ----------------------------------------------------------
+  // --------------------- ensureReferralCode -----------------
+  // ----------------------------------------------------------
   // Approval is when the investor becomes eligible to refer others. An existing
   // unused, active code is reused; otherwise a fresh one is issued.
   private async ensureReferralCode(
@@ -1180,6 +1631,9 @@ export class InvestorService {
 
   }
 
+  // ----------------------------------------------------------
+  // ---------------------- nomineeNestedWrite ---------------
+  // ----------------------------------------------------------
   private nomineeNestedWrite(
     existing: InvestorWithRelations,
     nominee: UpdateInvestorDto['nominee'],
@@ -1211,6 +1665,9 @@ export class InvestorService {
     };
   }
 
+  // ----------------------------------------------------------
+  // ------------------------ kycNestedWrite ------------------
+  // ----------------------------------------------------------
   private kycNestedWrite(
     existing: InvestorWithRelations,
     kycDocuments: UpdateInvestorDto['kycDocuments'],
@@ -1240,6 +1697,108 @@ export class InvestorService {
   }
 }
 
+// ----------------------------------------------------------
+// ------------------------ batch types ---------------------
+// ----------------------------------------------------------
+// One validated but not yet written bulk import row, plus the row-level
+// findings reported back to the admin.
+type PreparedBulkRow = {
+  row: BulkInvestorRowInput;
+  errors: BulkInvestorRowIssue[];
+  // warnings: BulkInvestorRowIssue[];
+};
+
+type BulkImportBatch = {
+  passwordHash: string;
+  admin: { id: string; name: string | null } | null;
+  context?: RequestAuditContext;
+};
+
+// Shown on rows that are valid but not imported because another row failed.
+// const SKIPPED_ROW_WARNING =
+//   'Row is valid but was not imported because other rows failed.';
+
+// ----------------------------------------------------------
+// ----------------------- prepareBulkRow -------------------
+// ----------------------------------------------------------
+// Phase 1 of the bulk import: collect every problem with a row without writing
+// anything, so the admin sees all bad rows in one response.
+function prepareBulkRow(
+  row: BulkInvestorRowInput,
+  taken: { emails: Set<string>; phones: Set<string>; nids: Set<string> },
+): PreparedBulkRow {
+  const errors: BulkInvestorRowIssue[] = [];
+  // const warnings: BulkInvestorRowIssue[] = [];
+
+  if (taken.emails.has(row.email)) {
+    errors.push({
+      field: 'email',
+      message: `An account with email "${row.email}" already exists`,
+    });
+  }
+
+  if (taken.phones.has(row.phone)) {
+    errors.push({
+      field: 'phone',
+      message: `An account with phone "${row.phone}" already exists`,
+    });
+  }
+
+  if (row.nidNumber !== undefined && taken.nids.has(row.nidNumber)) {
+    errors.push({
+      field: 'nidNumber',
+      message: `An investor with NID number "${row.nidNumber}" already exists`,
+    });
+  }
+
+  // const bankAccount = bulkRowBankAccount(row, errors);
+  // const nominee = bulkRowNominee(row);
+
+
+  // if (
+  //   row.selectedBank !== undefined &&
+  //   row.bankName !== undefined &&
+  //   row.accountName !== undefined &&
+  //   row.accountNumber !== undefined
+  // ) {
+  //   warnings.push({
+  //     message:
+  //       'Bank account is created inactive; activate it from the investor bank-account endpoint.',
+  //   });
+  // }
+
+  // return { row, errors, warnings };
+  return { row, errors };
+}
+
+// ----------------------------------------------------------
+// --------------------- uniqueTargetLabel ------------------
+// ----------------------------------------------------------
+// Prisma reports the violated columns in `meta.target`. Naming them keeps a
+// race error from claiming "email or phone" when the NID was the duplicate.
+const UNIQUE_TARGET_LABELS: Record<string, string> = {
+  email: 'Email',
+  phone: 'Phone',
+  nid_number: 'NID number',
+};
+
+function uniqueTargetLabel(target: unknown): string {
+  const fields = Array.isArray(target)
+    ? target.filter((field): field is string => typeof field === 'string')
+    : typeof target === 'string'
+      ? [target]
+      : [];
+
+  if (fields.length === 0) return 'One of the provided unique values';
+
+  return fields
+    .map((field) => UNIQUE_TARGET_LABELS[field] ?? field)
+    .join(', ');
+}
+
+// ----------------------------------------------------------
+// ------------------------- pickLogModule ------------------
+// ----------------------------------------------------------
 function pickLogModule(next: {
   status?: InvestorStatus;
   kycDocuments?: UpdateInvestorDto['kycDocuments'];
@@ -1251,6 +1810,9 @@ function pickLogModule(next: {
   return LogModule.INVESTOR;
 }
 
+// ----------------------------------------------------------
+// ----------------------- pickAuditAction ------------------
+// ----------------------------------------------------------
 function pickAuditAction(
   existing: InvestorWithRelations,
   next: {
@@ -1280,6 +1842,9 @@ type StagedFields<T extends object> = {
   [K in keyof T]?: NonNullable<T[K]>;
 };
 
+// ----------------------------------------------------------
+// ------------------------- stagedFields -------------------
+// ----------------------------------------------------------
 //keep fields that have actual values and skip null or undefined.
 function stagedFields<T extends object>(fields: T): StagedFields<T> {
   const result: StagedFields<T> = {};
@@ -1293,6 +1858,9 @@ function stagedFields<T extends object>(fields: T): StagedFields<T> {
   return result;
 }
 
+// ----------------------------------------------------------
+// ---------------------- toStagedSnapshot ------------------
+// ----------------------------------------------------------
 function toStagedSnapshot(request: ReviewEditRequest) {
   const user = request.editableUser;
 
@@ -1331,6 +1899,9 @@ function toStagedSnapshot(request: ReviewEditRequest) {
   };
 }
 
+// ----------------------------------------------------------
+// --------------------- toInvestorSnapshot -----------------
+// ----------------------------------------------------------
 function toInvestorSnapshot(investor: InvestorWithRelations) {
   return {
     fullName: investor.fullname,
