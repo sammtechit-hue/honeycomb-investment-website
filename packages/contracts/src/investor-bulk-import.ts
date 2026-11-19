@@ -10,6 +10,7 @@ import {
   emailSchema,
   fileUrlSchema,
   fullNameSchema,
+  passwordSchema,
   phoneNumberSchema,
   professionSchema,
   routingNumberSchema,
@@ -70,7 +71,7 @@ export const bulkInvestorRowSchema = z
     // Same lowercasing as signupInputSchema in auth.ts.
     email: emailSchema.toLowerCase(),
     phone: phoneNumberSchema,
-
+    password: passwordSchema.optional(),
     // --- Investor profile (optional) ---
     // কারণ CSV-তে optional field খালি থাকলে সেটি অনেক সময় undefined না হয়ে empty string ('') হিসেবে আসে।
     nidNumber: nidNumberSchema,
@@ -236,14 +237,17 @@ export const bulkInvestorImportRequestSchema = z
     const firstByEmail = new Map<string, number>();
     const firstByPhone = new Map<string, number>();
     const firstByNid = new Map<string, number>();
+    // Row numbers identify rows in the response, so they must be unique
+    // inside one file.
+    const firstIndexByRowNumber = new Map<number, number>();
 
     request.rows.forEach((row, index) => {
 
       // check() function
       const check = (
-        map: Map<string, number>,
-        value: string | undefined,
-        field: 'email' | 'phone' | 'nidNumber',
+        map: Map<string | number, number>,
+        value: number | string | undefined,
+        field: 'email' | 'phone' | 'nidNumber' | 'rowNumber',
         label: string,
       ) => {
         if (value === undefined) return;
@@ -267,6 +271,7 @@ export const bulkInvestorImportRequestSchema = z
       check(firstByEmail, row.email, 'email', 'email');
       check(firstByPhone, row.phone, 'phone', 'phone');
       check(firstByNid, row.nidNumber, 'nidNumber', 'NID number');
+      check(firstIndexByRowNumber, row.rowNumber, 'rowNumber', 'Row number')
     });
   });
 

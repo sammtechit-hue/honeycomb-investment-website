@@ -987,7 +987,7 @@ export class InvestorService {
         },
         // Maximum time the transaction is allowed to run before Prisma cancels it timeout: 30s.
         // Maximum time Prisma waits to acquire a database connection and start the transaction. maxWait: 5s
-        { timeout: 30_000, maxWait: 5_000 },
+        { timeout: 20_000, maxWait: 5_000 },
       );
     } catch (err) {
       // P2002 here means another account took the email, phone or NID after
@@ -1083,11 +1083,22 @@ export class InvestorService {
       verificationStatus: VerificationStatus.verified
     };
 
+    let password = "";
+
+    if (row.password) {
+      password = await this.passwords.hash(
+        row.password
+      );
+    } else {
+      password = batch.passwordHash;
+    }
+
+
     const user = await tx.user.create({
       data: {
         email: row.email,
         phone: row.phone,
-        passwordHash: batch.passwordHash,
+        passwordHash: password,
         role: Role.INVESTOR,
       },
       select: { id: true },
@@ -1287,11 +1298,10 @@ export class InvestorService {
     // only permitted status change from active is suspension.
     if (
       existing.status === InvestorStatus.active &&
-      (status === InvestorStatus.pending ||
-        status === InvestorStatus.uploaded_kyc)
+      (status === InvestorStatus.pending)
     ) {
       throw new BadRequestException(
-        'An active investor cannot go back to pending or uploaded_kyc. The only permitted status change is suspension.',
+        'An active investor cannot go back to pending. The only permitted status change is suspension.',
       );
     }
 
