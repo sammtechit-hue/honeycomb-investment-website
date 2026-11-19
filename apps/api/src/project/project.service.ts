@@ -3,6 +3,7 @@ import { CreateProjectDto } from '../admin/project/dto/create-project.dto';
 import { ProjectQueryDto } from '../admin/project/dto/query-project.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@investment-platform/db';
+import { fetchData } from '../utils/common/fetchData.util';
 
 const PUBLIC_PROJECT_SELECT = {
     id: true,
@@ -11,6 +12,18 @@ const PUBLIC_PROJECT_SELECT = {
     status: true,
     minimumInvestment: true,
     startDate: true,
+    // monthlyRateSettings: {
+    //     where: {
+    //         isActive: true,
+    //     },
+    //     select: {
+    //         ratePercent: true,
+    //         periodMonth: true,
+    //     },
+    //     orderBy: {
+    //         periodMonth: 'desc',
+    //     },
+    // },
 } satisfies Prisma.ProjectSelect;
 
 @Injectable()
@@ -18,7 +31,7 @@ export class ProjectService {
     constructor(private readonly prisma: PrismaService) { }
 
     // GET /api/admin/project
-    async findAll(query: ProjectQueryDto) {
+    async findAllProject(query: ProjectQueryDto) {
         const {
             search,
             status,
@@ -54,20 +67,18 @@ export class ProjectService {
         // Tie-breaker on id keeps pagination deterministic.
         const orderBy: Prisma.ProjectOrderByWithRelationInput[] = [
             { [sortBy]: sortOrder },
-            ...(sortBy !== 'id' ? [{ id: 'asc' as const }] : []),
+            { id: 'asc' },
         ];
 
 
-        const [projects, total] = await Promise.all([
-            this.prisma.project.findMany({
-                where,
-                orderBy,
-                skip: (page - 1) * limit,
-                take: limit,
-                select: PUBLIC_PROJECT_SELECT,
-            }),
-            this.prisma.project.count({ where }),
-        ]);
+        const [projects, total] = await fetchData(
+            this.prisma.project,
+            where,
+            orderBy,
+            page,
+            limit,
+            { select: PUBLIC_PROJECT_SELECT },
+        );
 
         const totalPages = Math.ceil(total / limit);
 
@@ -87,7 +98,7 @@ export class ProjectService {
     }
 
     // For Getting One Project's Data
-    async findOne(id: string) {
+    async findOneProject(id: string) {
         const project = await this.prisma.project.findUnique({
             where: { id },
             select: PUBLIC_PROJECT_SELECT,

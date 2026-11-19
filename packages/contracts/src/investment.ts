@@ -66,18 +66,7 @@ const disbursementPeriodLabels: Record<
   yearly: 'yearly',
 };
 
-/**
- * Cross-field rule: investmentPeriodMonths must be a positive whole number
- * of months AND an exact multiple of the profit disbursement period (so every
- * disbursement lands on a real cycle). Returns the error message, or null
- * when the combination is valid.
- *
- * Shared by the zod refinements below and the Nest service layer (which turns
- * a non-null result into a BadRequestException) so the rule lives in one place.
- *
- * When disbursementPeriod is absent (partial update payloads) the check is
- * skipped here — callers must re-run it with the merged final values.
- */
+
 export function investmentPeriodDisbursementError(input: {
   investmentPeriodMonths?: number | null;
   disbursementPeriod?: string | null;
@@ -154,9 +143,8 @@ export type InvestmentCreateInput = z.infer<typeof investmentCreateInputSchema>;
 export const investmentAdminUpdateInputSchema = investmentCreateFieldsSchema
   .extend({
     status: investmentStatusSchema.optional(),
-    // rate is intentionally excluded — admin sets it during approval
-    rate: percentSchema.optional(),
     investmentDate: dateSchema.optional(),
+    rate: percentSchema.optional(),
     agreementEndDate: dateSchema.optional(),
     agreementPlace: z.string().trim().max(150).optional(),
     deedOffical: z.string().trim().optional(),
@@ -185,6 +173,46 @@ export const investmentAdminUpdateInputSchema = investmentCreateFieldsSchema
   .superRefine(refineInvestmentPeriodAgainstDisbursement);
 
 export type InvestmentAdminUpdateInputSchema = z.infer<typeof investmentAdminUpdateInputSchema>;
+
+// For admin — creates an investment row on behalf of an investor, so the
+// owning investorId is required alongside the regular investment fields.
+// `status` is intentionally excluded: a new row starts as `pending` and moves
+// through the audited status transitions in the admin update endpoint.
+export const investmentAdminCreateInputSchema = investmentCreateFieldsSchema
+  .extend({
+    investorId: uuidSchema,
+
+    // rate is intentionally excluded — it is derived from the project's
+    // configured rate / monthly rate setting, never supplied by the admin.
+    investmentDate: dateSchema,
+    agreementEndDate: dateSchema.optional(),
+    agreementPlace: z.string().trim().max(150).optional(),
+    deedOffical: z.string().trim().optional(),
+    deedGoverment: z.string().trim().optional(),
+    status: investmentStatusSchema,
+
+    // --- Physical Items Tracking ---
+    chequeGiven: z.boolean().optional(),
+    cashVoucharGiven: z.boolean().optional(),
+
+    souvenirGiven: z.boolean().optional(),
+    isSouvenirApplicable: z.boolean().optional(),
+
+    certificateGiven: z.boolean().optional(),
+    isCertificateApplicable: z.boolean().optional(),
+
+    // --- Notes ---
+    specialInstruction: z
+      .string()
+      .trim()
+      .max(1000, 'Special instruction cannot exceed 1000 characters')
+      .optional(),
+  })
+  .superRefine(refineInvestmentPeriodAgainstDisbursement);
+
+export type InvestmentAdminCreateInputSchema = z.infer<
+  typeof investmentAdminCreateInputSchema
+>;
 
 
 // For investor

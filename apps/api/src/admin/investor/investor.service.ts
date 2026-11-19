@@ -19,6 +19,8 @@ import {
 } from '@investment-platform/db';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RequestAuditContext } from '../../utils/common types';
+import { generateUniqueReferralCode } from '../../utils/common/generateReferralCode.utils';
+import { fetchData } from '../../utils/common/fetchData.util';
 import { CreateInvestorDto } from './dto/create-investor.dto';
 import { UpdateInvestorDto } from './dto/update-investor.dto';
 import { InvestorQueryDto } from './dto/query-investor.dto';
@@ -135,21 +137,21 @@ export class InvestorService {
       { id: 'asc' as const },
     ];
 
-    const [investors, total] = await Promise.all([
-      this.prisma.investor.findMany({
-        where,
-        orderBy,
-        skip: (page - 1) * limit,
-        take: limit,
+    const [investors, total] = await fetchData(
+      this.prisma.investor,
+      where,
+      orderBy,
+      page,
+      limit,
+      {
         include: {
           user: { select: { email: true, phone: true } },
           nominee: true,
           kycDocuments: true,
           bankAccount: true,
         },
-      }),
-      this.prisma.investor.count({ where }),
-    ]);
+      },
+    );
 
     const totalPages = Math.ceil(total / limit);
 
@@ -197,12 +199,13 @@ export class InvestorService {
       { id: 'asc' },
     ];
 
-    const [bankAccounts, total] = await Promise.all([
-      this.prisma.investorBankAccount.findMany({
-        where,
-        orderBy,
-        skip: (page - 1) * limit,
-        take: limit,
+    const [bankAccounts, total] = await fetchData(
+      this.prisma.investorBankAccount,
+      where,
+      orderBy,
+      page,
+      limit,
+      {
         select: {
           id: true,
           selectedBank: true,
@@ -215,9 +218,8 @@ export class InvestorService {
           isActive: true,
           investorId: true,
         },
-      }),
-      this.prisma.investorBankAccount.count({ where }),
-    ]);
+      },
+    );
 
     return {
       message: 'Investor bank accounts fetched successfully',
@@ -400,12 +402,13 @@ export class InvestorService {
       { id: 'asc' as const },
     ];
 
-    const [editRequests, total] = await Promise.all([
-      this.prisma.investorEditRequest.findMany({
-        where,
-        orderBy,
-        skip: (page - 1) * limit,
-        take: limit,
+    const [editRequests, total] = await fetchData(
+      this.prisma.investorEditRequest,
+      where,
+      orderBy,
+      page,
+      limit,
+      {
         // Explicit select so credential fields (passwordHash etc.) never leak.
         include: {
           investor: {
@@ -416,9 +419,8 @@ export class InvestorService {
             },
           },
         },
-      }),
-      this.prisma.investorEditRequest.count({ where }),
-    ]);
+      },
+    );
 
     const totalPages = Math.ceil(total / limit);
 
@@ -915,7 +917,7 @@ export class InvestorService {
       const missing = [
         !(nidNumber ?? existing.nidNumber) && "the investor's NID number",
         !(nominee?.nomineeNidNumber ?? existing.nominee?.nomineeNidNumber) &&
-          "the nominee's NID number",
+        "the nominee's NID number",
       ].filter(Boolean);
       if (missing.length) {
         throw new BadRequestException(
@@ -965,6 +967,10 @@ export class InvestorService {
           });
           if (email !== undefined) updated.user.email = email.toLowerCase();
           if (phone !== undefined) updated.user.phone = phone;
+        }
+
+        if (becomingActive) {
+          await this.ensureReferralCode(tx, id);
         }
 
         await tx.auditLog.create({
@@ -1134,6 +1140,52 @@ export class InvestorService {
       }
       throw err;
     }
+  }
+
+  // Approval is when the investor becomes eligible to refer others. An existing
+  // unused, active code is reused; otherwise a fresh one is issued.
+  private async ensureReferralCode(
+    tx: Prisma.TransactionClient,
+    investorId: string,
+  ) {
+
+    //first find existing referralCode
+    const reusable = await tx.referralCode.findFirst({
+      where: { referrerId: investorId, isUsed: false, isActive: true },
+      select: { id: true },
+    });
+
+    if (reusable) return;
+
+    // await tx.referralCode.create({
+    //   data: {
+    //     code: await generateUniqueReferralCode(tx),  //modular function in utils
+    //     referrerId: investorId,
+    //   },
+    // });
+
+    const newReferralCode = await tx.referralCode.create({
+      data: {
+        code: await generateUniqueReferralCode(tx),
+        referrerId: investorId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    // Deactivate previous active referral codes
+    await tx.referralCode.updateMany({
+      where: {
+        referrerId: investorId,
+        isActive: true,
+        id: { not: newReferralCode.id },
+      },
+      data: {
+        isActive: false,
+      },
+    });
+
   }
 
   private nomineeNestedWrite(

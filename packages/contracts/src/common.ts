@@ -61,6 +61,29 @@ export const emailSchema = z
   .max(150, 'Email must not exceed 150 characters')
   .email('Invalid email address');
 
+// Investor profile fields shared by the single-investor and bulk-import
+// contracts, so both paths enforce exactly the same rules.
+export const fullNameSchema = z
+  .string()
+  .trim()
+  .min(3, 'Full name must be at least 3 characters')
+  .max(150, 'Full name cannot exceed 150 characters');
+
+export const addressSchema = z
+  .string()
+  .trim()
+  .max(500, 'Address cannot exceed 500 characters');
+
+export const professionSchema = z
+  .string()
+  .trim()
+  .max(150, 'Profession cannot exceed 150 characters');
+
+export const workplaceSchema = z
+  .string()
+  .trim()
+  .max(150, 'Workplace cannot exceed 150 characters');
+
 export const phoneNumberSchema = z
   .string({ required_error: 'Phone number is required' })
   .trim()

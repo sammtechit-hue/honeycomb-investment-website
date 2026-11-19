@@ -20,12 +20,14 @@ import { Roles } from '../../auth/decorators/roles.decorator';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../auth/types/jwt-payload.interface';
 import { CreateMonthlyRateSettingDto } from './dto/create-monthly-rate-setting.dto';
+import { CreateMultipleMonthlyRateSettingsDto } from './dto/create-multiple-monthly-rate-settings.dto';
 import { UpdateMonthlyRateSettingDto } from './dto/update-monthly-rate-setting.dto';
 import { MonthlyRateSettingQueryDto } from './dto/query-monthly-rate-setting.dto';
 import { MonthlyRateSettingService } from './monthly-rate-setting.service';
 
-// Admin endpoints for the per-month profit rate. A setting is addressed by
-// month name + year (mapped to the unique @db.Date period_month column).
+// Admin endpoints for the per-project, per-month profit rate. A setting is
+// addressed by project + month name + year (unique on project_id +
+// period_month).
 // Writes write an AuditLog entry (see the service) — the acting admin's
 // identity and request context are forwarded to it.
 @Controller('admin/monthly-rate-setting')
@@ -37,7 +39,7 @@ export class MonthlyRateSettingController {
         private readonly monthlyRateSettingService: MonthlyRateSettingService,
     ) { }
 
-    // GET /admin/monthly-rate-setting?status=active&page=1&limit=10&sortBy=periodMonth&sortOrder=desc
+    // GET /admin/monthly-rate-setting?projectId=&status=active&page=1&limit=10&sortBy=periodMonth&sortOrder=desc
     @Get()
     findAll(@Query() query: MonthlyRateSettingQueryDto) {
         return this.monthlyRateSettingService.findAll(query);
@@ -68,6 +70,30 @@ export class MonthlyRateSettingController {
         // user.userId is the User.id attached by JwtAuthGuard/JwtStrategy.
         return this.monthlyRateSettingService.createMonthlyRateSetting(
             createMonthlyRateSettingDto,
+            user?.userId,
+            context,
+        );
+    }
+
+    // POST /admin/monthly-rate-setting/bulk — apply one rate to many projects
+    // for a month. Existing settings are skipped, not overwritten.
+    @Post('bulk')
+    @Roles(Role.ADMIN)
+    createForMultipleProjects(
+        @Body() createMultipleMonthlyRateSettingsDto: CreateMultipleMonthlyRateSettingsDto,
+        @CurrentUser() user: AuthenticatedUser,
+        @Ip() ip?: string,
+        @Headers('user-agent') userAgent?: string,
+        @Headers('x-session-id') sessionId?: string,
+    ) {
+        const context = {
+            ipAddress: ip,
+            userAgent: userAgent,
+            sessionId: sessionId,
+        };
+
+        return this.monthlyRateSettingService.createMonthlyRateSettingsForMultipleProjects(
+            createMultipleMonthlyRateSettingsDto,
             user?.userId,
             context,
         );

@@ -12,7 +12,6 @@ import {
   InvestmentType,
   InvestorStatus,
   Prisma,
-  ProjectStatus,
   Role,
 } from '@investment-platform/db';
 import { ConfigService } from '@nestjs/config';
@@ -24,6 +23,8 @@ import { investmentPeriodDisbursementError } from '@investment-platform/contract
 import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import { Env } from '../config/env';
 import { getDhakaDateOnly } from '../utils/common/bangladeshTime.util';
+import { fetchData } from '../utils/common/fetchData.util';
+import { assertProjectAcceptsInvestment } from '../utils/common/project-investment.util';
 
 const INVESTMENT_LIST_SELECT = {
   id: true,
@@ -168,17 +169,15 @@ export class InvestmentService {
       { id: 'desc' as const },
     ];
 
-    // 2. Fetch the current page and the total count in parallel.
-    const [investments, total] = await Promise.all([
-      this.prisma.investment.findMany({
-        where,
-        orderBy,
-        skip: (page - 1) * limit,
-        take: limit,
-        select: INVESTMENT_LIST_SELECT,
-      }),
-      this.prisma.investment.count({ where }),
-    ]);
+    // 2. Reuse the fetch function — current page and total count in parallel.
+    const [investments, total] = await fetchData(
+      this.prisma.investment,
+      where,
+      orderBy,
+      page,
+      limit,
+      { select: INVESTMENT_LIST_SELECT },
+    );
 
     return {
       message: 'Investments fetched successfully',
@@ -223,14 +222,11 @@ export class InvestmentService {
     };
   }
 
-  async create(dto: CreateInvestmentDto, userId: string | undefined) {
+  async createInvestment(dto: CreateInvestmentDto, userId: string | undefined) {
     if (!userId) {
       throw new UnauthorizedException('Session is no longer valid');
     }
 
-    // Cross-field contract rule, re-checked in code so every caller of this
-    // service (not just the controller DTO path) is covered. See
-    // packages/contracts/src/investment.ts.
     const periodError = investmentPeriodDisbursementError({
       investmentPeriodMonths: dto.investmentPeriodMonths,
       disbursementPeriod: dto.disbursementPeriod,
@@ -257,6 +253,7 @@ export class InvestmentService {
           endDate: true,
           minimumInvestment: true,
           maximumInvestment: true,
+          projectRate: true,
         },
       }),
     ]);
@@ -277,18 +274,28 @@ export class InvestmentService {
       throw new NotFoundException('Project not found');
     }
 
-    this.assertProjectAcceptsInvestment(project, amount);
+    assertProjectAcceptsInvestment(project, amount);
 
-    const databaseRate = await this.prisma.fixedRate.findFirst({
-      where: { isActive: true },
-    })
+    let rate = new Prisma.Decimal(0);
+
+    if (dto.investmentType === InvestmentType.fixed) {
+      if (project.projectRate != null) {
+        rate = project.projectRate;
+      } 
+      // else {
+      //   const settings = await this.prisma.businessSettings.findFirst({
+      //     where: { isActive: true },
+      //     select: { rate: true },
+      //   });
+
+      //   rate =
+      //     settings?.rate ??
+      //     new Prisma.Decimal(this.config.get('FIXED_RATE', { infer: true }));
+      // }
+    }
 
     // for setting investmentDate
     const today = getDhakaDateOnly();
-
-    const rate =
-      databaseRate?.rate ??
-      new Prisma.Decimal(this.config.get('FIXED_RATE', { infer: true }));
 
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -435,40 +442,4 @@ export class InvestmentService {
   //   };
   // }
 
-  private assertProjectAcceptsInvestment(
-    project: {
-      status: ProjectStatus;
-      isActive: boolean;
-      isVisible: boolean;
-      startDate: Date;
-      endDate: Date | null;
-      minimumInvestment: Prisma.Decimal;
-      maximumInvestment: Prisma.Decimal | null;
-    },
-    amount: Prisma.Decimal,
-  ) {
-    if (
-      !project.isActive ||
-      !project.isVisible ||
-      project.status !== ProjectStatus.OPEN
-    ) {
-      throw new BadRequestException(
-        'This project is not currently open for investment.',
-      );
-    }
-
-    const now = new Date();
-    if (project.startDate > now) {
-      throw new BadRequestException('This project has not opened yet.');
-    }
-    if (project.endDate && project.endDate < now) {
-      throw new BadRequestException('This project is no longer accepting investments.');
-    }
-
-    if (amount.lt(project.minimumInvestment)) {
-      throw new BadRequestException(
-        `Amount must be at least ${project.minimumInvestment.toFixed(2)}.`,
-      );
-    }
-  }
 }

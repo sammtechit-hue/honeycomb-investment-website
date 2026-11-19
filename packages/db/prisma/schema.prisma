@@ -34,16 +34,20 @@ enum AuditAction {
     investment_status_changed
     monthly_rate_set
     monthly_rate_updated // any admin edit to an existing monthly rate setting (rate, active flag, period)
-    fixed_rate_set
-    fixed_rate_updated
-    profit_ledger_settings_set // profit ledger cycle-day setting created
-    profit_ledger_settings_updated // any edit to an existing profit ledger settings row
+    business_settings_set // business settings (rate, cycle day, counting start) created
+    business_settings_updated // any edit to an existing business settings row
     disbursement_batch_created
+    disbursement_batch_updated // admin edit to an existing disbursement batch
     disbursement_batch_exported
     disbursement_batch_confirmed
+    disbursement_batch_deleted // draft-only destructive delete
     disbursement_item_remark_updated // admin edited (or cleared) a disbursement item's remarks
+    payout_window_created // admin opened a payout window for a period month
+    payout_window_updated // admin edited a payout window
     withdrawal_status_changed
     referral_code_generated
+    referral_code_updated // any admin edit to an existing referral code (e.g. expiry)
+    referral_updated // any admin edit to an existing referral (bonus fields or relations)
     company_document_uploaded
     // Auth / staff accounts (apps/api/src/auth, admin/admin-account)
     admin_login
@@ -212,11 +216,31 @@ enum PayoutSchedule {
     YEARLY
 }
 
-enum DisbursementSlot {
-    slot_1
-    slot_2
-    slot_3
-    slot_4
+// enum DisbursementSlot {
+//     slot_1
+//     slot_2
+//     slot_3
+//     slot_4
+// }
+
+enum PayoutWindowStatus {
+    open
+    completed
+}
+
+enum Month {
+    JANUARY
+    FEBRUARY
+    MARCH
+    APRIL
+    MAY
+    JUNE
+    JULY
+    AUGUST
+    SEPTEMBER
+    OCTOBER
+    NOVEMBER
+    DECEMBER
 }
 
 enum LogModule {
@@ -651,6 +675,7 @@ model Project {
     description String?
 
     status ProjectStatus @default(DRAFT)
+    projectRate                Decimal? @db.Decimal(3, 2)
 
     minimumInvestment Decimal  @default(10000) @db.Decimal(18, 2)
     maximumInvestment Decimal? @db.Decimal(18, 2)
@@ -669,6 +694,7 @@ model Project {
     updatedAt DateTime @updatedAt
 
     investments Investment[]
+    monthlyRateSettings MonthlyRateSetting[]
 
     @@index([isVisible, isActive, status, createdAt])
     @@index([minimumInvestment])
@@ -744,7 +770,7 @@ model Investment {
 
     // An investment's slot is determined automatically... Admin can manually move an investment to a different slot if needed
     disbursementItems  DisbursementItem[]
-    disbursementSlot   DisbursementSlot?  @map("disbursement_slot") // investmentDate + 10 din calculate kore
+    // disbursementSlot   DisbursementSlot?  @map("disbursement_slot") // investmentDate + 10 din calculate kore
     slotManuallyMoved  Boolean            @default(false) @map("slot_manually_moved")
     slotAdjustmentDays Int?               @map("slot_adjustment_days") // koto din berlo/komlo, audit-er jonno
 
@@ -785,10 +811,17 @@ model InvestmentDocument {
 
 model MonthlyRateSetting {
     id          String   @id @default(uuid()) @db.Uuid
-    periodMonth DateTime @unique @map("period_month") @db.Date
+    periodMonth DateTime @map("period_month") @db.Date
     ratePercent Decimal  @map("rate_percent") @db.Decimal(3, 2)
     isActive    Boolean  @default(true)
     setAt       DateTime @default(now()) @map("set_at")
+
+    projectId String  @map("project_id") @db.Uuid
+    project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+    // One rate per project per month (was: one rate per month globally)
+    @@unique([projectId, periodMonth])
+    @@index([periodMonth])
 
     @@map("monthly_rate_settings")
 }
@@ -796,18 +829,6 @@ model MonthlyRateSetting {
 // ----------------------------------------------------------------------------
 // 11. Monthly Profit Ledger
 // ----------------------------------------------------------------------------
-
-model MonthlyProfitLedgerSettings {
-    id          Int @id @default(autoincrement())
-    setcycleday Int
-
-    label    String? @db.VarChar(200)
-    isActive Boolean @default(true)
-
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
-}
-
 model MonthlyProfitLedger {
     id String @id @default(uuid()) @db.Uuid
 
@@ -843,7 +864,7 @@ model MonthlyProfitLedger {
 
 model DisbursementBatch {
     id         String                  @id @default(uuid()) @db.Uuid
-    slot       DisbursementSlot        @map("slot")
+    // slot       DisbursementSlot        @map("slot")
     slotLabel  String                  @map("slot_label") @db.VarChar(50)
     batchDate  DateTime                @map("batch_date") @db.Date
     exportType DisbursementExportType  @map("export_type")
@@ -851,15 +872,40 @@ model DisbursementBatch {
     status     DisbursementBatchStatus @default(draft)
     createdAt  DateTime                @default(now()) @map("created_at")
 
+    windowId String       @map("window_id") @db.Uuid
+    window   PayoutWindow @relation(fields: [windowId], references: [id])
+
     items DisbursementItem[]
 
-    @@index([slot, batchDate])
     @@index([status])
     @@map("disbursement_batches")
 }
 
 // ----------------------------------------------------------------------------
-// 13. Disbursement Items
+// 13. Payout Window
+// ----------------------------------------------------------------------------
+
+model PayoutWindow {
+    id          String             @id @default(uuid()) @db.Uuid
+    periodMonth DateTime           @map("period_month") @db.Date
+    monthLabel  Month
+    yearLabel   Int
+    startDate   DateTime           @map("start_date") @db.Date
+    endDate     DateTime           @map("end_date") @db.Date
+    status      PayoutWindowStatus @default(open)
+    completedAt DateTime?          @map("completed_at")
+    createdAt   DateTime           @default(now()) @map("created_at")
+    updatedAt   DateTime           @updatedAt @map("updated_at")
+
+    batches DisbursementBatch[]
+
+    // "Overdue" is not stored: status = open and endDate < today.
+    @@index([status, endDate])
+    @@map("payout_windows")
+}
+
+// ----------------------------------------------------------------------------
+// 14. Disbursement Items
 // ----------------------------------------------------------------------------
 
 model DisbursementItem {
@@ -868,6 +914,7 @@ model DisbursementItem {
     amount       Decimal      @db.Decimal(14, 2)
     exportFormat ExportFormat @map("export_format")
     remarks      String?      @db.VarChar(255)
+    isDisbursed  Boolean      @default(false)
 
     investmentId String     @map("investment_id") @db.Uuid
     investment   Investment @relation(fields: [investmentId], references: [id])
@@ -897,7 +944,7 @@ model DisbursementItem {
 }
 
 // ----------------------------------------------------------------------------
-// 14. Withdrawal Requests
+// 15. Withdrawal Requests
 // ----------------------------------------------------------------------------
 
 model WithdrawalRequest {
@@ -939,7 +986,7 @@ model WithdrawalRequest {
 }
 
 // ----------------------------------------------------------------------------
-// 15. Incoming Payments
+// 16. Incoming Payments
 // ----------------------------------------------------------------------------
 
 model IncomingPayment {
@@ -963,7 +1010,7 @@ model IncomingPayment {
 }
 
 // ----------------------------------------------------------------------------
-// 16. Referral Codes
+// 17. Referral Codes
 // ----------------------------------------------------------------------------
 
 model ReferralCode {
@@ -978,14 +1025,15 @@ model ReferralCode {
     // Investor who used this referral code (null when unused).
     referredId String?   @unique @map("referred_id") @db.Uuid
     referred   Investor? @relation("ReferralCodeUsedBy", fields: [referredId], references: [id])
+    isActive   Boolean   @default(true)
 
     // Referral code timestamps.
     createdAt DateTime  @default(now()) @map("created_at")
-    expiresAt DateTime? @map("expires_at")
+    expiresAt DateTime @default(dbgenerated("((now() AT TIME ZONE 'Asia/Dhaka') + interval '1 year')"))
     usedAt    DateTime? @map("used_at")
 
     // Referrals created using this referral code.
-    referrals Referral[]
+    referrals Referral?
 
     @@index([referrerId])
     @@index([referrerId, isUsed])
@@ -994,7 +1042,7 @@ model ReferralCode {
 }
 
 // ----------------------------------------------------------------------------
-// 17. Referrals
+// 18. Referrals
 // ----------------------------------------------------------------------------
 
 model Referral {
@@ -1009,7 +1057,7 @@ model Referral {
     referredInvestor   Investor @relation("ReferredInvestor", fields: [referredInvestorId], references: [id])
 
     // Referral code used for this referral.
-    referralCodeId String       @map("referral_code_id") @db.Uuid
+    referralCodeId String       @unique @map("referral_code_id") @db.Uuid
     referralCode   ReferralCode @relation(fields: [referralCodeId], references: [id])
 
     // Referral bonus.
@@ -1025,7 +1073,7 @@ model Referral {
 }
 
 // ----------------------------------------------------------------------------
-// 18. ROI Calculator Leads
+// 19. ROI Calculator Leads
 // ----------------------------------------------------------------------------
 
 model RoiCalculatorLead {
@@ -1042,7 +1090,7 @@ model RoiCalculatorLead {
 }
 
 // ----------------------------------------------------------------------------
-// 19. Admin Notifications
+// 20. Admin Notifications
 // ----------------------------------------------------------------------------
 
 model AdminNotification {
@@ -1061,7 +1109,7 @@ model AdminNotification {
 }
 
 // ----------------------------------------------------------------------------
-// 20. Audit Log
+// 21. Audit Log
 // ----------------------------------------------------------------------------
 
 model AuditLog {
@@ -1103,17 +1151,14 @@ model AuditLog {
 }
 
 // ----------------------------------------------------------------------------
-// 21. Business Settings
+// 22. Business Settings
 // ----------------------------------------------------------------------------
+model BusinessSettings {
+    id Int @id @default(autoincrement())
 
-// model BusinessSettings {
-//     id        Int      @id @default(autoincrement())
-//     fixedRate Decimal? @db.Decimal(2, 2)
-// }
-
-model FixedRate {
-    id   Int      @id @default(autoincrement())
-    rate Decimal? @db.Decimal(3, 2)
+    rate                   Decimal? @db.Decimal(3, 2)
+    setcycleday            Int?
+    countingStartAfterDays Int?
 
     label    String? @db.VarChar(200)
     isActive Boolean @default(true)

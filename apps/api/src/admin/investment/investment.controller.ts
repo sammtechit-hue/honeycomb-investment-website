@@ -24,9 +24,7 @@ import { UpdateInvestmentDto } from './dto/update-investment.dto';
 import { InvestmentQueryDto } from './dto/query-investment.dto';
 import { InvestmentService } from './investment.service';
 
-// Admin investment endpoints — full visibility plus approval-side fields
-// (status, rate, agreement fields, physical-item tracking flags).
-// Restricted to ADMIN and MODERATOR staff; SUPER_ADMIN passes via RolesGuard.
+
 @Controller('admin/investment')
 @UsePipes(ZodValidationPipe)
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -47,14 +45,30 @@ export class InvestmentController {
   }
 
   // POST /api/admin/investment
+  // Creates an investment row on behalf of an investor (investorId is part of
+  // the payload) and records the action in the audit log.
   @Post()
-  create(@Body() createInvestmentDto: CreateInvestmentDto) {
-    return this.investmentService.create(createInvestmentDto);
+  create(
+    @Body() createInvestmentDto: CreateInvestmentDto,
+    @CurrentUser() user: AuthenticatedUser,
+    @Ip() ip?: string,
+    @Headers('user-agent') userAgent?: string,
+    @Headers('x-session-id') sessionId?: string,
+  ) {
+    const context = {
+      ipAddress: ip,
+      userAgent: userAgent,
+      sessionId: sessionId,
+    };
+
+    return this.investmentService.createInvestment(
+      createInvestmentDto,
+      user?.userId,
+      context,
+    );
   }
 
-  // PATCH /api/admin/investment/:id
-  // Admins may additionally set status, rate, agreement fields and the
-  // physical-item tracking flags — see investmentAdminUpdateInputSchema.
+
   @Patch(':id')
   update(
     @Param('id', ParseUUIDPipe) id: string,

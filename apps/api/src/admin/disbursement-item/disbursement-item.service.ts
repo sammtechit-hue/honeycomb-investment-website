@@ -1,4 +1,6 @@
 import {
+    BadRequestException,
+    ConflictException,
     Injectable,
     NotFoundException,
 } from '@nestjs/common';
@@ -17,6 +19,8 @@ import {
 } from '@investment-platform/db';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RequestAuditContext } from '../../utils/common types';
+import { fetchData } from '../../utils/common/fetchData.util';
+import { AddItemsToBatchDto } from './dto/add-items-to-batch.dto';
 import { DisbursementItemQueryDto } from './dto/query-disbursement-item.dto';
 import { UpdateDisbursementItemDto } from './dto/update-disbursement-item.dto';
 
@@ -105,13 +109,14 @@ export class DisbursementItemService {
             { id: 'asc' as const },
         ];
 
-        // Current page and total count fetched in parallel.
-        const [items, total] = await Promise.all([
-            this.prisma.disbursementItem.findMany({
-                where,
-                orderBy,
-                skip: (page - 1) * limit,
-                take: limit,
+        // Reuse the fetch function — current page and total count in parallel.
+        const [items, total] = await fetchData(
+            this.prisma.disbursementItem,
+            where,
+            orderBy,
+            page,
+            limit,
+            {
                 include: {
                     investor: {
                         select: {
@@ -125,9 +130,8 @@ export class DisbursementItemService {
                         select: { slotLabel: true, batchDate: true, status: true },
                     },
                 },
-            }),
-            this.prisma.disbursementItem.count({ where }),
-        ]);
+            },
+        );
 
         const totalPages = Math.ceil(total / limit);
 
@@ -349,25 +353,29 @@ export class DisbursementItemService {
     }
 
     // --------------------------------------------------------
-    // -------------- Update Disbursement Item Remark ----------
+    // -------- Update Disbursement Item (notes + batch) -------
     //---------------------------------------------------------
-    // Only `remarks` is editable after creation. A null / empty value clears it.
-    // Example: PATCH /admin/disbursement-item/:id  { "remarks": "..." }
     async updateDisbursementItem(
         id: string,
         dto: UpdateDisbursementItemDto,
         userId?: string,
         context?: RequestAuditContext,
     ) {
-        const [existingItem, admin] = await Promise.all([
+        const [existingItem, admin, batch] = await Promise.all([
             this.prisma.disbursementItem.findUnique({
                 where: { id },
-                select: { id: true, remarks: true },
+                select: { id: true, remarks: true, investorNote: true, batchId: true },
             }),
             userId
                 ? this.prisma.adminProfile.findUnique({
                     where: { userId },
                     select: { id: true, name: true },
+                })
+                : Promise.resolve(null),
+            dto.batchId
+                ? this.prisma.disbursementBatch.findUnique({
+                    where: { id: dto.batchId },
+                    select: { id: true },
                 })
                 : Promise.resolve(null),
         ]);
@@ -376,12 +384,25 @@ export class DisbursementItemService {
             throw new NotFoundException(`Disbursement item with id ${id} not found`);
         }
 
+        // batchId is a nullable FK; reject unknown ids before Prisma surfaces P2003.
+        if (dto.batchId && !batch) {
+            throw new NotFoundException(
+                `Disbursement batch with id ${dto.batchId} not found`,
+            );
+        }
+
+        // Empty string / null clears each note; both are nullable per the schema.
         const remarks = dto.remarks?.trim() || null;
+        const investorNote = dto.investorNote?.trim() || null;
 
         const updated = await this.prisma.$transaction(async (tx) => {
             const updatedItem = await tx.disbursementItem.update({
                 where: { id },
-                data: { remarks },
+                data: {
+                    remarks,
+                    investorNote,
+                    ...(dto.batchId !== undefined && { batchId: dto.batchId }),
+                },
             });
 
             await tx.auditLog.create({
@@ -392,11 +413,19 @@ export class DisbursementItemService {
                     module: LogModule.DISBURSEMENT,
                     severity: LogSeverity.INFO,
                     status: LogStatus.SUCCESS,
-                    targetLabel: `Disbursement Item Remark Updated: ${updatedItem.id}`,
+                    targetLabel: `Disbursement Item Updated: ${updatedItem.id}`,
                     targetTable: 'disbursement_items',
                     targetId: updatedItem.id,
-                    oldValue: { remarks: existingItem.remarks } as unknown as Prisma.InputJsonValue,
-                    newValue: { remarks: updatedItem.remarks } as unknown as Prisma.InputJsonValue,
+                    oldValue: {
+                        remarks: existingItem.remarks,
+                        investorNote: existingItem.investorNote,
+                        batchId: existingItem.batchId,
+                    } as unknown as Prisma.InputJsonValue,
+                    newValue: {
+                        remarks: updatedItem.remarks,
+                        investorNote: updatedItem.investorNote,
+                        batchId: updatedItem.batchId,
+                    } as unknown as Prisma.InputJsonValue,
                     ipAddress: context?.ipAddress ?? null,
                     userAgent: context?.userAgent ?? null,
                     sessionId: context?.sessionId ?? null,
@@ -410,6 +439,156 @@ export class DisbursementItemService {
             message: 'Disbursement Item Remark Updated Successfully',
             success: true,
             data: updated,
+        };
+    }
+
+    // --------------------------------------------------------
+    // -------- Add Disbursement Items To A Batch -------------
+    //---------------------------------------------------------
+    // PATCH /admin/disbursement-batch/items
+    // Attaches the selected items to a draft batch. The items are only marked
+    // disbursed later, when the batch is confirmed.
+    async addDisbursementItemToBatch(
+        dto: AddItemsToBatchDto,
+        userId?: string,
+        context?: RequestAuditContext,
+    ) {
+        const { batchId, itemIds } = dto;
+
+        // 1. Batch, selected items and the acting admin are independent reads.
+        const [batch, items, admin] = await Promise.all([
+            this.prisma.disbursementBatch.findUnique({
+                where: { id: batchId },
+                select: {
+                    id: true,
+                    slotLabel: true,
+                    status: true,
+                },
+            }),
+            this.prisma.disbursementItem.findMany({
+                where: {
+                    id: { in: itemIds },
+                },
+                select: {
+                    id: true,
+                    batchId: true,
+                    isDisbursed: true,
+                },
+            }),
+            userId
+                ? this.prisma.adminProfile.findUnique({
+                    where: { userId },
+                    select: { id: true, name: true },
+                })
+                : Promise.resolve(null),
+        ]);
+
+        if (!batch) {
+            throw new NotFoundException('Disbursement batch not found');
+        }
+
+        // 2. Only draft batches can receive items
+        if (batch.status !== 'draft') {
+            throw new BadRequestException(
+                'Items can only be added to a draft batch',
+            );
+        }
+
+        // 3. Every requested item must exist
+        if (items.length !== itemIds.length) {
+            throw new NotFoundException(
+                'One or more disbursement items were not found',
+            );
+        }
+
+        // 4. Admin profile is needed for the audit trail.
+        if (!admin) {
+            throw new NotFoundException('Admin profile not found');
+        }
+
+        // 5. An item can only belong to one batch and can only be paid once.
+        const alreadyDisbursed = items.filter((item) => item.isDisbursed);
+        if (alreadyDisbursed.length > 0) {
+            throw new ConflictException(
+                `Items already disbursed: ${alreadyDisbursed
+                    .map((item) => item.id)
+                    .join(', ')}`,
+            );
+        }
+
+        const assignedElsewhere = items.filter(
+            (item) => item.batchId && item.batchId !== batchId,
+        );
+        if (assignedElsewhere.length > 0) {
+            throw new ConflictException(
+                `Items already assigned to another batch: ${assignedElsewhere
+                    .map((item) => item.id)
+                    .join(', ')}`,
+            );
+        }
+
+        // 6. Attach the items and audit — atomically. `isDisbursed` stays false
+        // until the batch is confirmed.
+        const updatedCount = await this.prisma.$transaction(async (tx) => {
+            const result = await tx.disbursementItem.updateMany({
+                where: {
+                    id: { in: itemIds },
+                    isDisbursed: false,
+                },
+                data: {
+                    batchId,
+                },
+            });
+
+            // A concurrent request changed one of the rows.
+            if (result.count !== itemIds.length) {
+                throw new ConflictException(
+                    'Some disbursement items changed. Reload and try again.',
+                );
+            }
+
+            await tx.auditLog.create({
+                data: {
+                    adminName: admin?.name ?? 'Admin',
+                    adminProfileId: admin?.id ?? null,
+                    action: AuditAction.disbursement_batch_updated,
+                    module: LogModule.DISBURSEMENT,
+                    severity: LogSeverity.INFO,
+                    status: LogStatus.SUCCESS,
+                    targetLabel: `Disbursement Items Added To Batch: ${batch.slotLabel}`.slice(
+                        0,
+                        255,
+                    ),
+                    targetTable: 'disbursement_batches',
+                    targetId: batch.id,
+                    oldValue: {
+                        items: items.map((item) => ({
+                            id: item.id,
+                            batchId: item.batchId,
+                            isDisbursed: item.isDisbursed,
+                        })),
+                    } as unknown as Prisma.InputJsonValue,
+                    newValue: {
+                        batchId,
+                        itemIds,
+                    } as unknown as Prisma.InputJsonValue,
+                    ipAddress: context?.ipAddress ?? null,
+                    userAgent: context?.userAgent ?? null,
+                    sessionId: context?.sessionId ?? null,
+                },
+            });
+
+            return result.count;
+        });
+
+        return {
+            message: 'Disbursement items added to batch successfully',
+            success: true,
+            data: {
+                batchId,
+                itemIds,
+                updatedCount,
+            },
         };
     }
 

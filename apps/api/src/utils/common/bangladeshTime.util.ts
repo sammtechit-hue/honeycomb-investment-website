@@ -15,6 +15,37 @@ export function getDhakaDateOnly(now: Date = new Date()): Date {
 }
 
 
+// Current Bangladesh wall-clock time as a UTC-based Date. This matches values in
+// `timestamp` columns written as Dhaka local time (e.g. `now() AT TIME ZONE
+// 'Asia/Dhaka'`), which Prisma reads back as UTC.
+export function getDhakaNow(now: Date = new Date()): Date {
+    const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Dhaka',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hourCycle: 'h23',
+    }).formatToParts(now);
+
+    const pick = (type: Intl.DateTimeFormatPartTypes) =>
+        Number(parts.find((p) => p.type === type)!.value);
+
+    return new Date(
+        Date.UTC(
+            pick('year'),
+            pick('month') - 1,
+            pick('day'),
+            pick('hour'),
+            pick('minute'),
+            pick('second'),
+        ),
+    );
+}
+
+
 export function toDateOnly(d: Date): Date {
     return new Date(
         Date.UTC(

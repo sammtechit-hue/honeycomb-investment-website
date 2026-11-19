@@ -1,2 +1,0 @@
--- AlterTable
-ALTER TABLE "FixedRate" ALTER COLUMN "rate" SET DATA TYPE DECIMAL(5,2);
