@@ -24,7 +24,7 @@ import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import { Env } from '../config/env';
 import { getDhakaDateOnly } from '../utils/common/bangladeshTime.util';
 import { fetchData } from '../utils/common/fetchData.util';
-import { assertProjectAcceptsInvestment } from '../utils/common/project-investment.util';
+import { resolveInvestmentTerms } from '../utils/common/project-investment.util';
 
 const INVESTMENT_LIST_SELECT = {
   id: true,
@@ -235,28 +235,10 @@ export class InvestmentService {
       throw new BadRequestException(periodError);
     }
 
-    const amount = new Prisma.Decimal(dto.amount);
-
-    const [investor, project] = await Promise.all([
-      this.prisma.investor.findUnique({
-        where: { userId },
-        select: { id: true, fullname: true, status: true },
-      }),
-      this.prisma.project.findUnique({
-        where: { id: dto.projectId },
-        select: {
-          id: true,
-          status: true,
-          isActive: true,
-          isVisible: true,
-          startDate: true,
-          endDate: true,
-          minimumInvestment: true,
-          maximumInvestment: true,
-          projectRate: true,
-        },
-      }),
-    ]);
+    const investor = await this.prisma.investor.findUnique({
+      where: { userId },
+      select: { id: true, fullname: true, status: true },
+    });
 
     if (!investor) {
       throw new ForbiddenException(
@@ -264,35 +246,16 @@ export class InvestmentService {
       );
     }
 
-    // if (investor.status != InvestorStatus.active ) {
-    //   throw new ForbiddenException(
-    //     'Only investors who have uploaded KYC can create an investment.',
-    //   );
-    // }
-
-    if (!project) {
-      throw new NotFoundException('Project not found');
+    // The first investment is part of the account application; further ones
+    // need an approved account.
+    if (investor.status !== InvestorStatus.active) {
+      throw new ForbiddenException(
+        'You can make new investments once your account is approved.',
+      );
     }
 
-    assertProjectAcceptsInvestment(project, amount);
-
-    let rate = new Prisma.Decimal(0);
-
-    if (dto.investmentType === InvestmentType.fixed) {
-      if (project.projectRate != null) {
-        rate = project.projectRate;
-      } 
-      // else {
-      //   const settings = await this.prisma.businessSettings.findFirst({
-      //     where: { isActive: true },
-      //     select: { rate: true },
-      //   });
-
-      //   rate =
-      //     settings?.rate ??
-      //     new Prisma.Decimal(this.config.get('FIXED_RATE', { infer: true }));
-      // }
-    }
+    const { amount, rate } = await resolveInvestmentTerms(this.prisma, dto);
+    const project = { id: dto.projectId };
 
     // for setting investmentDate
     const today = getDhakaDateOnly();

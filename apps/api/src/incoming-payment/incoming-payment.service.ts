@@ -52,7 +52,7 @@ export class IncomingPaymentService {
       where: { id: dto.investmentId },
       select: {
         id: true,
-        investor: { select: { userId: true } },
+        investor: { select: { userId: true, status: true } },
         incomingPayments: { select: { id: true } },
       },
     });
@@ -66,6 +66,14 @@ export class IncomingPaymentService {
     if (investment.investor.userId !== userId) {
       throw new ForbiddenException(
         'Invalid investment!',
+      );
+    }
+
+    // Payment is made from the portal, which opens once the account
+    // application is approved.
+    if (investment.investor.status !== 'active') {
+      throw new ForbiddenException(
+        'You can record a payment once your account is approved.',
       );
     }
 

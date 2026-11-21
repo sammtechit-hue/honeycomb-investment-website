@@ -23,7 +23,9 @@ import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import * as bcrypt from 'bcrypt';
 import { BCRYPT_ROUNDS } from '../auth/auth.constants';
 import { KycFilesService } from '../files/kyc-files.service';
-import { getDhakaNow } from '../utils/common/bangladeshTime.util';
+import { getDhakaDateOnly, getDhakaNow } from '../utils/common/bangladeshTime.util';
+import { resolveInvestmentTerms } from '../utils/common/project-investment.util';
+import { ResubmitApplicationDto } from './dto/resubmit-application.dto';
 import { fetchData } from '../utils/common/fetchData.util';
 
 // Selected Field for investor can see
@@ -37,6 +39,9 @@ const INVESTOR_PROFILE_SELECT = {
   status: true, //pending etc
   totalInvestmentAmount: true,
   approvedAt: true,
+  // Why the application was sent back (status `rejected`).
+  rejectionReason: true,
+  rejectedAt: true,
   createdAt: true,
   updatedAt: true,
   // Contact details live on the 1:1 User; the profile form edits `email`.
@@ -85,6 +90,32 @@ const INVESTOR_PROFILE_SELECT = {
   },
 } satisfies Prisma.InvestorSelect;
 
+// Before approval the investor has only an application: they can read it,
+// and edit it only after an admin rejects it (see resubmitApplication).
+// Approved investors change details through edit requests.
+const APPLICATION_STATUSES: InvestorStatus[] = [
+  InvestorStatus.pending,
+  InvestorStatus.uploaded_kyc,
+  InvestorStatus.rejected,
+];
+
+function isApproved(status: InvestorStatus) {
+  return !APPLICATION_STATUSES.includes(status);
+}
+
+function assertApproved(status: InvestorStatus) {
+  if (status === InvestorStatus.rejected) {
+    throw new ForbiddenException(
+      'Your application was sent back. Edit and resubmit it from the verification page.',
+    );
+  }
+  if (!isApproved(status)) {
+    throw new ForbiddenException(
+      "Your application is being reviewed. You can change your details once it's approved.",
+    );
+  }
+}
+
 @Injectable()
 export class InvestorService {
   constructor(
@@ -106,8 +137,8 @@ export class InvestorService {
     // `userId` was fetched for the ownership check; don't return it.
     const { userId: _ownerUserId, ...profile } = investor;
 
-    // Don't expose category until investor is beyond the initial KYC stages
-    if (profile.status === 'pending' || profile.status === 'uploaded_kyc') {
+    // Don't expose category until the application is approved
+    if (!isApproved(profile.status)) {
       const { category, ...publicProfile } = profile;
 
       return publicProfile;
@@ -183,6 +214,10 @@ export class InvestorService {
       ? 'uploaded_kyc'
       : 'pending';
 
+    // The application carries the first investment; check the project can
+    // take it before writing anything.
+    const terms = await resolveInvestmentTerms(this.prisma, dto.investment);
+
     try {
       return await this.prisma.$transaction(async (tx) => {
         // Create Investor profile & relations
@@ -239,6 +274,22 @@ export class InvestorService {
           },
         });
 
+        // Stays `pending` until the investor is approved, pays, and an admin
+        // activates it.
+        await tx.investment.create({
+          data: {
+            amount: terms.amount,
+            rate: terms.rate,
+            investmentType: dto.investment.investmentType,
+            investmentPeriodMonths: dto.investment.investmentPeriodMonths,
+            disbursementPeriod: dto.investment.disbursementPeriod,
+            investmentDate: getDhakaDateOnly(),
+            status: 'pending',
+            investorId: investor.id,
+            projectId: dto.investment.projectId,
+          },
+        });
+
         // Connect and initialize Referral relations if valid referral code used
         if (referralCodeRecord) {
           // Imagine two users submit the same referral code at almost exactly the same time.
@@ -282,7 +333,7 @@ export class InvestorService {
           data: {
             type: 'new_investment_request' as AdminNotificationType,
             referenceId: investor.id,
-            message: `New profile registration: ${investor.fullname} (Status: ${investor.status})${hasKycDocuments ? ' has uploaded KYC documents and is waiting for your manual review.' : ' registered without KYC documents.'}`,
+            message: `New account application: ${investor.fullname}, investing ${terms.amount.toFixed(2)}${hasKycDocuments ? ', is waiting for review.' : ', registered without KYC documents.'}`.slice(0, 255),
             isRead: false,
             clickLink: `/admin/investors/${investor.id}`,
           },
@@ -324,6 +375,7 @@ export class InvestorService {
         id: true,
         fullname: true,
         userId: true,
+        status: true,
         user: { select: { passwordHash: true } },
       },
     });
@@ -331,6 +383,8 @@ export class InvestorService {
     if (!investor) {
       throw new NotFoundException(`Invalid Investor!`);
     }
+
+    assertApproved(investor.status);
 
     const profileChanges = !!dto.address || !!dto.profession || !!dto.workplace;
     const nomineeChanges = !!dto.nominee;
@@ -635,6 +689,193 @@ export class InvestorService {
     };
   }
 
+  // PUT /api/investor/application
+  // A rejected application, corrected by the investor. Before approval there
+  // is no live account to protect, so the application rows are replaced
+  // directly (edit requests are for approved investors) and the whole thing
+  // goes back to the review queue.
+  async resubmitApplication(
+    dto: ResubmitApplicationDto,
+    user: AuthenticatedUser,
+  ) {
+    if (!user.userId) {
+      throw new UnauthorizedException('Session is no longer valid');
+    }
+
+    const investor = await this.prisma.investor.findUnique({
+      where: { userId: user.userId },
+      select: {
+        id: true,
+        status: true,
+        kycDocuments: { select: { nidFront: true, nidBack: true } },
+        nominee: { select: { nomineeNidFront: true, nomineeNidBack: true } },
+        bankAccount: { select: { id: true }, take: 1 },
+        investments: {
+          select: { id: true },
+          orderBy: { createdAt: 'asc' },
+          take: 1,
+        },
+      },
+    });
+
+    if (!investor) {
+      throw new NotFoundException('No investor profile found for the user');
+    }
+    if (investor.status !== InvestorStatus.rejected) {
+      throw new ConflictException(
+        isApproved(investor.status)
+          ? 'Your account is already approved. Change your details from your profile.'
+          : 'Your application is being reviewed and cannot be changed right now.',
+      );
+    }
+
+    await this.kycFiles.assertOwnedUploads(user.userId, [
+      dto.kycDocuments.nidFront,
+      dto.kycDocuments.nidBack,
+      dto.kycDocuments.photo,
+      dto.nominee.nomineeNidFront,
+      dto.nominee.nomineeNidBack,
+      dto.nominee.nomineePhoto,
+    ]);
+
+    const terms = await resolveInvestmentTerms(this.prisma, dto.investment);
+
+    // The admin copies NID numbers from the card images; new images mean the
+    // number has to be read again.
+    const nidCardChanged =
+      investor.kycDocuments?.nidFront !== dto.kycDocuments.nidFront ||
+      investor.kycDocuments?.nidBack !== dto.kycDocuments.nidBack;
+    const nomineeCardChanged =
+      investor.nominee?.nomineeNidFront !== dto.nominee.nomineeNidFront ||
+      investor.nominee?.nomineeNidBack !== dto.nominee.nomineeNidBack;
+
+    const kyc = {
+      nidFront: dto.kycDocuments.nidFront,
+      nidBack: dto.kycDocuments.nidBack,
+      photo: dto.kycDocuments.photo,
+      verificationStatus: 'pending' as const,
+      uploadedAt: new Date(),
+    };
+    const nominee = {
+      nomineeName: dto.nominee.nomineeName,
+      nomineeNidFront: dto.nominee.nomineeNidFront,
+      nomineeNidBack: dto.nominee.nomineeNidBack,
+      nomineePhoto: dto.nominee.nomineePhoto,
+      nomineePhone: dto.nominee.nomineePhone,
+      relation: dto.nominee.relation,
+    };
+    const bank = {
+      selectedBank: dto.bankAccount.selectedBank,
+      bankName: dto.bankAccount.bankName,
+      accountName: dto.bankAccount.accountName,
+      accountNumber: dto.bankAccount.accountNumber,
+      routingNumber: dto.bankAccount.routingNumber ?? null,
+      accountType: dto.bankAccount.accountType ?? null,
+      branchName: dto.bankAccount.branchName ?? null,
+    };
+    const investment = {
+      amount: terms.amount,
+      rate: terms.rate,
+      investmentType: dto.investment.investmentType,
+      investmentPeriodMonths: dto.investment.investmentPeriodMonths,
+      disbursementPeriod: dto.investment.disbursementPeriod,
+      investmentDate: getDhakaDateOnly(),
+      status: 'pending' as const,
+      projectId: dto.investment.projectId,
+    };
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        // Conditional on the status, so a double submit can't resubmit twice.
+        const { count } = await tx.investor.updateMany({
+          where: { id: investor.id, status: InvestorStatus.rejected },
+          data: {
+            fullname: dto.fullName,
+            address: dto.address ?? null,
+            profession: dto.profession ?? null,
+            workplace: dto.workplace ?? null,
+            status: InvestorStatus.uploaded_kyc,
+            rejectionReason: null,
+            rejectedAt: null,
+            ...(nidCardChanged && { nidNumber: null }),
+          },
+        });
+        if (count === 0) {
+          throw new ConflictException(
+            'Your application was already resubmitted.',
+          );
+        }
+
+        await tx.investorKycDocument.upsert({
+          where: { investorId: investor.id },
+          create: { ...kyc, investorId: investor.id },
+          update: kyc,
+        });
+
+        await tx.nominee.upsert({
+          where: { investorId: investor.id },
+          create: { ...nominee, investorId: investor.id },
+          update: {
+            ...nominee,
+            ...(nomineeCardChanged && { nomineeNidNumber: null }),
+          },
+        });
+
+        const [bankAccount] = investor.bankAccount;
+        if (bankAccount) {
+          await tx.investorBankAccount.update({
+            where: { id: bankAccount.id },
+            data: bank,
+          });
+        } else {
+          await tx.investorBankAccount.create({
+            data: { ...bank, isActive: false, investorId: investor.id },
+          });
+        }
+
+        const [firstInvestment] = investor.investments;
+        if (firstInvestment) {
+          await tx.investment.update({
+            where: { id: firstInvestment.id },
+            data: investment,
+          });
+        } else {
+          await tx.investment.create({
+            data: { ...investment, investorId: investor.id },
+          });
+        }
+
+        await tx.adminNotification.create({
+          data: {
+            type: 'investor_action' as AdminNotificationType,
+            referenceId: investor.id,
+            message: `${dto.fullName} resubmitted their account application.`.slice(
+              0,
+              255,
+            ),
+            isRead: false,
+            clickLink: `/admin/investors/${investor.id}`,
+          },
+        });
+
+        return {
+          message: 'Application resubmitted for review',
+          success: true,
+        };
+      });
+    } catch (err) {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2000'
+      ) {
+        throw new BadRequestException(
+          'One of the provided values is too long for its field.',
+        );
+      }
+      throw err;
+    }
+  }
+
   async createBankAccount(
     dto: CreateInvestorBankAccountDto,
     user: AuthenticatedUser,
@@ -645,12 +886,14 @@ export class InvestorService {
 
     const investor = await this.prisma.investor.findUnique({
       where: { userId: user.userId },
-      select: { id: true, fullname: true },
+      select: { id: true, fullname: true, status: true },
     });
 
     if (!investor) {
       throw new NotFoundException('No investor profile found for the user');
     }
+
+    assertApproved(investor.status);
 
     try {
       return await this.prisma.$transaction(async (tx) => {

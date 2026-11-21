@@ -1,7 +1,7 @@
 import { createZodDto } from 'nestjs-zod';
-import { investorCreateInputSchema } from '@investment-platform/contracts/investor';
+import { investorApplicationInputSchema } from '@investment-platform/contracts/investor';
 
-// Validated against the same schema secure-web uses for the investor
-// registration form. See packages/contracts/src/investor.ts for the shared
-// source of truth.
-export class CreateInvestorDto extends createZodDto(investorCreateInputSchema) {}
+// The account application: profile, documents and the first investment.
+// Validated against the same schema secure-web uses for the verification
+// wizard (packages/contracts/src/investor.ts).
+export class CreateInvestorDto extends createZodDto(investorApplicationInputSchema) {}

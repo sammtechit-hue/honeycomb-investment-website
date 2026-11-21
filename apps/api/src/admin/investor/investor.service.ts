@@ -839,6 +839,13 @@ export class InvestorService {
       nominee !== undefined ||
       kycDocuments !== undefined;
 
+    // Rejection needs a reason the investor sees — PATCH :id/reject.
+    if (status === InvestorStatus.rejected) {
+      throw new BadRequestException(
+        'Use the reject action to send an application back with a reason.',
+      );
+    }
+
     // A suspension request must carry status only — no other field may be
     if (status === InvestorStatus.suspended && hasOtherFields) {
       throw new BadRequestException(
@@ -860,6 +867,13 @@ export class InvestorService {
 
     if (!existing) {
       throw new NotFoundException(`Investor with id ${id} not found`);
+    }
+
+    // A rejected application belongs to the investor until they resubmit it.
+    if (existing.status === InvestorStatus.rejected) {
+      throw new BadRequestException(
+        'This application was sent back to the investor. It can be reviewed again once they resubmit it.',
+      );
     }
 
     // An active investor can't revert to an earlier onboarding stage — the
@@ -1142,6 +1156,101 @@ export class InvestorService {
     }
   }
 
+  // PATCH /api/admin/investor/:id/reject
+  // Sends an application under review back to the investor with a reason.
+  // They can then edit everything (profile, documents, bank, first
+  // investment) and resubmit; nothing else may change it meanwhile.
+  async rejectApplication(
+    id: string,
+    reason: string,
+    userId: string | undefined,
+    context?: RequestAuditContext,
+  ) {
+    if (!userId) {
+      throw new UnauthorizedException('Session is no longer valid');
+    }
+
+    const [existing, admin] = await Promise.all([
+      this.prisma.investor.findUnique({
+        where: { id },
+        include: INVESTOR_UPDATE_INCLUDE,
+      }),
+      this.prisma.adminProfile.findUnique({
+        where: { userId },
+        select: { id: true, name: true },
+      }),
+    ]);
+
+    if (!existing) {
+      throw new NotFoundException(`Investor with id ${id} not found`);
+    }
+    if (existing.status === InvestorStatus.rejected) {
+      throw new BadRequestException(
+        'This application was already sent back and is waiting for the investor.',
+      );
+    }
+    if (
+      existing.status !== InvestorStatus.pending &&
+      existing.status !== InvestorStatus.uploaded_kyc
+    ) {
+      throw new BadRequestException(
+        'Only an application under review can be rejected.',
+      );
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      let updated: InvestorWithRelations;
+      try {
+        updated = await tx.investor.update({
+          where: { id, updatedAt: existing.updatedAt },
+          data: {
+            status: InvestorStatus.rejected,
+            rejectionReason: reason,
+            rejectedAt: new Date(),
+            ...(existing.kycDocuments && {
+              kycDocuments: { update: { verificationStatus: 'rejected' } },
+            }),
+          },
+          include: INVESTOR_UPDATE_INCLUDE,
+        });
+      } catch (e) {
+        if (
+          e instanceof Prisma.PrismaClientKnownRequestError &&
+          e.code === 'P2025'
+        ) {
+          throw new ConflictException(
+            'Investor was modified by someone else. Reload and try again.',
+          );
+        }
+        throw e;
+      }
+
+      await tx.auditLog.create({
+        data: {
+          adminName: admin?.name ?? 'Admin',
+          adminProfileId: admin?.id ?? null,
+          action: AuditAction.investor_status_changed,
+          module: LogModule.INVESTOR,
+          severity: LogSeverity.INFO,
+          status: LogStatus.SUCCESS,
+          targetLabel: `Application Rejected: ${updated.fullname}`,
+          targetTable: 'investors',
+          targetId: updated.id,
+          oldValue: toInvestorSnapshot(existing) as unknown as Prisma.InputJsonValue,
+          newValue: toInvestorSnapshot(updated) as unknown as Prisma.InputJsonValue,
+          ipAddress: context?.ipAddress ?? null,
+          userAgent: context?.userAgent ?? null,
+          sessionId: context?.sessionId ?? null,
+        },
+      });
+    });
+
+    return {
+      message: 'Application sent back to the investor',
+      success: true,
+    };
+  }
+
   // Approval is when the investor becomes eligible to refer others. An existing
   // unused, active code is reused; otherwise a fresh one is issued.
   private async ensureReferralCode(
@@ -1351,6 +1460,7 @@ function toInvestorSnapshot(investor: InvestorWithRelations) {
     totalInvestmentAmount: Number(investor.totalInvestmentAmount),
     approvedAt: investor.approvedAt?.toISOString() ?? null,
     approvedBy: investor.approvedBy,
+    rejectionReason: investor.rejectionReason,
     email: investor.user.email,
     phone: investor.user.phone,
     nominee: investor.nominee,

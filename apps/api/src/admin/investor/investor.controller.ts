@@ -23,6 +23,7 @@ import { Roles } from '../../auth/decorators/roles.decorator';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../auth/types/jwt-payload.interface';
 import { CreateInvestorDto } from './dto/create-investor.dto';
+import { RejectApplicationDto } from './dto/reject-application.dto';
 import { UpdateInvestorDto } from './dto/update-investor.dto';
 import { InvestorQueryDto } from './dto/query-investor.dto';
 import {
@@ -149,6 +150,24 @@ export class InvestorController {
       user.userId,
       context,
     );
+  }
+
+  // PATCH /api/admin/investor/:id/reject  (sends the application back with a reason)
+  @Patch(':id/reject')
+  @HttpCode(HttpStatus.OK)
+  reject(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RejectApplicationDto,
+    @CurrentUser() user: AuthenticatedUser,
+    @Ip() ip?: string,
+    @Headers('user-agent') userAgent?: string,
+    @Headers('x-session-id') sessionId?: string,
+  ) {
+    return this.investorService.rejectApplication(id, dto.reason, user.userId, {
+      ipAddress: ip,
+      userAgent,
+      sessionId,
+    });
   }
 
   // PATCH /api/admin/investor/:id/deactivate  (sets status to 'deactivated')
