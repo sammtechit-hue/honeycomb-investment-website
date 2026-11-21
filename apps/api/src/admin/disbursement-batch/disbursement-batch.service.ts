@@ -1,5 +1,14 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, AuditAction, LogModule, LogSeverity, LogStatus, PayoutStatus } from '@investment-platform/db';
+import {
+    AuditAction,
+    DisbursementBatchStatus,
+    LogModule,
+    LogSeverity,
+    LogStatus,
+    PayoutStatus,
+    PayoutWindowStatus,
+    Prisma,
+} from '@investment-platform/db';
 import { RequestAuditContext } from '../../utils/common types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { buildOrderBy } from '../../utils/common/build-order-by.util';
@@ -13,7 +22,7 @@ export class DisbursementBatchService {
     constructor(private readonly prisma: PrismaService) { }
 
     // --------------------------------------------------------
-    // -------------- Find Disbursement Batch ----------------
+    // --------------- findAllDisbursementBatch ---------------
     //---------------------------------------------------------
     // Example: GET /admin/disbursement-batch?search=1st&exportType=cbl&status=draft&page=1&limit=10
     async findAllDisbursementBatch(query: DisbursementBatchQueryDto) {
@@ -65,7 +74,7 @@ export class DisbursementBatchService {
 
 
     // --------------------------------------------------------
-    // -------------- Create Disbursement Batch ----------------
+    // --------------- createDisbursementBatch ----------------
     //---------------------------------------------------------
     // POST /admin/disbursement-batch/:windowId
     async createDisbursementBatch(
@@ -104,6 +113,9 @@ export class DisbursementBatchService {
             },
         });
 
+        // --------------------------------------------------------
+        // ---------------------- AuditLog -------------------------
+        //-----------------------------------------------------------
         await this.prisma.auditLog.create({
             data: {
                 adminName: admin?.name ?? 'Admin',
@@ -131,9 +143,9 @@ export class DisbursementBatchService {
 
 
     // --------------------------------------------------------
-    // -------------- Update Disbursement Batch ----------------
+    // --------------- updateDisbursementBatch ----------------
     //---------------------------------------------------------
-    async update(
+    async updateDisbursementBatch(
         id: string,
         updateDisbursementBatchDto: UpdateDisbursementBatchDto,
         userId: string | undefined,
@@ -205,9 +217,6 @@ export class DisbursementBatchService {
             );
         }
 
-        // Confirming is the payout step: the batch status change, the items
-        // flagged as disbursed, the ledger rows marked paid and the audit entry
-        // must all land together or not at all.
         const isConfirming = status === 'confirmed';
 
         try {
@@ -226,6 +235,7 @@ export class DisbursementBatchService {
                 let payoutCounts:
                     | { itemsMarkedDisbursed: number; ledgerRowsDisbursed: number }
                     | undefined;
+                let payoutWindowCompleted = false;
 
                 if (isConfirming) {
                     // Every item in this batch is paid out by the confirmation.
@@ -244,8 +254,36 @@ export class DisbursementBatchService {
                         itemsMarkedDisbursed: disbursedItems.count,
                         ledgerRowsDisbursed: disbursedLedger.count,
                     };
+
+                    // Confirming the last remaining batch closes its payout
+                    // window. This batch is already confirmed, so an empty
+                    // result means no other batch is still pending.
+                    const pendingBatches = await tx.disbursementBatch.count({
+                        where: {
+                            windowId: batch.windowId,
+                            status: { not: DisbursementBatchStatus.confirmed },
+                        },
+                    });
+
+                    if (pendingBatches === 0) {
+                        const completedWindow = await tx.payoutWindow.updateMany({
+                            where: {
+                                id: batch.windowId,
+                                status: PayoutWindowStatus.open,
+                            },
+                            data: {
+                                status: PayoutWindowStatus.completed,
+                                completedAt: new Date(),
+                            },
+                        });
+
+                        payoutWindowCompleted = completedWindow.count > 0;
+                    }
                 }
 
+                // --------------------------------------------------------
+                // ---------------------- AuditLog -------------------------
+                //-----------------------------------------------------------
                 await tx.auditLog.create({
                     data: {
                         adminName: admin?.name ?? 'Admin',
@@ -262,6 +300,7 @@ export class DisbursementBatchService {
                             newValue: {
                                 batch: toDisbursementBatchSnapshot(updatedBatch),
                                 ...payoutCounts,
+                                payoutWindowCompleted,
                             } as unknown as Prisma.InputJsonValue,
                         }),
                         ipAddress: context?.ipAddress ?? null,
@@ -292,9 +331,9 @@ export class DisbursementBatchService {
     }
 
     // --------------------------------------------------------
-    // -------------- Remove Disbursement Batch ----------------
+    // --------------- removeDisbursementBatch ----------------
     //---------------------------------------------------------
-    async remove(id: string, userId: string | undefined, context?: RequestAuditContext) {
+    async removeDisbursementBatch(id: string, userId: string | undefined, context?: RequestAuditContext) {
         const [existing, admin] = await Promise.all([
             this.prisma.disbursementBatch.findUnique({
                 where: { id },
@@ -345,6 +384,9 @@ export class DisbursementBatchService {
                     );
                 }
 
+                // --------------------------------------------------------
+                // ---------------------- AuditLog -------------------------
+                //-----------------------------------------------------------
                 await tx.auditLog.create({
                     data: {
                         adminName: admin?.name ?? 'Admin',
@@ -394,6 +436,9 @@ const MONTH_NAMES = [
     'December',
 ];
 
+// --------------------------------------------------------
+// ------------------------ ordinal -----------------------
+//---------------------------------------------------------
 function ordinal(day: number): string {
     const mod100 = day % 100;
     if (mod100 >= 11 && mod100 <= 13) {
@@ -412,6 +457,9 @@ function ordinal(day: number): string {
     }
 }
 
+// --------------------------------------------------------
+// -------------------- buildSlotLabel --------------------
+//---------------------------------------------------------
 // 1st-10th November
 function buildSlotLabel(startDate: Date, endDate: Date): string {
     const sameMonth =
@@ -430,6 +478,9 @@ function buildSlotLabel(startDate: Date, endDate: Date): string {
 }
 
 
+// --------------------------------------------------------
+// -------------- toDisbursementBatchSnapshot -------------
+//---------------------------------------------------------
 function toDisbursementBatchSnapshot(batch: {
     id: string;
     slotLabel: string;

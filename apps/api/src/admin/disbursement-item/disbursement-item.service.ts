@@ -53,7 +53,7 @@ export class DisbursementItemService {
     constructor(private readonly prisma: PrismaService) { }
 
     // --------------------------------------------------------
-    // -------------- FindAll Disbursement Item ----------------
+    // ---------------- findAllDisbursementItem ----------------
     //---------------------------------------------------------
     // For Getting All DisbursementItem's Data with filtering, searching, sorting & pagination
     // Example: GET /admin/disbursement-item?search=ROI&exportFormat=cbl&page=1&limit=10
@@ -149,7 +149,7 @@ export class DisbursementItemService {
     }
 
     // --------------------------------------------------------
-    // -------------- Create Disbursement Item ----------------
+    // --------------- createDisbursementItem -----------------
     //---------------------------------------------------------
     async createDisbursementItem(
         userId?: string,
@@ -353,7 +353,7 @@ export class DisbursementItemService {
     }
 
     // --------------------------------------------------------
-    // -------- Update Disbursement Item (notes + batch) -------
+    // --------------- updateDisbursementItem -----------------
     //---------------------------------------------------------
     async updateDisbursementItem(
         id: string,
@@ -405,6 +405,9 @@ export class DisbursementItemService {
                 },
             });
 
+            // --------------------------------------------------------
+            // ---------------------- AuditLog -------------------------
+            //-----------------------------------------------------------
             await tx.auditLog.create({
                 data: {
                     adminName: admin?.name ?? 'Admin',
@@ -443,12 +446,12 @@ export class DisbursementItemService {
     }
 
     // --------------------------------------------------------
-    // -------- Add Disbursement Items To A Batch -------------
+    // -------------- addDisbursementItemsToBatch -------------
     //---------------------------------------------------------
     // PATCH /admin/disbursement-batch/items
     // Attaches the selected items to a draft batch. The items are only marked
     // disbursed later, when the batch is confirmed.
-    async addDisbursementItemToBatch(
+    async addDisbursementItemsToBatch(
         dto: AddItemsToBatchDto,
         userId?: string,
         context?: RequestAuditContext,
@@ -547,6 +550,9 @@ export class DisbursementItemService {
                 );
             }
 
+            // --------------------------------------------------------
+            // ---------------------- AuditLog -------------------------
+            //-----------------------------------------------------------
             await tx.auditLog.create({
                 data: {
                     adminName: admin?.name ?? 'Admin',
@@ -594,6 +600,9 @@ export class DisbursementItemService {
 
 }
 
+// --------------------------------------------------------
+// ---------------------- buildReason ---------------------
+//---------------------------------------------------------
 function buildReason(firstCycleStart: Date, lastCycleEnd: Date): string {
     const firstYear = firstCycleStart.getUTCFullYear();
     const lastYear = lastCycleEnd.getUTCFullYear();
@@ -606,6 +615,9 @@ function buildReason(firstCycleStart: Date, lastCycleEnd: Date): string {
     return `ROI Disbursement - ${from} to ${formatDayAndMonth(lastCycleEnd)} ${lastYear}`;
 }
 
+// --------------------------------------------------------
+// ------------------- formatDayAndMonth ------------------
+//---------------------------------------------------------
 function formatDayAndMonth(date: Date): string {
     return `${date.getUTCDate()} ${MONTH_ABBREVIATIONS[date.getUTCMonth()]}`;
 }
