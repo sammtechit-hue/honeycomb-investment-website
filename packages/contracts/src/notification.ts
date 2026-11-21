@@ -11,8 +11,11 @@ export const adminNotificationTypeSchema = z.enum([
   'upcoming_payout',
   'slot_reminder',
   'new_investment_request',
+  'investor_action',
   'disbursement_sent',
+  'incoming_payments',
   'company_document_expiring',
+  'monthly_profit_cycle',
 ]);
 
 // ============================================================================
