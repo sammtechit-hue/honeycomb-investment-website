@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { ADMIN_NAV } from '@/components/dashboard/nav-items';
+import { adminNavFor } from '@/components/dashboard/nav-items';
 import { DashboardShell } from '@/components/dashboard/shell';
 import { ROLE_LABEL, requireStaff } from '@/lib/admin';
 
@@ -16,7 +16,7 @@ export default async function AdminLayout({ children }: LayoutProps<'/admin'>) {
   return (
     <DashboardShell
       area="Admin"
-      nav={ADMIN_NAV}
+      nav={adminNavFor(user.role)}
       signInHref="/staff/login"
       name={user.email}
       subtitle={ROLE_LABEL[user.role]}

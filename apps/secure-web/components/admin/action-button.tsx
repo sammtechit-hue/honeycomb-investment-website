@@ -17,6 +17,7 @@ export function ActionButton({
   confirm,
   variant = 'primary',
   method = 'PATCH',
+  redirectTo,
 }: {
   endpoint: string;
   body: unknown;
@@ -24,7 +25,9 @@ export function ActionButton({
   pendingLabel?: string;
   confirm?: string;
   variant?: 'primary' | 'secondary';
-  method?: 'PATCH' | 'POST';
+  method?: 'PATCH' | 'POST' | 'DELETE';
+  // Where to go on success when the current page no longer applies (a delete).
+  redirectTo?: string;
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -38,6 +41,7 @@ export function ActionButton({
     setPending(false);
     setConfirming(false);
     if (result.ok) {
+      if (redirectTo) router.replace(redirectTo);
       router.refresh();
       return;
     }

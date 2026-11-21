@@ -1,5 +1,6 @@
 import { formatRate } from '@/lib/format';
 import type { DisbursementPeriod, Investment, InvestmentStatus, LedgerRow } from '@/lib/investor';
+import { payoutState, type PayoutState } from '@/lib/payout-progress';
 import { Badge, type BadgeTone } from './ui';
 
 const INVESTMENT_STATUS: Record<InvestmentStatus, [string, BadgeTone]> = {
@@ -26,10 +27,22 @@ export function PaymentStatusBadge({ payment }: { payment: Investment['incomingP
   return <Badge tone={tone}>{label}</Badge>;
 }
 
-// "Sent" once the row's payout batch is marked sent; until then the profit
-// is calculated and waiting for its payout window.
-export function PayoutStatusBadge({ status }: { status: LedgerRow['payoutStatus'] }) {
-  return status === 'disbursed' ? <Badge tone="solid">Sent</Badge> : <Badge>Awaiting payout</Badge>;
+const PAYOUT_STATE: Record<PayoutState, [string, BadgeTone]> = {
+  building: ['Awaiting payout', 'muted'],
+  being_paid: ['Being paid', 'outline'],
+  paid: ['Paid', 'solid'],
+};
+
+// Awaiting payout → Being paid (in a payout the team is sending) → Paid
+// (the bank has confirmed it).
+export function PayoutStatusBadge({ row }: { row: Pick<LedgerRow, 'payoutStatus' | 'disbursementItemId'> }) {
+  const [label, tone] = PAYOUT_STATE[payoutState(row)];
+  return <Badge tone={tone}>{label}</Badge>;
+}
+
+export function PayoutBadge({ paid }: { paid: boolean }) {
+  const [label, tone] = PAYOUT_STATE[paid ? 'paid' : 'being_paid'];
+  return <Badge tone={tone}>{label}</Badge>;
 }
 
 const PERIOD_LABEL: Record<DisbursementPeriod, string> = {

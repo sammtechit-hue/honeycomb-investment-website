@@ -10,6 +10,7 @@ import { Card, Notice, PageHeader } from '@/components/dashboard/ui';
 import { getInvestment, getInvestor, requireStaff, type AdminInvestment } from '@/lib/admin';
 import { formatDate, formatTaka } from '@/lib/format';
 import type { InvestorStatus } from '@/lib/investor';
+import { HistoryLink } from '../../audit/ui';
 import { ActivateForm } from './activate-form';
 
 export const metadata: Metadata = {
@@ -35,7 +36,7 @@ function Details({ items }: { items: [string, ReactNode][] }) {
 export default async function AdminInvestmentPage(props: PageProps<'/admin/investments/[id]'>) {
   const { id } = await props.params;
   const returnTo = `/admin/investments/${id}`;
-  await requireStaff(returnTo);
+  const user = await requireStaff(returnTo);
   if (!UUID_RE.test(id)) notFound();
 
   const investment = await getInvestment(id, returnTo);
@@ -50,7 +51,12 @@ export default async function AdminInvestmentPage(props: PageProps<'/admin/inves
         eyebrow="Investment"
         title={`${formatTaka(investment.amount)} in ${investment.project.name}`}
         description={`Requested ${formatDate(investment.createdAt)} by ${investment.investor.fullname}`}
-        actions={<StatusBadge labels={INVESTMENT_STATUS} status={investment.status} />}
+        actions={
+          <>
+            <StatusBadge labels={INVESTMENT_STATUS} status={investment.status} />
+            <HistoryLink role={user.role} targetId={investment.id} />
+          </>
+        }
       />
 
       <StatusPanel investment={investment} investorStatus={investor?.status ?? null} />

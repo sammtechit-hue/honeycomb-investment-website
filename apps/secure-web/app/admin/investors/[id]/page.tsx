@@ -10,7 +10,9 @@ import { categoryLabel } from '@/components/dashboard/shell';
 import { Badge, Card, EmptyState, Notice, PageHeader, Table, td, tdNum, th, thNum } from '@/components/dashboard/ui';
 import { getInvestor, listInvestments, requireStaff, type AdminBankAccount, type AdminInvestor } from '@/lib/admin';
 import { formatDate, formatTaka } from '@/lib/format';
-import { ApproveForm, CategoryForm } from './investor-forms';
+import { HistoryLink } from '../../audit/ui';
+import { InvestorReferrals } from '../../referrals/investor-referrals';
+import { ApproveForm, CategoryForm, RejectForm } from './investor-forms';
 
 export const metadata: Metadata = {
   title: 'Investor · HoneyComb Admin',
@@ -46,7 +48,7 @@ function bankLine(b: AdminBankAccount) {
 export default async function AdminInvestorPage(props: PageProps<'/admin/investors/[id]'>) {
   const { id } = await props.params;
   const returnTo = `/admin/investors/${id}`;
-  await requireStaff(returnTo);
+  const user = await requireStaff(returnTo);
   if (!UUID_RE.test(id)) notFound();
 
   const investor = await getInvestor(id, returnTo);
@@ -70,6 +72,7 @@ export default async function AdminInvestorPage(props: PageProps<'/admin/investo
           <>
             <StatusBadge labels={INVESTOR_STATUS} status={investor.status} />
             <Badge tone="outline">{categoryLabel(investor.category)}</Badge>
+            <HistoryLink role={user.role} targetId={investor.id} />
           </>
         }
       />
@@ -198,6 +201,8 @@ export default async function AdminInvestorPage(props: PageProps<'/admin/investo
           </Table>
         )}
       </Card>
+
+      <InvestorReferrals investorId={investor.id} returnTo={returnTo} />
     </>
   );
 }
@@ -205,6 +210,20 @@ export default async function AdminInvestorPage(props: PageProps<'/admin/investo
 // What the team can do with this investor right now, by status.
 function ReviewPanel({ investor }: { investor: AdminInvestor }) {
   const endpoint = `/api/admin/investor/${investor.id}`;
+
+  if (investor.status === 'rejected') {
+    return (
+      <Notice title="Sent back to the investor">
+        <span className="block">
+          {investor.rejectedAt ? `On ${formatDate(investor.rejectedAt)}` : 'Earlier'}, with this note:
+        </span>
+        <span className="mt-1 block whitespace-pre-line text-ink">{investor.rejectionReason ?? '—'}</span>
+        <span className="mt-2 block">
+          The application can’t be changed or approved until the investor edits and resubmits it.
+        </span>
+      </Notice>
+    );
+  }
 
   if (investor.status === 'pending' || investor.status === 'uploaded_kyc') {
     if (!investor.kycDocuments) {
@@ -214,18 +233,12 @@ function ReviewPanel({ investor }: { investor: AdminInvestor }) {
         </Notice>
       );
     }
-    const rejected = investor.kycDocuments.verificationStatus === 'rejected';
     return (
       <Card
-        title="Review and approve"
-        description="Check the documents below match the details, copy both NID numbers from the NID images, then approve. Approving lets the investor invest."
+        title="Review the application"
+        description="Check the details, documents, bank account and the investment below. To approve, copy both NID numbers from the NID images. If anything is wrong, send it back with a note and the investor can fix it."
       >
         <div className="flex flex-col gap-6 p-5">
-          {rejected && (
-            <Notice title="Documents were rejected">
-              You can still approve once the investor has sent correct documents.
-            </Notice>
-          )}
           {investor.nominee ? (
             <ApproveForm
               investorId={investor.id}
@@ -240,22 +253,13 @@ function ReviewPanel({ investor }: { investor: AdminInvestor }) {
               Approval needs the nominee’s NID number, and this investor has no nominee yet.
             </Notice>
           )}
-          {!rejected && (
-            <div className="flex flex-col gap-2 border-t border-hairline pt-5">
-              <p className="text-sm leading-5 text-muted">
-                Documents unreadable or not matching? Reject them and contact the investor.
-              </p>
-              <div className="self-start">
-                <ActionButton
-                  endpoint={endpoint}
-                  body={{ kycDocuments: { verificationStatus: 'rejected' } }}
-                  label="Reject documents"
-                  confirm="The investor will see their documents were rejected."
-                  variant="secondary"
-                />
-              </div>
-            </div>
-          )}
+          <div className="flex flex-col gap-3 border-t border-hairline pt-5">
+            <p className="text-sm leading-5 text-muted">
+              Documents unreadable, details not matching, or the investment needs changing? Send the application
+              back with a note.
+            </p>
+            <RejectForm investorId={investor.id} />
+          </div>
         </div>
       </Card>
     );

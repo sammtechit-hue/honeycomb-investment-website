@@ -20,6 +20,7 @@ import {
 } from '@/components/dashboard/ui';
 import { daysUntil, formatCycle, formatDate, formatRate, formatTaka, sumTaka } from '@/lib/format';
 import { getInvestments, getLedger, requireInvestor, type InvestorProfile } from '@/lib/investor';
+import { months, payoutState } from '@/lib/payout-progress';
 
 const linkClass = 'text-sm leading-5 text-secondary underline decoration-rule underline-offset-2 hover:text-black';
 
@@ -28,8 +29,9 @@ export default async function OverviewPage() {
   const [investments, ledger] = await Promise.all([getInvestments('/dashboard'), getLedger('/dashboard')]);
 
   const active = investments.filter((i) => i.status === 'active');
-  const received = sumTaka(ledger.filter((r) => r.payoutStatus === 'disbursed').map((r) => r.profitAmount));
-  const awaiting = ledger.filter((r) => r.payoutStatus === 'accrued');
+  const received = sumTaka(ledger.filter((r) => payoutState(r) === 'paid').map((r) => r.profitAmount));
+  const awaiting = ledger.filter((r) => payoutState(r) !== 'paid');
+  const beingPaid = sumTaka(ledger.filter((r) => payoutState(r) === 'being_paid').map((r) => r.profitAmount));
   const nextEnd = active
     .filter((i) => i.agreementEndDate)
     .sort((a, b) => a.agreementEndDate!.localeCompare(b.agreementEndDate!))[0];
@@ -59,11 +61,15 @@ export default async function OverviewPage() {
           value={formatTaka(sumTaka(active.map((i) => i.amount)))}
           hint={`Across ${active.length} active ${active.length === 1 ? 'investment' : 'investments'}`}
         />
-        <StatCard label="Profit received" value={formatTaka(received)} hint="Sent to your bank account" />
+        <StatCard label="Profit paid" value={formatTaka(received)} hint="Paid into your bank account" />
         <StatCard
           label="Awaiting payout"
           value={formatTaka(sumTaka(awaiting.map((r) => r.profitAmount)))}
-          hint={`${awaiting.length} ${awaiting.length === 1 ? 'month' : 'months'} calculated, not yet sent`}
+          hint={
+            beingPaid > 0
+              ? `${formatTaka(beingPaid)} of it is being paid now`
+              : `${months(awaiting.length)} calculated, not paid yet`
+          }
         />
         <StatCard
           label="Agreement days left"
@@ -153,7 +159,7 @@ export default async function OverviewPage() {
                 <td className={tdNum}>{formatRate(r.rateApplied)}</td>
                 <td className={tdNum}>+ {formatTaka(r.profitAmount)}</td>
                 <td className={td}>
-                  <PayoutStatusBadge status={r.payoutStatus} />
+                  <PayoutStatusBadge row={r} />
                 </td>
               </tr>
             ))}
@@ -164,26 +170,13 @@ export default async function OverviewPage() {
   );
 }
 
+// Only approved investors reach the portal (requireInvestor), so the one
+// notice left is for an account put on hold afterwards.
 function AccountNotice({ profile }: { profile: InvestorProfile }) {
-  if (profile.status === 'active') return null;
-
-  if (profile.status === 'suspended' || profile.status === 'deactivated') {
-    return (
-      <Notice title="Your account is on hold">
-        Please contact HoneyComb support to find out more. Your records stay available here.
-      </Notice>
-    );
-  }
-
-  const rejected = profile.kycDocuments?.verificationStatus === 'rejected';
+  if (profile.status !== 'suspended' && profile.status !== 'deactivated') return null;
   return (
-    <Notice title={rejected ? 'We couldn’t verify your documents' : 'Verification in review'}>
-      {rejected
-        ? 'Our verification team will contact you about what needs to change.'
-        : 'Our team is checking your details and documents. You can invest once your account is verified.'}{' '}
-      <Link href="/verification" className="underline underline-offset-2">
-        View verification status
-      </Link>
+    <Notice title="Your account is on hold">
+      Please contact HoneyComb support to find out more. Your records stay available here.
     </Notice>
   );
 }

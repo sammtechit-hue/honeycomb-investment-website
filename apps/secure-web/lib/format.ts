@@ -30,6 +30,13 @@ export function formatDate(iso: string | null | undefined): string {
   return iso ? dateFormat.format(new Date(iso)) : '—';
 }
 
+const timeFormat = new Intl.DateTimeFormat('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: TZ });
+
+// "5:02 pm" (Bangladesh time).
+export function formatTime(iso: string | null | undefined): string {
+  return iso ? timeFormat.format(new Date(iso)) : '—';
+}
+
 // "11 Aug – 10 Sep 2026"
 export function formatCycle(startIso: string, endIso: string): string {
   return `${dayMonthFormat.format(new Date(startIso))} – ${dateFormat.format(new Date(endIso))}`;

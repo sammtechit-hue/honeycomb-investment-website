@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 const PATH = '/admin/investors';
 // The API's status filter doesn't accept "deactivated" yet, so it isn't
 // offered as a filter; deactivated investors still show under "All".
-const STATUSES = ['uploaded_kyc', 'pending', 'active', 'suspended'] as const satisfies readonly InvestorStatus[];
+const STATUSES = ['uploaded_kyc', 'rejected', 'pending', 'active', 'suspended'] as const satisfies readonly InvestorStatus[];
 
 export default async function InvestorsPage(props: PageProps<'/admin/investors'>) {
   await requireStaff(PATH);

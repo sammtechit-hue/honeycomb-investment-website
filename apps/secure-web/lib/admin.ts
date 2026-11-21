@@ -1,5 +1,7 @@
 import { redirect } from 'next/navigation';
+import { sumTaka } from './format';
 import type { DisbursementPeriod, InvestmentStatus, InvestorCategory, InvestorStatus } from './investor';
+import { getAllUnbatchedItems, overdueWindowQuery } from './payouts';
 import { getJson, getPage, type Page } from './server-api';
 import { requireSessionUser, type SessionUser } from './session';
 
@@ -71,6 +73,8 @@ export type AdminInvestor = {
   status: InvestorStatus;
   totalInvestmentAmount: string;
   approvedAt: string | null;
+  rejectionReason: string | null;
+  rejectedAt: string | null;
   createdAt: string;
   updatedAt: string;
   user: { email: string; phone: string | null; lastLoginAt?: string | null };
@@ -217,13 +221,164 @@ async function countOf(path: string, filters: Record<string, string>, returnTo: 
 }
 
 export async function getQueueCounts(returnTo: string) {
-  const [awaitingVerification, pendingInvestments, pendingPayments, overduePayments, pendingChanges] =
-    await Promise.all([
-      countOf('/admin/investor', { status: 'uploaded_kyc' }, returnTo),
-      countOf('/admin/investment', { status: 'pending' }, returnTo),
-      countOf('/admin/incoming-payment', { status: 'pending' }, returnTo),
-      countOf('/admin/incoming-payment', { status: 'overdue' }, returnTo),
-      countOf('/admin/investor/edit-requests', { status: 'PENDING' }, returnTo),
-    ]);
-  return { awaitingVerification, pendingInvestments, pendingPayments, overduePayments, pendingChanges };
+  const [
+    awaitingVerification,
+    pendingInvestments,
+    pendingPayments,
+    overduePayments,
+    pendingChanges,
+    unbatched,
+    draftBatches,
+    sentBatches,
+    overdueWindows,
+    allReferrals,
+    recordedReferrals,
+  ] = await Promise.all([
+    countOf('/admin/investor', { status: 'uploaded_kyc' }, returnTo),
+    countOf('/admin/investment', { status: 'pending' }, returnTo),
+    countOf('/admin/incoming-payment', { status: 'pending' }, returnTo),
+    countOf('/admin/incoming-payment', { status: 'overdue' }, returnTo),
+    countOf('/admin/investor/edit-requests', { status: 'PENDING' }, returnTo),
+    // No "not in a batch" filter: read the items and count here.
+    getAllUnbatchedItems({}, returnTo),
+    countOf('/admin/disbursement-batch', { status: 'draft' }, returnTo),
+    countOf('/admin/disbursement-batch', { status: 'exported' }, returnTo),
+    countOf('/admin/payout-window', overdueWindowQuery(), returnTo),
+    // No "no bonus yet" filter: every referral minus those with an amount
+    // (an amount range leaves out the empty ones).
+    countOf('/admin/referral', {}, returnTo),
+    countOf('/admin/referral', { minBonusAmount: '0' }, returnTo),
+  ]);
+  return {
+    awaitingVerification,
+    pendingInvestments,
+    pendingPayments,
+    overduePayments,
+    pendingChanges,
+    unbatchedItems: {
+      count: unbatched.rows.length,
+      amount: sumTaka(unbatched.rows.map((i) => i.amount)),
+      complete: unbatched.complete,
+    },
+    draftBatches,
+    sentBatches,
+    overdueWindows,
+    unrecordedBonuses: Math.max(0, allReferrals - recordedReferrals),
+  };
+}
+
+// Changing projects, rates and settings is for admins; moderators can look.
+// (The API enforces the same split; SUPER_ADMIN passes every role check.)
+export function canManage(role: StaffRole) {
+  return role === 'ADMIN' || role === 'SUPER_ADMIN';
+}
+
+// ---------------------------------------------------------------------------
+// Projects
+// ---------------------------------------------------------------------------
+
+export type ProjectStatus = 'DRAFT' | 'OPEN' | 'FULL' | 'PAUSED' | 'COMPLETED' | 'CANCELLED';
+
+export type AdminProject = {
+  id: string;
+  name: string;
+  description: string | null;
+  status: ProjectStatus;
+  // Fixed monthly rate (%) for this project's fixed-rate investments.
+  projectRate: string | null;
+  minimumInvestment: string;
+  maximumInvestment: string | null;
+  targetAmount: string | null;
+  totalInvestedAmount: string;
+  totalActiveInvestmentAmout: string;
+  startDate: string;
+  endDate: string | null;
+  isActive: boolean;
+  isVisible: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export function listProjects(query: URLSearchParams, returnTo: string): Promise<Page<AdminProject>> {
+  return getPage<AdminProject>('/admin/project', query, returnTo);
+}
+
+export async function getProject(id: string, returnTo: string): Promise<AdminProject | null> {
+  const res = await getJson<{ data: AdminProject }>(`/admin/project/${id}`, returnTo);
+  return res?.data ?? null;
+}
+
+// Every project, for pickers (rates). The API caps a page at 100.
+export async function listAllProjects(returnTo: string): Promise<AdminProject[]> {
+  const rows: AdminProject[] = [];
+  for (let page = 1; page <= 20; page++) {
+    const res = await listProjects(
+      new URLSearchParams({ page: String(page), limit: '100', sortBy: 'name', sortOrder: 'asc' }),
+      returnTo,
+    );
+    rows.push(...res.data);
+    if (page >= res.meta.totalPages) break;
+  }
+  return rows;
+}
+
+export async function countProjectInvestments(projectId: string, returnTo: string) {
+  return countOf('/admin/investment', { projectId }, returnTo);
+}
+
+// ---------------------------------------------------------------------------
+// Monthly rates (variable-rate investments, per project per month)
+// ---------------------------------------------------------------------------
+
+export type AdminMonthlyRate = {
+  id: string;
+  // First day of the month, UTC.
+  periodMonth: string;
+  ratePercent: string;
+  isActive: boolean;
+  setAt: string;
+  projectId: string;
+  project: { id: string; name: string };
+};
+
+export function listMonthlyRates(query: URLSearchParams, returnTo: string): Promise<Page<AdminMonthlyRate>> {
+  return getPage<AdminMonthlyRate>('/admin/monthly-rate-setting', query, returnTo);
+}
+
+// ---------------------------------------------------------------------------
+// Business settings (profit cycle)
+// ---------------------------------------------------------------------------
+
+export type AdminBusinessSettings = {
+  id: number;
+  rate: string | null;
+  setcycleday: number | null;
+  countingStartAfterDays: number | null;
+  label: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+// The row the profit run reads: the first active one.
+export async function getActiveBusinessSettings(returnTo: string): Promise<AdminBusinessSettings | null> {
+  const page = await getPage<AdminBusinessSettings>(
+    '/admin/business-settings',
+    new URLSearchParams({ isActive: 'true', limit: '10', sortBy: 'createdAt', sortOrder: 'asc' }),
+    returnTo,
+  );
+  return page.data[0] ?? null;
+}
+
+// Whether investors can put money into the project right now — the same
+// checks the API makes before accepting an application or investment.
+export function acceptingNow(p: Pick<AdminProject, 'status' | 'isActive' | 'isVisible' | 'startDate' | 'endDate'>) {
+  const now = Date.now();
+  return (
+    p.status === 'OPEN' &&
+    p.isActive &&
+    p.isVisible &&
+    new Date(p.startDate).getTime() <= now &&
+    (!p.endDate || new Date(p.endDate).getTime() >= now)
+  );
 }

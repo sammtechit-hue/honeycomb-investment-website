@@ -6,6 +6,8 @@ export type NavItem = {
   label: string;
   // SVG path data for a 24×24 stroked icon.
   icon: string;
+  // Admins and super admins only (the API refuses moderators).
+  adminOnly?: boolean;
 };
 
 export const INVESTOR_NAV: NavItem[] = [
@@ -25,5 +27,29 @@ export const ADMIN_NAV: NavItem[] = [
   },
   { href: '/admin/investments', label: 'Investments', icon: 'M3 3v18h18M7 15l4-4 3 3 5-6' },
   { href: '/admin/payments', label: 'Payments', icon: 'M2 6h20v12H2zM2 10h20M6 15h4' },
+  { href: '/admin/payouts', label: 'Payouts', icon: 'M12 3v12M7 10l5 5 5-5M4 21h16' },
+  {
+    href: '/admin/referrals',
+    label: 'Referrals',
+    icon: 'M8 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-6 10a6 6 0 0 1 12 0M19 8v6M16 11h6',
+  },
   { href: '/admin/change-requests', label: 'Change requests', icon: 'M4 20h4L19 9l-4-4L4 16v4ZM13 7l4 4' },
+  { href: '/admin/projects', label: 'Projects', icon: 'M3 7h18v13H3zM8 7V4h8v3M3 12h18' },
+  { href: '/admin/rates', label: 'Monthly rates', icon: 'M19 5 5 19M7.5 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM16.5 18a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z' },
+  {
+    href: '/admin/settings',
+    label: 'Profit settings',
+    icon: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM19 12h2M3 12h2M12 3v2M12 19v2M17 7l1.5-1.5M5.5 18.5 7 17M17 17l1.5 1.5M5.5 5.5 7 7',
+  },
+  {
+    href: '/admin/audit',
+    label: 'Audit log',
+    icon: 'M9 4h6v3H9zM6 5.5H5v15h14v-15h-1M8.5 12h7M8.5 16h5',
+    adminOnly: true,
+  },
 ];
+
+// The admin nav for one staff role: moderators don't get admin-only pages.
+export function adminNavFor(role: 'MODERATOR' | 'ADMIN' | 'SUPER_ADMIN') {
+  return role === 'MODERATOR' ? ADMIN_NAV.filter((n) => !n.adminOnly) : ADMIN_NAV;
+}

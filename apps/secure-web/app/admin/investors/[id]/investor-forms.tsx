@@ -5,7 +5,12 @@ import { useRouter } from 'next/navigation';
 import { useForm, type UseFormRegisterReturn } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { investorCategorySchema, nidNumberSchema } from '@investment-platform/contracts/investor';
+import {
+  investorApplicationRejectInputSchema,
+  investorCategorySchema,
+  nidNumberSchema,
+  type InvestorApplicationRejectInput,
+} from '@investment-platform/contracts/investor';
 import { Alert, Field, FormActions, describedBy, inputClass } from '@/components/dashboard/form';
 import type { InvestorCategory } from '@/lib/investor';
 import { submitJson } from '@/lib/submit';
@@ -112,6 +117,90 @@ export function ApproveForm({
         <CategorySelect registration={register('category')} />
       </Field>
       <FormActions busy={isSubmitting} label="Approve investor" busyLabel="Approving…" />
+    </form>
+  );
+}
+
+// Sends the whole application (details, documents, bank, first investment)
+// back to the investor. The reason is shown to them as written.
+type RejectValues = InvestorApplicationRejectInput;
+
+export function RejectForm({ investorId }: { investorId: string }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const {
+    register,
+    handleSubmit,
+    setError,
+    formState: { errors, isSubmitting },
+  } = useForm<RejectValues>({
+    resolver: zodResolver(investorApplicationRejectInputSchema),
+    defaultValues: { reason: '' },
+  });
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex h-10 items-center justify-center self-start rounded-md border border-emphasis px-4 text-sm leading-5 text-ink hover:bg-surface"
+      >
+        Send back to investor
+      </button>
+    );
+  }
+
+  async function onSubmit(values: RejectValues) {
+    setSubmitError(null);
+    const result = await submitJson(`/api/admin/investor/${investorId}/reject`, values, 'PATCH');
+    if (result.ok) {
+      router.refresh();
+      return;
+    }
+    if (result.fieldErrors.reason) setError('reason', { message: result.fieldErrors.reason });
+    setSubmitError(result.message);
+  }
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4">
+      {submitError && (
+        <Alert>
+          <p>{submitError}</p>
+        </Alert>
+      )}
+      <Field
+        id="reason"
+        label="What needs to change"
+        hint="The investor sees this note exactly as written, then edits and resubmits their application."
+        error={errors.reason?.message}
+      >
+        <textarea
+          id="reason"
+          rows={4}
+          aria-invalid={!!errors.reason}
+          aria-describedby={describedBy('reason', errors.reason?.message, 'hint')}
+          {...register('reason')}
+          className={`${inputClass} h-auto resize-y py-2.5 leading-5`}
+        />
+      </Field>
+      <div className="flex flex-wrap gap-3">
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="flex h-10 items-center justify-center rounded-md bg-emphasis px-5 text-sm leading-5 text-white hover:bg-black/85 disabled:opacity-60"
+        >
+          {isSubmitting ? 'Sending back…' : 'Send back'}
+        </button>
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          disabled={isSubmitting}
+          className="flex h-10 items-center justify-center rounded-md border border-hairline px-4 text-sm leading-5 text-ink hover:bg-surface"
+        >
+          Cancel
+        </button>
+      </div>
     </form>
   );
 }
