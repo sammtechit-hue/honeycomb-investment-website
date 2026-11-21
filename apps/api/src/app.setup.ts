@@ -1,9 +1,16 @@
 import { ConfigService } from '@nestjs/config';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
-import { ZodValidationPipe } from 'nestjs-zod';
+import { createZodValidationPipe } from 'nestjs-zod';
 import type { Env } from './config/env';
 import { csrfOriginMiddleware } from './auth/csrf-origin.middleware';
+import { createZodValidationException } from './common/pipes/zod-validation-exception';
+
+// Validates zod DTOs the same way nestjs-zod does, but reports bulk `rows`
+// issues with 1-based indices (see zod-validation-exception.ts).
+const AppZodValidationPipe = createZodValidationPipe({
+  createValidationException: createZodValidationException,
+});
 
 // Everything main.ts applies to the app besides listen(). Kept separate so
 // e2e tests run against exactly the same middleware stack as production.
@@ -34,7 +41,7 @@ export function configureApp(app: NestExpressApplication) {
   // ones — each opts into its own validation pipe.
 
   app.setGlobalPrefix('api');
-  app.useGlobalPipes(new ZodValidationPipe());
+  app.useGlobalPipes(new AppZodValidationPipe());
   app.enableShutdownHooks();
 
   return config;

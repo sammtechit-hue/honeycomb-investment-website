@@ -28,6 +28,10 @@
       "types": "./dist/investment.d.ts",
       "default": "./dist/investment.js"
     },
+    "./investment-bulk-create": {
+      "types": "./dist/investment-bulk-create.d.ts",
+      "default": "./dist/investment-bulk-create.js"
+    },
     "./incomingPayment": {
       "types": "./dist/incomingPayment.d.ts",
       "default": "./dist/incomingPayment.js"

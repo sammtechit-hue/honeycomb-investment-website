@@ -20,6 +20,7 @@ import { Roles } from '../../auth/decorators/roles.decorator';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../auth/types/jwt-payload.interface';
 import { CreateInvestmentDto } from './dto/create-investment.dto';
+import { CreateBulkInvestmentDto } from './dto/create-bulk-investment.dto';
 import { UpdateInvestmentDto } from './dto/update-investment.dto';
 import { InvestmentQueryDto } from './dto/query-investment.dto';
 import { InvestmentService } from './investment.service';
@@ -68,6 +69,33 @@ export class InvestmentController {
     );
   }
 
+
+  // ----------------------------------------------------------
+  // ------------------------ createBulk ----------------------
+  // ----------------------------------------------------------
+  // POST /api/admin/investment/bulk
+  // All or nothing: every row is validated before anything is written; one
+  // bad row rejects the whole batch and nothing is created.
+  @Post('bulk')
+  createBulk(
+    @Body() createBulkInvestmentDto: CreateBulkInvestmentDto,
+    @CurrentUser() user: AuthenticatedUser,
+    @Ip() ip?: string,
+    @Headers('user-agent') userAgent?: string,
+    @Headers('x-session-id') sessionId?: string,
+  ) {
+    const context = {
+      ipAddress: ip,
+      userAgent: userAgent,
+      sessionId: sessionId,
+    };
+
+    return this.investmentService.createBulkInvestment(
+      createBulkInvestmentDto,
+      user?.userId,
+      context,
+    );
+  }
 
   @Patch(':id')
   update(

@@ -2,7 +2,10 @@ import {
     BadRequestException,
     ConflictException,
     Injectable,
+    Logger,
     NotFoundException,
+    UnauthorizedException,
+    UnprocessableEntityException,
 } from '@nestjs/common';
 import {
     AuditAction,
@@ -26,6 +29,12 @@ import { investmentPeriodDisbursementError } from '@investment-platform/contract
 import { getDhakaDateOnly } from '../../utils/common/bangladeshTime.util';
 import { fetchData } from '../../utils/common/fetchData.util';
 import { assertProjectAcceptsInvestment } from '../../utils/common/project-investment.util';
+import {
+    type BulkInvestmentCreateRequest,
+    type BulkInvestmentRowInput,
+    type BulkInvestmentRowIssue,
+    type BulkInvestmentRowResult,
+} from '@investment-platform/contracts/investment-bulk-create';
 
 // Fields returned by both admin investment endpoints (list + detail). Defined
 // once so the two views can never drift apart.
@@ -59,6 +68,21 @@ const INVESTMENT_ADMIN_SELECT = {
     // One-to-one relation: at most one incoming payment per investment.
     incomingPayments: true,
 } satisfies Prisma.InvestmentSelect;
+
+// Project fields needed to validate a bulk row: eligibility plus the project
+// rate used for fixed investments.
+const INVESTMENT_BULK_PROJECT_SELECT = {
+    id: true,
+    name: true,
+    status: true,
+    isActive: true,
+    isVisible: true,
+    startDate: true,
+    endDate: true,
+    minimumInvestment: true,
+    maximumInvestment: true,
+    projectRate: true,
+} satisfies Prisma.ProjectSelect;
 
 // `sortBy` values that live on the related IncomingPayment rather than on
 // Investment itself. Query key → actual column (`paymentStatus` is stored as
@@ -127,11 +151,16 @@ function statusTransitionError(
 
 @Injectable()
 export class InvestmentService {
+    private readonly logger = new Logger(InvestmentService.name);
+
     constructor(
         private readonly prisma: PrismaService,
         private readonly config: ConfigService<Env, true>,
     ) { }
 
+    // ----------------------------------------------------------
+    // -------------------------- findAll -----------------------
+    // ----------------------------------------------------------
     // For Getting All Investment's Data with filtering, searching, sorting & pagination
     // Example: GET /admin/investment?search=&status=active&investmentType=fixed&page=1&limit=10
     async findAll(query: InvestmentQueryDto) {
@@ -251,6 +280,9 @@ export class InvestmentService {
         };
     }
 
+    // ----------------------------------------------------------
+    // -------------------------- findOne -----------------------
+    // ----------------------------------------------------------
     // For Getting One Investment's Data
     async findOne(id: string) {
         const investment = await this.prisma.investment.findUnique({
@@ -270,6 +302,9 @@ export class InvestmentService {
     }
 
 
+    // ----------------------------------------------------------
+    // --------------------- createInvestment -------------------
+    // ----------------------------------------------------------
     // For Creating Investment (admin, on behalf of an investor)
     async createInvestment(
         createInvestmentDto: CreateInvestmentDto,
@@ -326,7 +361,7 @@ export class InvestmentService {
 
         assertProjectAcceptsInvestment(project, new Prisma.Decimal(amount));
 
-        
+
         let rate: Prisma.Decimal | undefined;
 
         if (investmentType === InvestmentType.fixed) {
@@ -342,7 +377,7 @@ export class InvestmentService {
                     settings?.rate ??
                     new Prisma.Decimal(this.config.get('FIXED_RATE', { infer: true }));
             }
-        } 
+        }
         // else {
         //     const investmentMonth = investmentDate ?? getDhakaDateOnly();
         //     const periodMonth = new Date(
@@ -390,7 +425,7 @@ export class InvestmentService {
             ...(specialInstruction !== undefined && { specialInstruction }),
             // A new row always starts pending; status changes go through the
             // audited update flow, which enforces the payment/investor rules.
-            ...(status !== undefined && {status}),
+            ...(status !== undefined && { status }),
             investor: { connect: { id: investorId } },
             project: { connect: { id: projectId } },
         };
@@ -409,6 +444,9 @@ export class InvestmentService {
                     })
                     : null;
 
+                // ----------------------------------------------------------
+                // ------------------------- AUDITLOG -----------------------
+                // ----------------------------------------------------------
                 await tx.auditLog.create({
                     data: {
                         adminName: admin?.name ?? 'Admin',
@@ -453,10 +491,239 @@ export class InvestmentService {
         }
     }
 
+    // ----------------------------------------------------------
+    // -------------------- createBulkInvestment ----------------
+    // ----------------------------------------------------------
+    async createBulkInvestment(
+
+        createBulkInvestmentDto: BulkInvestmentCreateRequest,
+        userId: string | undefined,
+        context?: RequestAuditContext,
+    ) {
+        if (!userId) {
+            throw new UnauthorizedException('Session is no longer valid');
+        }
+
+        const { rows } = createBulkInvestmentDto;
+
+
+        const investorIds = rows.map((row) => row.investorId);
+        const projectIds = rows.map((row) => row.projectId);
+
+        const [admin, investors, projects, settings] = await Promise.all([
+            this.prisma.adminProfile.findUnique({
+                where: { userId },
+                select: { id: true, name: true },
+            }),
+            this.prisma.investor.findMany({
+                where: { id: { in: investorIds } },
+                select: { id: true, fullname: true },
+            }),
+            this.prisma.project.findMany({
+                where: { id: { in: projectIds } },
+                select: INVESTMENT_BULK_PROJECT_SELECT,
+            }),
+            // Same fixed-rate fallback as createInvestment.
+            this.prisma.businessSettings.findFirst({
+                where: { isActive: true },
+                select: { rate: true },
+            }),
+        ]);
+
+        const investorById = new Map(
+            investors.map((investor) => [investor.id, investor]),
+        );
+        const projectById = new Map(
+            projects.map((project) => [project.id, project]),
+        );
+
+        const fallbackRate =
+            settings?.rate ??
+            new Prisma.Decimal(this.config.get('FIXED_RATE', { infer: true }));
+
+        // ---- Phase 1: validate every row, write nothing ----
+        const prepared = rows.map((row) =>
+            prepareBulkInvestmentRow(row, { investorById, projectById }),
+        );
+
+        const failedRows = prepared.filter((row) => row.errors.length > 0);
+
+        if (failedRows.length > 0) {
+            await this.auditRejectedBulkInvestment(
+                prepared,
+                failedRows.length,
+                userId,
+                admin,
+                context,
+            );
+
+            // Only rejected rows are reported: all-or-nothing means the other
+            // rows have no created or skipped state to expose.
+            throw new UnprocessableEntityException({
+                message:
+                    'Investment bulk create rejected: no investments were created',
+                success: false,
+                data: {
+                    totals: {
+                        total: prepared.length,
+                        created: 0,
+                        failed: failedRows.length,
+                    },
+                    results: failedRows.map((row) => ({
+                        rowNumber: row.row.rowNumber,
+                        status: 'failed',
+                        errors: row.errors,
+                    })),
+                },
+            });
+        }
+
+        // ---- Phase 2: create the whole batch in one transaction ----
+
+        // Tracks the row being written so a database error can be attributed to
+        // a row number instead of the batch as a whole.
+        let currentRow = 0;
+        const results: BulkInvestmentRowResult[] = [];
+
+        try {
+            await this.prisma.$transaction(
+                async (tx) => {
+                    for (const preparedRow of prepared) {
+                        const { row } = preparedRow;
+                        currentRow = row.rowNumber;
+
+                        const investment = await tx.investment.create({
+                            data: buildBulkInvestmentData(
+                                row,
+                                projectById.get(row.projectId)!,
+                                fallbackRate,
+                            ),
+                            select: INVESTMENT_ADMIN_SELECT,
+                        });
+
+                        // ----------------------------------------------------------
+                        // ------------------------- AUDITLOG -----------------------
+                        // ----------------------------------------------------------
+                        await tx.auditLog.create({
+                            data: {
+                                adminName: admin?.name ?? 'Admin',
+                                adminProfileId: admin?.id ?? null,
+                                action: AuditAction.investment_bulk_created,
+                                module: LogModule.INVESTMENT,
+                                severity: LogSeverity.INFO,
+                                status: LogStatus.SUCCESS,
+                                targetLabel: `Investment Bulk Created: ${investorById.get(row.investorId)?.fullname ?? row.investorId}`,
+                                targetTable: 'investments',
+                                targetId: investment.id,
+                                metadata: {
+                                    source: 'bulk_create',
+                                    rowNumber: row.rowNumber,
+                                    batchSize: prepared.length,
+                                } as unknown as Prisma.InputJsonValue,
+                                newValue: toInvestmentSnapshot(investment) as unknown as Prisma.InputJsonValue,
+                                ipAddress: context?.ipAddress ?? null,
+                                userAgent: context?.userAgent ?? null,
+                                sessionId: context?.sessionId ?? null,
+                            },
+                        });
+
+                        results.push({
+                            rowNumber: row.rowNumber,
+                            status: 'created',
+                            investmentId: investment.id,
+                            errors: [],
+                        });
+                    }
+                },
+                { timeout: 20_000, maxWait: 5_000 },
+            );
+        } catch (err) {
+            // The transaction has rolled back, so nothing was saved. Report
+            // which row hit the database error.
+            if (err instanceof Prisma.PrismaClientKnownRequestError) {
+                if (err.code === 'P2003') {
+                    throw new BadRequestException(
+                        `Row ${currentRow}: one or more referenced records do not exist.`,
+                    );
+                }
+                if (err.code === 'P2000') {
+                    throw new BadRequestException(
+                        `Row ${currentRow}: one of the provided values is too long for its field.`,
+                    );
+                }
+            }
+            throw err;
+        }
+
+        return {
+            message: 'Investment bulk create completed',
+            success: true,
+            data: {
+                totals: {
+                    total: results.length,
+                    created: results.length,
+                    failed: 0,
+                },
+                results,
+            },
+        };
+    }
 
     // ----------------------------------------------------------
-    // ---------------------- updateInvestment ---------------------------
-    //------------------------------------------------------------ 
+    // -------------------- auditRejectedBulkInvestment ---------
+    // ----------------------------------------------------------
+    // Written outside any transaction: a rejected batch created no investment
+    // row, but the attempt must still leave a trail.
+    private async auditRejectedBulkInvestment(
+        prepared: PreparedBulkInvestmentRow[],
+        failedCount: number,
+        userId: string,
+        admin: { id: string; name: string | null } | null,
+        context?: RequestAuditContext,
+    ): Promise<void> {
+        try {
+            await this.prisma.auditLog.create({
+                data: {
+                    adminName: admin?.name ?? 'Admin',
+                    adminProfileId: admin?.id ?? null,
+                    action: AuditAction.investment_bulk_create_rejected,
+                    module: LogModule.INVESTMENT,
+                    severity: LogSeverity.WARNING,
+                    status: LogStatus.FAILED,
+                    targetLabel: `Investment bulk create rejected: ${failedCount} of ${prepared.length} rows invalid`,
+                    // No investment row was created, so the acting admin's user
+                    // row is what the trail points at.
+                    targetTable: 'users',
+                    targetId: userId,
+                    metadata: {
+                        source: 'bulk_create',
+                        totalRows: prepared.length,
+                        failedRows: failedCount,
+                        errorCount: prepared.reduce(
+                            (count, row) => count + row.errors.length,
+                            0,
+                        ),
+                        failedRowNumbers: prepared
+                            .filter((row) => row.errors.length > 0)
+                            .map((row) => row.row.rowNumber),
+                    } as unknown as Prisma.InputJsonValue,
+                    ipAddress: context?.ipAddress ?? null,
+                    userAgent: context?.userAgent ?? null,
+                    sessionId: context?.sessionId ?? null,
+                },
+            });
+        } catch (err) {
+            // The 422 is the answer the admin needs; the trail is best-effort.
+            this.logger.error(
+                'Failed to write investment bulk create rejected audit log',
+                err as Error,
+            );
+        }
+    }
+
+    // ----------------------------------------------------------
+    // ---------------------- updateInvestment ------------------
+    // ----------------------------------------------------------
     async updateInvestment(
         id: string,
         updateInvestmentDto: UpdateInvestmentDto,
@@ -703,6 +970,9 @@ export class InvestmentService {
                     investorActiveDelta,
                 );
 
+                // ----------------------------------------------------------
+                // ------------------------- AUDITLOG -----------------------
+                // ----------------------------------------------------------
                 await tx.auditLog.create({
                     data: {
                         adminName: admin?.name ?? 'Admin',
@@ -744,6 +1014,9 @@ export class InvestmentService {
     }
 }
 
+// ----------------------------------------------------------
+// -------------------- toInvestmentSnapshot ----------------
+// ----------------------------------------------------------
 // Shape an Investment row for audit oldValue / newValue JSON columns.
 // Decimal -> number and Date -> ISO string keep the snapshot JSON-safe.
 function toInvestmentSnapshot(investment: {
@@ -796,9 +1069,9 @@ function toInvestmentSnapshot(investment: {
     };
 }
 
-// Apply aggregate deltas to a project. Negative deltas decrement via Prisma's
-// `increment` operator; zero deltas are dropped so a no-op edit never rewrites
-// the row (and never bumps anything unintentionally).
+// ----------------------------------------------------------
+// ---------------------- applyProjectTotals ----------------
+// ----------------------------------------------------------
 async function applyProjectTotals(
     tx: Prisma.TransactionClient,
     projectId: string,
@@ -819,6 +1092,9 @@ async function applyProjectTotals(
     await tx.project.update({ where: { id: projectId }, data });
 }
 
+// ----------------------------------------------------------
+// --------------------- applyInvestorTotals ----------------
+// ----------------------------------------------------------
 // Same idea for the investor's lifetime / active aggregates.
 async function applyInvestorTotals(
     tx: Prisma.TransactionClient,
@@ -838,4 +1114,141 @@ async function applyInvestorTotals(
     if (Object.keys(data).length === 0) return;
 
     await tx.investor.update({ where: { id: investorId }, data });
+}
+
+// ----------------------------------------------------------
+// ------------------ PreparedBulkInvestmentRow --------------
+// ----------------------------------------------------------
+// One validated but not yet written bulk row, plus the row-level findings
+// reported back to the admin.
+type PreparedBulkInvestmentRow = {
+    row: BulkInvestmentRowInput;
+    errors: BulkInvestmentRowIssue[];
+};
+
+type BulkInvestmentProject = Prisma.ProjectGetPayload<{
+    select: typeof INVESTMENT_BULK_PROJECT_SELECT;
+}>;
+
+// ----------------------------------------------------------
+// ------------------ prepareBulkInvestmentRow --------------
+// ----------------------------------------------------------
+// Phase 1 of the bulk create: collect every problem with a row without
+// writing anything, so the admin sees all bad rows in one response.
+function prepareBulkInvestmentRow(
+    row: BulkInvestmentRowInput,
+    lookups: {
+        investorById: Map<string, { id: string; fullname: string }>;
+        projectById: Map<string, BulkInvestmentProject>;
+    },
+): PreparedBulkInvestmentRow {
+    const errors: BulkInvestmentRowIssue[] = [];
+
+    if (!lookups.investorById.has(row.investorId)) {
+        errors.push({
+            field: 'investorId',
+            message: `Investor with id "${row.investorId}" not found`,
+        });
+    }
+
+    const project = lookups.projectById.get(row.projectId);
+    if (!project) {
+        errors.push({
+            field: 'projectId',
+            message: `Project with id "${row.projectId}" not found`,
+        });
+    } else {
+        // Without try-catch, if one row has an invalid investment amount, the exception immediately interrupts prepareBulkInvestmentRow().
+        // But we want to collect the validation error inside the errors array.
+        try {
+            assertProjectAcceptsInvestment(
+                project,
+                new Prisma.Decimal(row.amount),
+            );
+        } catch (err) {
+            if (err instanceof BadRequestException) {
+                errors.push({
+                    field: err.message.startsWith('Amount must be at least')
+                        ? 'amount'
+                        : 'projectId',
+                    message: err.message,
+                });
+            } else {
+                throw err;
+            }
+        }
+    }
+
+    // The contract enforces this too; re-checked here, like createInvestment,
+    // so every service caller is covered.
+    const periodError = investmentPeriodDisbursementError({
+        investmentPeriodMonths: row.investmentPeriodMonths,
+        disbursementPeriod: row.disbursementPeriod,
+    });
+    if (periodError) {
+        errors.push({
+            field: 'investmentPeriodMonths',
+            message: periodError,
+        });
+    }
+
+    return { row, errors };
+}
+
+// ----------------------------------------------------------
+// ------------------- buildBulkInvestmentData --------------
+// ----------------------------------------------------------
+// Maps one validated bulk row to a Prisma create payload. The rate is derived
+// the same way as createInvestment: project rate first, then active business
+// settings, then the FIXED_RATE default.
+function buildBulkInvestmentData(
+    row: BulkInvestmentRowInput,
+    project: BulkInvestmentProject,
+    fallbackRate: Prisma.Decimal,
+): Prisma.InvestmentCreateInput {
+    const rate =
+        row.investmentType === InvestmentType.fixed
+            ? project.projectRate ?? fallbackRate
+            : undefined;
+
+    return {
+        amount: new Prisma.Decimal(row.amount),
+        investmentType: row.investmentType,
+        investmentPeriodMonths: row.investmentPeriodMonths,
+        disbursementPeriod: row.disbursementPeriod,
+        ...(rate !== undefined && { rate }),
+        investmentDate: row.investmentDate,
+        ...(row.agreementEndDate !== undefined && {
+            agreementEndDate: row.agreementEndDate,
+        }),
+        ...(row.agreementPlace !== undefined && {
+            agreementPlace: row.agreementPlace,
+        }),
+        ...(row.deedOffical !== undefined && { deedOffical: row.deedOffical }),
+        ...(row.deedGoverment !== undefined && {
+            deedGoverment: row.deedGoverment,
+        }),
+        ...(row.chequeGiven !== undefined && { chequeGiven: row.chequeGiven }),
+        ...(row.cashVoucharGiven !== undefined && {
+            cashVoucharGiven: row.cashVoucharGiven,
+        }),
+        ...(row.souvenirGiven !== undefined && {
+            souvenirGiven: row.souvenirGiven,
+        }),
+        ...(row.isSouvenirApplicable !== undefined && {
+            isSouvenirApplicable: row.isSouvenirApplicable,
+        }),
+        ...(row.certificateGiven !== undefined && {
+            certificateGiven: row.certificateGiven,
+        }),
+        ...(row.isCertificateApplicable !== undefined && {
+            isCertificateApplicable: row.isCertificateApplicable,
+        }),
+        ...(row.specialInstruction !== undefined && {
+            specialInstruction: row.specialInstruction,
+        }),
+        status: row.status,
+        investor: { connect: { id: row.investorId } },
+        project: { connect: { id: row.projectId } },
+    };
 }
