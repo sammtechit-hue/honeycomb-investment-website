@@ -6,7 +6,12 @@ import { requireSessionUser, type SessionUser } from './session';
 // Server-side reads for the investor dashboard. Only endpoints that the
 // API scopes to the signed-in investor are used here.
 
-export type InvestorStatus = 'pending' | 'uploaded_kyc' | 'active' | 'suspended' | 'deactivated';
+export type InvestorStatus = 'pending' | 'uploaded_kyc' | 'rejected' | 'active' | 'suspended' | 'deactivated';
+
+// Until an admin approves it, the investor only has an application: they see
+// it on /verification (and edit it there after a rejection), not the portal.
+export const APPLICATION_STATUSES: readonly InvestorStatus[] = ['pending', 'uploaded_kyc', 'rejected'];
+export const isApplication = (status: InvestorStatus) => APPLICATION_STATUSES.includes(status);
 export type InvestorCategory = 'bronze' | 'silver' | 'gold' | 'diamond' | 'platinum' | 'titanium';
 
 export type InvestorProfile = {
@@ -20,11 +25,20 @@ export type InvestorProfile = {
   status: InvestorStatus;
   totalInvestmentAmount: string;
   approvedAt: string | null;
+  rejectionReason: string | null;
+  rejectedAt: string | null;
   createdAt: string;
   user: { email: string; phone: string | null; lastLoginAt: string | null };
-  kycDocuments: { verificationStatus: 'pending' | 'verified' | 'rejected'; uploadedAt: string } | null;
+  kycDocuments: {
+    nidFront: string;
+    nidBack: string;
+    photo: string;
+    verificationStatus: 'pending' | 'verified' | 'rejected';
+    uploadedAt: string;
+  } | null;
   bankAccount: {
     id: string;
+    selectedBank: 'city_bank' | 'others';
     bankName: string;
     accountName: string;
     accountNumber: string;
@@ -33,7 +47,14 @@ export type InvestorProfile = {
     branchName: string | null;
     isActive: boolean;
   }[];
-  nominee: { nomineeName: string; nomineePhone: string | null; relation: string } | null;
+  nominee: {
+    nomineeName: string;
+    nomineePhone: string | null;
+    relation: string;
+    nomineeNidFront: string | null;
+    nomineeNidBack: string | null;
+    nomineePhoto: string | null;
+  } | null;
 };
 
 export type InvestmentStatus = 'pending' | 'active' | 'rejected' | 'closed';
@@ -69,10 +90,12 @@ export type LedgerRow = {
   principalAmount: string;
   payoutStatus: 'accrued' | 'disbursed';
   investmentId: string;
+  // Set once staff put this month into a payout (see lib/payout-progress).
+  disbursementItemId: string | null;
 };
 
 // cache() lets the layout and the page share one fetch per request.
-const getProfile = cache((returnTo: string) => getJson<InvestorProfile>('/investor', returnTo));
+export const getProfile = cache((returnTo: string) => getJson<InvestorProfile>('/investor', returnTo));
 
 export const getInvestments = cache((returnTo: string) =>
   getAll<Investment>('/investment', 'sortBy=createdAt&sortOrder=desc', returnTo),
@@ -124,14 +147,15 @@ export const getEditRequests = cache(async (returnTo: string) => {
   return res?.data ?? [];
 });
 
-// Staff go to the staff home; investors without a profile finish
-// verification first.
+// The portal is for approved investors. Staff go to the staff home; anyone
+// without an approved account goes to /verification, which shows the form,
+// the application under review, or the rejected application to fix.
 export async function requireInvestor(
   returnTo: string,
 ): Promise<{ user: SessionUser; profile: InvestorProfile }> {
   const user = await requireSessionUser(returnTo);
   if (user.role !== 'INVESTOR') redirect('/');
   const profile = await getProfile(returnTo);
-  if (!profile) redirect('/verification');
+  if (!profile || isApplication(profile.status)) redirect('/verification');
   return { user, profile };
 }

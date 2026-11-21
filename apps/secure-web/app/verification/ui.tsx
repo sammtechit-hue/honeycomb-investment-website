@@ -138,7 +138,7 @@ export function StepFooter({
         <span />
       )}
       <p className="hidden text-xs leading-4 tracking-[0.3px] text-muted uppercase sm:block">
-        Step {step} of 4
+        Step {step} of {STEPS.length}
       </p>
       <button
         type="submit"
@@ -154,7 +154,7 @@ export function StepFooter({
   );
 }
 
-export const STEPS = ['Personal info', 'Nominee', 'Bank details', 'Documents'] as const;
+export const STEPS = ['Personal info', 'Nominee', 'Bank details', 'Investment', 'Documents'] as const;
 
 export function Stepper({
   current,
@@ -168,7 +168,7 @@ export function Stepper({
   return (
     <nav aria-label="Verification progress" className="w-full max-w-[760px]">
       <ol className="relative flex items-start justify-between">
-        <span aria-hidden className="absolute top-4 right-[12%] left-[12%] h-px bg-hairline" />
+        <span aria-hidden className="absolute top-4 right-[10%] left-[10%] h-px bg-hairline" />
         {STEPS.map((label, index) => {
           const step = index + 1;
           const isCurrent = step === current;

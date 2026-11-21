@@ -9,9 +9,13 @@ const EMPTY: PersonalValues = { fullName: '', address: '', profession: '', workp
 
 export function PersonalStep({
   initial,
+  showReferral = true,
   onComplete,
 }: {
   initial: PersonalValues | null;
+  // A referral code is settled on the first submission, so a resubmitted
+  // application doesn't ask again.
+  showReferral?: boolean;
   onComplete: (values: PersonalValues) => void;
 }) {
   const {
@@ -78,22 +82,24 @@ export function PersonalStep({
           </Field>
         </div>
 
-        <Field
-          id="referralCode"
-          label="Referral code"
-          optional
-          hint="If another investor referred you, enter their code."
-          error={errors.referralCode?.message}
-        >
-          <input
+        {showReferral && (
+          <Field
             id="referralCode"
-            autoComplete="off"
-            aria-invalid={!!errors.referralCode}
-            aria-describedby={describedBy('referralCode', errors.referralCode?.message, 'hint')}
-            {...register('referralCode')}
-            className={`${inputClass} uppercase placeholder:normal-case`}
-          />
-        </Field>
+            label="Referral code"
+            optional
+            hint="If another investor referred you, enter their code."
+            error={errors.referralCode?.message}
+          >
+            <input
+              id="referralCode"
+              autoComplete="off"
+              aria-invalid={!!errors.referralCode}
+              aria-describedby={describedBy('referralCode', errors.referralCode?.message, 'hint')}
+              {...register('referralCode')}
+              className={`${inputClass} uppercase placeholder:normal-case`}
+            />
+          </Field>
+        )}
 
         <StepFooter step={1} primaryLabel="Continue" />
       </form>

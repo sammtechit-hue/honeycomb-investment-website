@@ -8,10 +8,19 @@ import {
   routingNumberSchema,
 } from '@investment-platform/contracts/common';
 import {
+  investorApplicationInputSchema,
+  investorApplicationResubmitInputSchema,
   investorCreateInputSchema,
   nomineeSchema,
+  type InvestorApplicationInput,
+  type InvestorApplicationResubmitInput,
   type InvestorCreateInput,
 } from '@investment-platform/contracts/investor';
+import {
+  disbursementPeriodSchema,
+  investmentPeriodDisbursementError,
+  investmentTypeSchema,
+} from '@investment-platform/contracts/investment';
 import { localMobileSchema, withCountryCode } from '@/lib/phone';
 
 // Form-side schemas for each wizard step. Field rules come from the shared
@@ -87,6 +96,31 @@ export const bankFormSchema = z
   });
 export type BankValues = z.infer<typeof bankFormSchema>;
 
+// The first investment, submitted with the application. Kept as strings for
+// the form; the project minimum is checked in the step, which has the list.
+export const parseAmount = (value: string) => Number(value.replace(/,/g, ''));
+
+export const investmentFormSchema = z
+  .object({
+    projectId: z.string().min(1, 'Choose a project'),
+    amount: z.string().trim().min(1, 'Enter an amount'),
+    investmentType: investmentTypeSchema,
+    disbursementPeriod: disbursementPeriodSchema,
+    investmentPeriodMonths: z.string().trim().min(1, 'Enter the investment term'),
+  })
+  .superRefine((data, ctx) => {
+    const amount = parseAmount(data.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      ctx.addIssue({ code: 'custom', path: ['amount'], message: 'Enter an amount in taka' });
+    }
+    const termError = investmentPeriodDisbursementError({
+      investmentPeriodMonths: Number(data.investmentPeriodMonths),
+      disbursementPeriod: data.disbursementPeriod,
+    });
+    if (termError) ctx.addIssue({ code: 'custom', path: ['investmentPeriodMonths'], message: termError });
+  });
+export type InvestmentValues = z.infer<typeof investmentFormSchema>;
+
 export const DOCUMENT_KEYS = [
   'nidFront',
   'nidBack',
@@ -110,6 +144,7 @@ export type WizardData = {
   personal: PersonalValues | null;
   nominee: NomineeValues | null;
   bank: BankValues | null;
+  investment: InvestmentValues | null;
   documents: Documents;
 };
 
@@ -117,6 +152,7 @@ export const EMPTY_WIZARD: WizardData = {
   personal: null,
   nominee: null,
   bank: null,
+  investment: null,
   documents: {},
 };
 
@@ -139,12 +175,23 @@ export function toBankPayload(bank: BankValues): InvestorCreateInput['bankAccoun
   };
 }
 
-export function toInvestorPayload(data: WizardData): InvestorCreateInput | null {
-  const { personal, nominee, bank, documents } = data;
-  if (!personal || !nominee || !bank) return null;
+// POST /api/investor (a new application) or, with `resubmit`, PUT
+// /api/investor/application (a rejected one, corrected). Null if anything
+// is missing or no longer passes the contract.
+export function toInvestorPayload(data: WizardData): InvestorApplicationInput | null;
+export function toInvestorPayload(
+  data: WizardData,
+  mode: 'resubmit',
+): InvestorApplicationResubmitInput | null;
+export function toInvestorPayload(
+  data: WizardData,
+  mode: 'create' | 'resubmit' = 'create',
+): InvestorApplicationInput | InvestorApplicationResubmitInput | null {
+  const { personal, nominee, bank, investment, documents } = data;
+  if (!personal || !nominee || !bank || !investment) return null;
   if (DOCUMENT_KEYS.some((key) => !documents[key])) return null;
 
-  const payload: InvestorCreateInput = {
+  const payload: InvestorApplicationInput = {
     fullName: personal.fullName,
     address: personal.address,
     profession: blankToUndefined(personal.profession),
@@ -164,7 +211,124 @@ export function toInvestorPayload(data: WizardData): InvestorCreateInput | null 
       nidBack: documents.nidBack!.url,
       photo: documents.photo!.url,
     },
+    investment: {
+      projectId: investment.projectId,
+      amount: parseAmount(investment.amount),
+      investmentType: investment.investmentType,
+      disbursementPeriod: investment.disbursementPeriod,
+      investmentPeriodMonths: Number(investment.investmentPeriodMonths),
+    },
   };
 
-  return investorCreateInputSchema.safeParse(payload).success ? payload : null;
+  if (mode === 'resubmit') {
+    const resubmit: InvestorApplicationResubmitInput = { ...payload };
+    delete (resubmit as Partial<InvestorApplicationInput>).referralCode;
+    return investorApplicationResubmitInputSchema.safeParse(resubmit).success ? resubmit : null;
+  }
+  return investorApplicationInputSchema.safeParse(payload).success ? payload : null;
+}
+
+// ---------------------------------------------------------------------------
+// Prefill for a rejected application: what the investor sent last time, in
+// the wizard's shape, so they only change what the reviewer flagged.
+// ---------------------------------------------------------------------------
+
+type SavedApplication = {
+  fullname: string;
+  address: string | null;
+  profession: string | null;
+  workplace: string | null;
+  kycDocuments: { nidFront: string; nidBack: string; photo: string } | null;
+  nominee: {
+    nomineeName: string;
+    nomineePhone: string | null;
+    relation: string;
+    nomineeNidFront: string | null;
+    nomineeNidBack: string | null;
+    nomineePhoto: string | null;
+  } | null;
+  bankAccount: {
+    selectedBank: 'city_bank' | 'others';
+    bankName: string;
+    accountName: string;
+    accountNumber: string;
+    routingNumber: string | null;
+    accountType: 'savings' | 'current' | null;
+    branchName: string | null;
+  }[];
+};
+
+type SavedInvestment = {
+  projectId: string;
+  amount: string;
+  investmentType: 'fixed' | 'unfixed';
+  disbursementPeriod: 'monthly' | 'quarterly' | 'half_yearly' | 'yearly';
+  investmentPeriodMonths: number | null;
+};
+
+// A file already on the server. Its original name and size weren't kept, so
+// the summary says "On file" instead.
+function savedDocument(url: string | null | undefined): DocumentRef | undefined {
+  if (!url) return undefined;
+  return {
+    url,
+    name: 'On file',
+    size: 0,
+    mimeType: /\.pdf($|\?)/i.test(url) ? 'application/pdf' : 'image/*',
+  };
+}
+
+// Stored as +8801XXXXXXXXX; the form takes the part after +880.
+const localMobile = (phone: string | null) => (phone ? phone.replace(/^\+880/, '0') : '');
+
+export function fromApplication(profile: SavedApplication, investment: SavedInvestment | null): WizardData {
+  const bank = profile.bankAccount[0];
+  const nominee = profile.nominee;
+  const documents: Documents = {};
+  const docs: [DocumentKey, string | null | undefined][] = [
+    ['nidFront', profile.kycDocuments?.nidFront],
+    ['nidBack', profile.kycDocuments?.nidBack],
+    ['photo', profile.kycDocuments?.photo],
+    ['nomineeNidFront', nominee?.nomineeNidFront],
+    ['nomineeNidBack', nominee?.nomineeNidBack],
+    ['nomineePhoto', nominee?.nomineePhoto],
+  ];
+  for (const [key, url] of docs) {
+    const ref = savedDocument(url);
+    if (ref) documents[key] = ref;
+  }
+
+  return {
+    personal: {
+      fullName: profile.fullname,
+      address: profile.address ?? '',
+      profession: profile.profession ?? '',
+      workplace: profile.workplace ?? '',
+      referralCode: '',
+    },
+    nominee: nominee
+      ? { nomineeName: nominee.nomineeName, nomineePhone: localMobile(nominee.nomineePhone), relation: nominee.relation }
+      : null,
+    bank: bank
+      ? {
+          selectedBank: bank.selectedBank,
+          bankName: bank.selectedBank === 'city_bank' ? '' : bank.bankName,
+          branchName: bank.branchName ?? '',
+          accountName: bank.accountName,
+          accountNumber: bank.accountNumber,
+          routingNumber: bank.routingNumber ?? '',
+          accountType: bank.accountType ?? '',
+        }
+      : null,
+    investment: investment
+      ? {
+          projectId: investment.projectId,
+          amount: String(Number(investment.amount)),
+          investmentType: investment.investmentType,
+          disbursementPeriod: investment.disbursementPeriod,
+          investmentPeriodMonths: String(investment.investmentPeriodMonths ?? ''),
+        }
+      : null,
+    documents,
+  };
 }

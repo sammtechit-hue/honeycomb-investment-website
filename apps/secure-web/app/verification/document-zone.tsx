@@ -195,7 +195,7 @@ export function DocumentZone({
               >
                 <FileSummary
                   name={doc.name}
-                  detail={`${slot.label} · ${formatSize(doc.size)}`}
+                  detail={doc.size > 0 ? `${slot.label} · ${formatSize(doc.size)}` : slot.label}
                   pdf={doc.mimeType === 'application/pdf'}
                 />
                 <div className="flex shrink-0 items-center gap-3 text-xs leading-4">
