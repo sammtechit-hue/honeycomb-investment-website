@@ -122,6 +122,16 @@ export default async function AdminOverviewPage() {
           hint="Decide the referrer’s bonus and record it"
         />
       </Section>
+
+      <Section title="Leads">
+        <Queue
+          href="/admin/leads?status=open"
+          label="ROI leads to follow up"
+          count={counts.leadsToFollowUp.count}
+          detail={counts.leadsToFollowUp.complete ? undefined : 'Or more (too many to count)'}
+          hint="Contact them, then mark them as followed up"
+        />
+      </Section>
     </>
   );
 }

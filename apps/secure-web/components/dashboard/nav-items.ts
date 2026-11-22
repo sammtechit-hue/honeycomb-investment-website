@@ -33,6 +33,11 @@ export const ADMIN_NAV: NavItem[] = [
     label: 'Referrals',
     icon: 'M8 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-6 10a6 6 0 0 1 12 0M19 8v6M16 11h6',
   },
+  {
+    href: '/admin/leads',
+    label: 'ROI leads',
+    icon: 'M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a1 1 0 0 1-1 1A16 16 0 0 1 4 5a1 1 0 0 1 1-1Z',
+  },
   { href: '/admin/change-requests', label: 'Change requests', icon: 'M4 20h4L19 9l-4-4L4 16v4ZM13 7l4 4' },
   { href: '/admin/projects', label: 'Projects', icon: 'M3 7h18v13H3zM8 7V4h8v3M3 12h18' },
   { href: '/admin/rates', label: 'Monthly rates', icon: 'M19 5 5 19M7.5 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM16.5 18a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z' },

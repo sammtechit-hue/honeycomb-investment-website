@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { sumTaka } from './format';
 import type { DisbursementPeriod, InvestmentStatus, InvestorCategory, InvestorStatus } from './investor';
+import { countLeadsToFollowUp } from './leads';
 import { getAllUnbatchedItems, overdueWindowQuery } from './payouts';
 import { getJson, getPage, type Page } from './server-api';
 import { requireSessionUser, type SessionUser } from './session';
@@ -233,6 +234,7 @@ export async function getQueueCounts(returnTo: string) {
     overdueWindows,
     allReferrals,
     recordedReferrals,
+    leadsToFollowUp,
   ] = await Promise.all([
     countOf('/admin/investor', { status: 'uploaded_kyc' }, returnTo),
     countOf('/admin/investment', { status: 'pending' }, returnTo),
@@ -248,6 +250,8 @@ export async function getQueueCounts(returnTo: string) {
     // (an amount range leaves out the empty ones).
     countOf('/admin/referral', {}, returnTo),
     countOf('/admin/referral', { minBonusAmount: '0' }, returnTo),
+    // No "not followed up" filter either; see countLeadsToFollowUp.
+    countLeadsToFollowUp(returnTo),
   ]);
   return {
     awaitingVerification,
@@ -264,6 +268,7 @@ export async function getQueueCounts(returnTo: string) {
     sentBatches,
     overdueWindows,
     unrecordedBonuses: Math.max(0, allReferrals - recordedReferrals),
+    leadsToFollowUp,
   };
 }
 
