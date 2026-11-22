@@ -227,6 +227,35 @@ admin overview.
   likely want the biggest leads first. Please add it, and the screen will
   offer it.
 
+### Notifications (found while building the admin notifications feed)
+The screen is at `/admin/notifications`. It's read-only for now.
+
+- **Staff can't mark a notification as read.** `admin-notification` has
+  only list and detail routes, so every notification stays unread forever.
+  The feed doesn't show read state or an unread count, because both would
+  always be "everything". Please add `PATCH /admin-notification/:id` with
+  `{ isRead }` and a "mark all read" route. The screen will then add an
+  unread filter, a "Mark read" button and a count in the sidebar.
+- **`clickLink` points at API routes, not screens.** The stored links are
+  `/admin/incoming-payment/:id`, `/admin/investment/:id`,
+  `/admin/disbursement-item`, `/admin/monthly-profit-ledger` and
+  `/admin/monthly-rate-setting`. None of these exist in the web app (only
+  `/admin/investors/:id` does). The feed maps them to real screens itself and
+  never uses `clickLink` as a link. Either store the screen paths
+  (`/admin/investments/:id`, `/admin/payouts/items`, `/admin/rates`) or drop
+  `clickLink` and rely on `type` plus `referenceId`. Please tell the frontend
+  team if the format changes.
+- **`new_investment_request` is used for two things.** Signup uses it with
+  an investor id; a new investment uses it with an investment id. Only
+  `clickLink` tells them apart. A separate type for new applications would
+  make filtering useful.
+- **The investor `notification` controller is a placeholder.** It returns
+  "HelloWorld", has no guard (see "Auth guards" below), and the comments say
+  "admin notifications" although it's mounted for investors. Investors have
+  no notifications yet, so the investor portal has no notifications screen.
+- **No date range filter.** Filtering by "from/to" would help on a busy feed,
+  like the audit log has.
+
 ### Payouts (found while building the admin payout screens)
 The screens are at `/admin/payouts` in secure-web. They work around these
 for now; each workaround is noted.

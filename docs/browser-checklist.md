@@ -239,9 +239,31 @@ followed up and 100 followed up.
 - [ ] On a phone-width window the table scrolls sideways and the filters
       stack.
 
+## 7b. Admin: notifications
+
+The test database has four test notifications: three whose messages start
+with "QA-EDGE", and one with no message ("No message."). They cover a missing
+link, a missing payment and unsafe stored links.
+
+- [ ] The sidebar has **Notifications**. `/admin/notifications` shows the
+      newest first, grouped under day headings in Bangladesh time.
+- [ ] Each "Open …" link goes to a real page, not a 404:
+  - [ ] "Payment received" opens the payment's investment.
+  - [ ] "New application or investment" opens the investor or investment.
+  - [ ] "Investor update" opens the investor.
+  - [ ] "Payout items prepared" and a profit run open payout items.
+  - [ ] A missing-rate profit run opens monthly rates.
+- [ ] "QA-EDGE missing payment" opens the payments list. The other QA-EDGE
+      rows have no link at all.
+- [ ] Filter by type, search the message text (try `qa-edge`), switch to
+      oldest first, and page through. Clear resets everything.
+- [ ] There's no "unread" or "mark read" anywhere (the API can't do it yet).
+
 ## 8. Moderator
 
 Sign in as **Moderator**.
+
+- [ ] **Notifications** is in the nav and the feed opens.
 
 - [ ] **ROI leads** is in the nav, and marking a lead followed up works.
 
