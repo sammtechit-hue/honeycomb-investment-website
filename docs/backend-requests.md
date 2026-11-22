@@ -202,6 +202,31 @@ page.
   ADMIN and MODERATOR on both PATCH routes). The screens follow the API.
   Confirm moderators should be able to.
 
+### ROI calculator leads (found while building the admin leads screen)
+The screen is at `/admin/leads`, with a "ROI leads to follow up" card on the
+admin overview.
+
+- **No `followedUp` filter on the list.** `GET /admin/roi-calculator-lead`
+  can sort by `followedUp` but not filter on it. The "Not followed up" view
+  and the overview count work around this: they sort by `followedUp`, read
+  pages of 100 and stop at the first lead in the other state. That costs
+  one extra request per 100 open leads on every overview load. Please add
+  `followedUp: queryBooleanSchema.optional()` to
+  `roiCalculatorLeadQuerySchema` and the `where` in `findAll`. The frontend
+  will then switch to a single request.
+- **Delete doesn't delete.** `DELETE /admin/roi-calculator-lead/:id` returns
+  "removed successfully" without touching the database. The screen doesn't
+  offer delete. Either make it work (admins only, with an audit entry) or
+  remove the route, so a later caller isn't misled.
+- **Follow-up isn't audited, and there's no record of who or when.** The
+  `LEAD` audit action exists in the contracts, but `update` doesn't write an
+  entry, and the row has no `followedUpAt` or `followedUpBy`. If the team
+  needs to know who called a lead, add those (or write an audit entry), and
+  the screen will show them.
+- **Sort by amount.** `sortBy` doesn't include `enteredAmount`. Sales would
+  likely want the biggest leads first. Please add it, and the screen will
+  offer it.
+
 ### Payouts (found while building the admin payout screens)
 The screens are at `/admin/payouts` in secure-web. They work around these
 for now; each workaround is noted.
