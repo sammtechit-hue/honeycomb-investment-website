@@ -22,7 +22,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "HoneyComb Investor",
-  description: "Project shareholder platform",
+  description: "Investor platform",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

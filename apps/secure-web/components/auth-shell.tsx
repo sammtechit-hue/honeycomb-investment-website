@@ -3,7 +3,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { TERMS_URL } from '@/lib/public-web';
 
-// Frame shared by the signed-out pages: sign in (shareholder and staff),
+// Frame shared by the signed-out pages: sign in (investor and staff),
 // forgot password, and reset / set password.
 export function AuthShell({
   title,
@@ -47,7 +47,7 @@ export function AuthShell({
               HoneyComb Inc.
             </p>
             <p className="pt-1 text-center text-xs leading-4 tracking-[1.2px] text-muted uppercase">
-              Project Shareholder Platform
+              Investor Platform
             </p>
           </div>
 

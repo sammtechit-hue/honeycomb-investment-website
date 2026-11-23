@@ -25,8 +25,6 @@ const INCOMING_PAYMENT_ADMIN_SELECT = {
     paymentMethod: true,
     screenshotUrl: true,
     senderAccountInfo: true,
-    installmentNumber: true,
-    dueDate: true,
     confirmedAt: true,
     status: true,
 
@@ -50,7 +48,7 @@ const INCOMING_PAYMENT_ADMIN_SELECT = {
 export class IncomingPaymentService {
     constructor(private readonly prisma: PrismaService) { }
 
-    // Example: GET /admin/incoming-payment?status=pending&page=1&limit=20&sortBy=dueDate&sortOrder=desc
+    // Example: GET /admin/incoming-payment?status=pending&page=1&limit=20&sortBy=createdAt&sortOrder=desc
     async findAllIncomingPayment(query: IncomingPaymentQueryDto) {
         const {
             page,
@@ -63,8 +61,6 @@ export class IncomingPaymentService {
             paymentMethod,
             minAmount,
             maxAmount,
-            dueDateFrom,
-            dueDateTo,
             search,
         } = query;
 
@@ -81,13 +77,6 @@ export class IncomingPaymentService {
                 amount: {
                     ...(minAmount !== undefined && { gte: minAmount }),
                     ...(maxAmount !== undefined && { lte: maxAmount }),
-                },
-            }),
-            // Installment due-date range.
-            ...((dueDateFrom !== undefined || dueDateTo !== undefined) && {
-                dueDate: {
-                    ...(dueDateFrom !== undefined && { gte: dueDateFrom }),
-                    ...(dueDateTo !== undefined && { lte: dueDateTo }),
                 },
             }),
             // Free-text search across the sender account info plus the owning
@@ -172,8 +161,6 @@ export class IncomingPaymentService {
             paymentMethod,
             screenshotUrl,
             senderAccountInfo,
-            installmentNumber,
-            dueDate,
             status,
         } = updateIncomingPaymentDto;
 
@@ -183,8 +170,6 @@ export class IncomingPaymentService {
             ...(paymentMethod !== undefined && { paymentMethod }),
             ...(screenshotUrl !== undefined && { screenshotUrl }),
             ...(senderAccountInfo !== undefined && { senderAccountInfo }),
-            ...(installmentNumber !== undefined && { installmentNumber }),
-            ...(dueDate !== undefined && { dueDate }),
             ...(status !== undefined && { status }),
         };
 
@@ -288,8 +273,6 @@ function toIncomingPaymentSnapshot(payment: {
     paymentMethod: string;
     screenshotUrl: string;
     senderAccountInfo: string | null;
-    installmentNumber: number | null;
-    dueDate: Date | null;
     confirmedAt: Date | null;
     status: string;
 }) {
@@ -299,8 +282,6 @@ function toIncomingPaymentSnapshot(payment: {
         paymentMethod: payment.paymentMethod,
         screenshotUrl: payment.screenshotUrl,
         senderAccountInfo: payment.senderAccountInfo,
-        installmentNumber: payment.installmentNumber,
-        dueDate: payment.dueDate ? payment.dueDate.toISOString() : null,
         confirmedAt: payment.confirmedAt ? payment.confirmedAt.toISOString() : null,
         status: payment.status,
     };

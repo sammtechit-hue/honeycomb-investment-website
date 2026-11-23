@@ -6,7 +6,7 @@ import { DocumentZone, type Slot } from './document-zone';
 import { DOCUMENT_KEYS, type DocumentKey, type DocumentRef, type Documents } from './schema';
 import { Alert, StepCard, StepFooter } from './ui';
 
-// Shareholder KYC = own NID + photo, nominee NID + photo. Never a trade
+// Investor KYC = own NID + photo, nominee NID + photo. Never a trade
 // licence — investors must not be asked for one.
 const ZONES: { title: string; hint: string; slots: Slot[]; imagesOnly?: boolean }[] = [
   {
@@ -47,7 +47,9 @@ export function DocumentsStep({
   onBack,
   onSubmit,
   onSessionExpired,
+  submitLabel = 'Submit application',
 }: {
+  submitLabel?: string;
   documents: Documents;
   submitting: boolean;
   submitError: ReactNode;
@@ -67,7 +69,7 @@ export function DocumentsStep({
 
   return (
     <StepCard
-      eyebrow="Step 4 · KYC documents"
+      eyebrow="Step 5 · KYC documents"
       title="Documents"
       description="Upload clear photos or scans. Files are encrypted before they are stored, and only you and our verification team can open them."
       badge={
@@ -110,9 +112,9 @@ export function DocumentsStep({
         </div>
 
         <StepFooter
-          step={4}
+          step={5}
           onBack={onBack}
-          primaryLabel="Submit for verification"
+          primaryLabel={submitLabel}
           primaryIcon
           busy={submitting}
           busyLabel="Submitting…"

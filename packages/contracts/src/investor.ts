@@ -19,6 +19,7 @@ import {
   uuidSchema,
   workplaceSchema,
 } from './common.js';
+import { investmentCreateInputSchema } from './investment.js';
 
 export {
   bankAccountSchema,
@@ -33,7 +34,8 @@ export {
 // ---------------------------------------------------------------------------
 export const investorStatusSchema = z.enum([
   'pending',
-  // 'uploaded_kyc',
+  'uploaded_kyc',
+  'rejected',
   'active',
   'suspended',
 ]);
@@ -118,6 +120,41 @@ export const investorCreateInputSchema = z.object({
 });
 
 export type InvestorCreateInput = z.infer<typeof investorCreateInputSchema>;
+
+// ---------------------------------------------------------------------------
+// Application — what an investor submits to open an account: the profile
+// above plus their first investment, reviewed together by an admin.
+// ---------------------------------------------------------------------------
+
+export const investorApplicationInputSchema = investorCreateInputSchema.extend({
+  investment: investmentCreateInputSchema,
+});
+
+export type InvestorApplicationInput = z.infer<
+  typeof investorApplicationInputSchema
+>;
+
+// Resubmitting a rejected application replaces every field. The referral
+// code was settled on the first submission, so it isn't accepted again.
+export const investorApplicationResubmitInputSchema =
+  investorApplicationInputSchema.omit({ referralCode: true });
+
+export type InvestorApplicationResubmitInput = z.infer<
+  typeof investorApplicationResubmitInputSchema
+>;
+
+// Admin: send the application back. The reason is shown to the investor.
+export const investorApplicationRejectInputSchema = z.object({
+  reason: z
+    .string()
+    .trim()
+    .min(5, 'Tell the investor what needs to change')
+    .max(500, 'Reason cannot exceed 500 characters'),
+});
+
+export type InvestorApplicationRejectInput = z.infer<
+  typeof investorApplicationRejectInputSchema
+>;
 
 // ---------------------------------------------------------------------------
 // Update

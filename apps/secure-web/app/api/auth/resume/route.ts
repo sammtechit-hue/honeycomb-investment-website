@@ -14,7 +14,10 @@ import { safeNextPath } from '@/lib/safe-next';
 // applies when no app route matches.
 export async function GET(request: NextRequest) {
   const next = safeNextPath(request.nextUrl.searchParams.get('next'));
-  const loginUrl = new URL(`/login?next=${encodeURIComponent(next)}`, request.url);
+  // Staff pages send staff back to the staff sign-in, everyone else to the
+  // investor one.
+  const signIn = /^\/admin(?:[/?#]|$)/.test(next) ? '/staff/login' : '/login';
+  const loginUrl = new URL(`${signIn}?next=${encodeURIComponent(next)}`, request.url);
 
   if (!request.cookies.has('refresh_token')) {
     return NextResponse.redirect(loginUrl);

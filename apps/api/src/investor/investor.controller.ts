@@ -8,6 +8,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Query,
   UseGuards,
   UsePipes,
@@ -25,6 +26,7 @@ import { CreateInvestorDto } from './dto/create-investor.dto';
 import { UpdateInvestorDto } from './dto/update-investor.dto';
 import { InvestorEditRequestQueryDto } from './dto/investor-edit-request.dto';
 import { CreateInvestorBankAccountDto } from './dto/create-investor-bank-account.dto';
+import { ResubmitApplicationDto } from './dto/resubmit-application.dto';
 import { InvestorService } from './investor.service';
 
 
@@ -51,6 +53,16 @@ export class InvestorController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.investorService.createInvestor(createInvestorDto, user?.userId);
+  }
+
+  // PUT /api/investor/application — resubmit a rejected application
+  @Put('application')
+  @HttpCode(HttpStatus.OK)
+  resubmitApplication(
+    @Body() dto: ResubmitApplicationDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.investorService.resubmitApplication(dto, user);
   }
 
   // PATCH /api/investor/:id/update

@@ -165,7 +165,7 @@ export const en = {
       {
         question: "Is the profit guaranteed?",
         answer:
-          "No. The calculator shows projections. Fixed-type projects use a set monthly rate (around {fixedRate}) that HoneyComb can adjust. Variable-type rates are set each month between {minRate} and {maxRate} and can change. Your shareholder agreement sets out the exact terms.",
+          "No. The calculator shows projections. Fixed-type projects use a set monthly rate (around {fixedRate}) that HoneyComb can adjust. Variable-type rates are set each month between {minRate} and {maxRate} and can change. Your investment agreement sets out the exact terms.",
       },
       {
         question: "Can I add more money later?",
@@ -187,7 +187,7 @@ export const en = {
 
   disclaimer: {
     heading: "About these figures",
-    body: "Profits shown on this site, including the calculator and project listings, are projections and not guaranteed. Actual profit depends on the rate in effect each month and the terms of your shareholder agreement. Variable rates are set monthly and can change.",
+    body: "Profits shown on this site, including the calculator and project listings, are projections and not guaranteed. Actual profit depends on the rate in effect each month and the terms of your investment agreement. Variable rates are set monthly and can change.",
     methodology: "Calculation methodology",
     risk: "Risk disclosure",
     terms: "Terms of participation",
@@ -276,7 +276,7 @@ export const en = {
     variableNote:
       "Variable rates are set each month between {minRate} and {maxRate} and can change from month to month, so your actual payouts will vary within this range.",
     disclaimer:
-      "These figures are projections, not guaranteed profits. Actual profit depends on the rate in effect each month and the terms of your shareholder agreement.",
+      "These figures are projections, not guaranteed profits. Actual profit depends on the rate in effect each month and the terms of your investment agreement.",
     methodologyLink: "How profits are calculated",
     legalLink: "Legal and risk information",
     cta: "Become an Investor",
@@ -319,7 +319,7 @@ export const en = {
         points: [
           "Figures from the Return on Investment Calculator and project listings are projections, not guaranteed profits.",
           "Variable-type projects have a rate set each month between {minRate} and {maxRate}, which can change from month to month. Fixed-type rates can be adjusted by HoneyComb.",
-          "Profit depends on the rate in effect each month and the terms of your shareholder agreement.",
+          "Profit depends on the rate in effect each month and the terms of your investment agreement.",
         ],
       },
       {
@@ -328,7 +328,7 @@ export const en = {
         points: [
           "Each investment is tied to one specific project run by a HoneyComb Inc. operating company.",
           "Withdrawals are limited to {withdrawalLimit} per request and need one month's notice. Each request is approved by HoneyComb.",
-          "Your shareholder agreement is the binding document and takes precedence over anything on this website.",
+          "Your investment agreement is the binding document and takes precedence over anything on this website.",
         ],
       },
       {

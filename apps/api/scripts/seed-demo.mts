@@ -1,5 +1,5 @@
 // Creates the demo logins listed in packages/contracts/src/demo-accounts.ts
-// (two shareholders + one of each staff role, all with DEMO_PASSWORD) in a
+// (two investors + one of each staff role, all with DEMO_PASSWORD) in a
 // LOCAL development database.
 //
 //   docker compose up -d db                                   # repo root
@@ -12,7 +12,7 @@
 //
 // Safe to re-run: each account's password, role and active flag are reset,
 // its sessions are ended and its login lockout is cleared. Profiles you've
-// changed are otherwise left alone — e.g. once the "new" shareholder has
+// changed are otherwise left alone — e.g. once the "new" investor has
 // submitted verification it stays submitted. To start completely fresh:
 //   docker compose down -v && docker compose up -d db, then migrate + seed.
 import bcrypt from 'bcrypt';

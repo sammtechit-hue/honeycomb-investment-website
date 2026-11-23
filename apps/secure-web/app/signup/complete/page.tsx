@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   title: 'Account created · HoneyComb Investor',
 };
 
-// KYC = shareholder NID + photo, nominee NID + photo, home address, bank
+// KYC = investor NID + photo, nominee NID + photo, home address, bank
 // account. Never list a trade licence here — investors must not be asked
 // for one.
 const REQUIRED_DOCUMENTS = [
@@ -55,8 +55,8 @@ export default async function AccountCreatedPage() {
               Account created
             </h1>
             <p className="pt-2 text-center text-sm leading-5 text-secondary">
-              Next, verify your identity to activate your Project Shareholder participation
-              rights. You will need your NID and a passport-size photograph, your
+              Next, verify your identity to activate your investor account.
+              You will need your NID and a passport-size photograph, your
               nominee&apos;s NID and photograph, your home address and your bank account details.
             </p>
 

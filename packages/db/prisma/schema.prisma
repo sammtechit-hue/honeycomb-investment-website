@@ -73,7 +73,8 @@ enum InvestorCategory {
 
 enum InvestorStatus {
     pending
-    // uploaded_kyc
+    uploaded_kyc
+    rejected // application sent back; the investor may edit and resubmit it
     active
     suspended //cant suspended until all investment closed
     deactivated
@@ -480,6 +481,10 @@ model Investor {
     status                     InvestorStatus   @default(pending)
     approvedAt                 DateTime?        @map("approved_at") // At the firstDay of activation of this investor
     approvedBy                 String?          @db.Uuid // UserId from User Model who is admin. Dont need adminprofileId
+    // Set when an admin rejects the application; shown to the investor and
+    // cleared when they resubmit.
+    rejectionReason            String?          @map("rejection_reason") @db.VarChar(500)
+    rejectedAt                 DateTime?        @map("rejected_at")
     createdAt                  DateTime         @default(now()) @map("created_at")
     updatedAt                  DateTime         @updatedAt @map("updated_at")
 
@@ -999,8 +1004,6 @@ model IncomingPayment {
     paymentMethod     IncomingPaymentMethod @map("payment_method")
     screenshotUrl     String                @map("screenshot_url")
     senderAccountInfo String?               @map("sender_account_info") @db.VarChar(150)
-    installmentNumber Int?                  @map("installment_number")
-    dueDate           DateTime?             @map("due_date") @db.Date
     confirmedAt       DateTime?             @map("confirmed_at")
     status            IncomingPaymentStatus @default(pending)
 

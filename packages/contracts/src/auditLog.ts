@@ -25,11 +25,17 @@ export const auditActionSchema = z.enum([
   'investment_created',
   'investment_status_changed',
   'monthly_rate_set',
+  'monthly_rate_updated',
+  'business_settings_set',
+  'business_settings_updated',
   'disbursement_batch_created',
+  'disbursement_batch_updated',
   'disbursement_batch_exported',
   'disbursement_batch_confirmed',
   'disbursement_batch_deleted',
   'disbursement_item_remark_updated',
+  'payout_window_created',
+  'payout_window_updated',
   'withdrawal_status_changed',
   'referral_code_generated',
   'referral_code_updated',
@@ -48,7 +54,7 @@ export const auditActionSchema = z.enum([
 export const logSeveritySchema = z.enum(['INFO', 'WARNING', 'ERROR', 'CRITICAL']);
 
 // Mirrors Prisma `LogStatus` enum.
-export const logStatusSchema = z.enum(['SUCCESS', 'FAILURE', 'PENDING']);
+export const logStatusSchema = z.enum(['SUCCESS', 'FAILED', 'PENDING']);
 
 export const logModuleSchema = z.enum([
   'AUTH',          // Login, logout, password resets, role changes

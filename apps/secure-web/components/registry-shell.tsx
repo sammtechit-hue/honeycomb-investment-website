@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { TERMS_URL } from '@/lib/public-web';
 
 // Header + footer shared by the registration flow (Create Account, Account
-// Created, verification steps) — the "HoneyComb Shareholder Registry"
+// Created, verification steps) — the "HoneyComb Investor Registry"
 // frames in Figma.
 
 const NAV = [
@@ -18,7 +18,7 @@ export function RegistryHeader({ active }: { active: NavKey }) {
     <header className="sticky top-0 z-10 bg-surface/80 px-4 shadow-[0px_1px_8px_0px_rgba(0,0,0,0.04)] backdrop-blur-md sm:px-10">
       <div className="mx-auto flex h-16 max-w-[1200px] items-center justify-between gap-4 px-2 sm:px-6">
         <Link href="/" className="truncate text-base leading-7 font-bold tracking-[-0.5px] uppercase sm:text-xl">
-          HoneyComb <span className="hidden sm:inline">Shareholder Registry</span>
+          HoneyComb <span className="hidden sm:inline">Investor Registry</span>
         </Link>
         <nav className="flex shrink-0 items-center gap-4 text-sm leading-5 sm:gap-6">
           {NAV.map((item) => (
