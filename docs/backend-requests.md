@@ -256,6 +256,35 @@ The screen is at `/admin/notifications`. It's read-only for now.
 - **No date range filter.** Filtering by "from/to" would help on a busy feed,
   like the audit log has.
 
+### Staff accounts (found while building the staff invites screen)
+The screen is at `/admin/staff` (super admins only). It invites people and
+resends invites, and it works. What's missing:
+
+- **No staff list.** There's no `GET` for staff accounts (the `admin/admin`
+  controller is a placeholder). The "People invited" list is rebuilt from
+  the audit log: `admin_created`, `admin_invite_resent`,
+  `admin_invite_accepted` and `admin_login` entries for each account. That
+  costs three audit reads per row, and it misses accounts made any other way
+  (seeded, or by the create-super-admin script). Please add
+  `GET /admin/accounts` (super admin) returning id, email, role, name,
+  department, `allowedIpRange`, `isActive`, `createdAt`, `lastLoginAt` and
+  whether an unused invite is pending. The screen will switch to it.
+- **Nothing can be changed after the invite.** There's no way to change a
+  staff member's role, name, department or IP allowlist, or to deactivate
+  them. A wrong IP allowlist locks the person out for good, and someone who
+  leaves keeps a working account. The form warns about the allowlist for
+  now. Please add `PATCH /admin/accounts/:id` for those fields (audited),
+  including `isActive: false`, which should also end their sessions.
+- **The invitee's name isn't in the audit entry.** `admin_created` stores
+  the email as `targetLabel` and role in `metadata`, but not the name, so
+  the list can only show emails. Adding `name` to the metadata (or the list
+  endpoint above) fixes it.
+- **Resend is allowed after the password is set, until first sign-in.**
+  `resendInvite` checks `lastLoginAt`, so someone who has set a password
+  but not signed in yet can be sent a new invite link. That isn't harmful,
+  but checking for a used `ACCOUNT_INVITE` token would be more accurate. The
+  screen hides "Resend" once an "Invite accepted" entry exists.
+
 ### Payouts (found while building the admin payout screens)
 The screens are at `/admin/payouts` in secure-web. They work around these
 for now; each workaround is noted.
