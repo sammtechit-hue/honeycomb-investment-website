@@ -71,6 +71,11 @@ const envSchema = z.object({
   // CORS_ORIGINS entry outside production.
   APP_URL: z.string().url('APP_URL must be a full URL').optional(),
 
+  // Initial login password given to investors created by the admin bulk
+  // import (POST /api/admin/investor/bulk). Optional so existing deploys still
+  // boot; the endpoint answers 503 without it.
+  INITIAL_PASSWORD_INVESTOR: z.string().min(8).optional(),
+
   // KYC document storage (src/files). Every file is AES-256-GCM encrypted
   // in this process before it reaches the driver, so neither the disk nor
   // the bucket ever holds plaintext.

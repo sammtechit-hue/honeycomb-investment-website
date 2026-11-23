@@ -210,9 +210,7 @@ export class InvestorService {
     const hasKycDocuments =
       !!kycInput?.nidFront && !!kycInput?.nidBack && !!kycInput?.photo;
 
-    const investorStatus: InvestorStatus = hasKycDocuments
-      ? 'uploaded_kyc'
-      : 'pending';
+    const investorStatus: InvestorStatus = 'pending';
 
     // The application carries the first investment; check the project can
     // take it before writing anything.
