@@ -1,5 +1,5 @@
 import { createZodDto } from 'nestjs-zod';
-import { withdrawalRequestUpdateInputSchema } from '@investment-platform/contracts/withdrawal-request';
+import { updateWithdrawalRequestSchema } from '@investment-platform/contracts/withdrawal-request';
 
 // PATCH /api/withdrawal-request/:id — all fields optional
 // (see packages/contracts/src/withdrawal-request.ts).
@@ -11,5 +11,5 @@ import { withdrawalRequestUpdateInputSchema } from '@investment-platform/contrac
 //   "disbursementDate": "2026-10-21"
 // }
 export class UpdateWithdrawalRequestDto extends createZodDto(
-  withdrawalRequestUpdateInputSchema,
+  updateWithdrawalRequestSchema,
 ) {}

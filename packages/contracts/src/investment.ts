@@ -116,7 +116,7 @@ function refineInvestmentPeriodAgainstDisbursement(
 
 // Field definitions only (no refinement), so the update schemas below can
 // still .pick() / .extend() from them.
-const investmentCreateFieldsSchema = z.object({
+export const investmentCreateFieldsSchema = z.object({
   projectId: uuidSchema,
   amount: moneySchema,
   investmentType: investmentTypeSchema,

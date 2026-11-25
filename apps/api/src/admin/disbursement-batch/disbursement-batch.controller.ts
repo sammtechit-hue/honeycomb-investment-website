@@ -46,7 +46,7 @@ export class DisbursementBatchController {
     // GET /api/admin/disbursement-batch?search=1st&exportType=cbl&status=draft
     //   &page=1&limit=10&sortBy=createdAt&sortOrder=desc
     @Get()
-    findAll(@Query() query: DisbursementBatchQueryDto) {
+    findAllDisbursementBatch(@Query() query: DisbursementBatchQueryDto) {
         // Search, filters, sort and pagination are validated by
         // DisbursementBatchQueryDto.
         return this.disbursementBatchService.findAllDisbursementBatch(query);
@@ -54,7 +54,7 @@ export class DisbursementBatchController {
 
     // POST /api/admin/disbursement-batch/:windowId
     @Post(':windowId')
-    create(
+    createDisbursementBatch(
         @Param('windowId', ParseUUIDPipe) windowId: string,
         @Body() createDisbursementBatchDto: CreateDisbursementBatchDto,
         @CurrentUser() user: AuthenticatedUser,
@@ -83,7 +83,7 @@ export class DisbursementBatchController {
     // Attaches the selected items to a draft batch and marks them disbursed.
     // Declared before `PATCH :id` so "items" is never parsed as a UUID id.
     @Patch('items')
-    addItems(
+    addDisbursementItemsToBatch(
         @Body() addItemsToBatchDto: AddItemsToBatchDto,
         @CurrentUser() user: AuthenticatedUser,
         @Ip() ip?: string,
@@ -96,7 +96,7 @@ export class DisbursementBatchController {
             sessionId: sessionId,
         };
 
-        return this.disbursementItemService.addDisbursementItemToBatch(
+        return this.disbursementItemService.addDisbursementItemsToBatch(
             addItemsToBatchDto,
             user?.userId,
             context,
@@ -105,7 +105,7 @@ export class DisbursementBatchController {
 
     // PATCH /api/admin/disbursement-batch/:id
     @Patch(':id')
-    update(
+    updateDisbursementBatch(
         @Param('id', ParseUUIDPipe) id: string,
         @Body() updateDisbursementBatchDto: UpdateDisbursementBatchDto,
         @CurrentUser() user: AuthenticatedUser,
@@ -121,7 +121,7 @@ export class DisbursementBatchController {
 
         // Only the fields provided in the request
         // will be updated.
-        return this.disbursementBatchService.update(
+        return this.disbursementBatchService.updateDisbursementBatch(
             id,
             updateDisbursementBatchDto,
             user?.userId,
@@ -135,7 +135,7 @@ export class DisbursementBatchController {
     @Delete(':id')
     @Roles(Role.ADMIN)
     @HttpCode(HttpStatus.OK)
-    remove(
+    removeDisbursementBatch(
         @Param('id', ParseUUIDPipe) id: string,
         @CurrentUser() user: AuthenticatedUser,
         @Ip() ip?: string,
@@ -150,6 +150,6 @@ export class DisbursementBatchController {
         };
 
         // user.userId is the User.id attached by JwtAuthGuard/JwtStrategy.
-        return this.disbursementBatchService.remove(id, user?.userId, context);
+        return this.disbursementBatchService.removeDisbursementBatch(id, user?.userId, context);
     }
 }

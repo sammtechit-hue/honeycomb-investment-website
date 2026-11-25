@@ -44,11 +44,13 @@ export function roiStartDate(investmentDate: Date): Date {
     return addDays(toDateOnly(investmentDate), ROI_START_DELAY_DAYS);
 }
 
-/** 40 days up to 2,00,000, then +20 days per further 1,00,000 or part of it. */
 export function withdrawalNoticeDays(amount: Prisma.Decimal.Value): number {
     const extra = new Prisma.Decimal(amount).sub(200_000);
+
     if (extra.lte(0)) return 40;
-    return 40 + 20 * extra.div(100_000).ceil().toNumber();
+
+    // 60 days as soon as the amount passes 200,000, then +20 days for every full 100,000 above that
+    return 60 + 20 * extra.div(100_000).floor().toNumber();
 }
 
 export function computeProfit(

@@ -53,7 +53,7 @@ export class DisbursementItemService {
     constructor(private readonly prisma: PrismaService) { }
 
     // --------------------------------------------------------
-    // -------------- FindAll Disbursement Item ----------------
+    // ---------------- findAllDisbursementItem ----------------
     //---------------------------------------------------------
     // For Getting All DisbursementItem's Data with filtering, searching, sorting & pagination
     // Example: GET /admin/disbursement-item?search=ROI&exportFormat=cbl&page=1&limit=10
@@ -149,7 +149,7 @@ export class DisbursementItemService {
     }
 
     // --------------------------------------------------------
-    // -------------- Create Disbursement Item ----------------
+    // --------------- createDisbursementItem -----------------
     //---------------------------------------------------------
     async createDisbursementItem(
         userId?: string,
@@ -207,6 +207,7 @@ export class DisbursementItemService {
                         id: true,
                         cycleStart: true,
                         cycleEnd: true,
+                        daysCounted: true,   // <-- new
                         profitAmount: true,
                     },
                 },
@@ -221,39 +222,36 @@ export class DisbursementItemService {
         const created: { investmentId: string; itemId: string; ledgerRowIds: string[] }[] = [];
         const skipped: { investmentId: string; reason: string }[] = [];
 
-        for (const inv of investments) {
-            const cycles = CYCLES_PER_DISBURSEMENT[inv.disbursementPeriod];
-            const rows = inv.monthlyProfitLedger;
+        const MIN_CYCLE_DAYS = 15;
 
-            // Check cycles eligible
-            if (rows.length < cycles) {
+        for (const inv of investments) {
+
+            const cycles = CYCLES_PER_DISBURSEMENT[inv.disbursementPeriod];
+            const rows = inv.monthlyProfitLedger; // already ordered by cycleStart asc
+
+            // Only full-enough cycles (>= 15 days) count toward the disbursement.
+            const eligibleIdx: number[] = [];
+            rows.forEach((row, i) => {
+                if (row.daysCounted >= MIN_CYCLE_DAYS) eligibleIdx.push(i);
+            });
+
+            if (eligibleIdx.length < cycles) {
+                const shortCount = rows.length - eligibleIdx.length;
                 skipped.push({
                     investmentId: inv.id,
-                    reason: `ROI disbursement not due yet: needs ${cycles} ${cycles === 1 ? 'cycle' : 'cycles'}, has ${rows.length}`,
+                    reason: `ROI disbursement not due yet: needs ${cycles} ${cycles === 1 ? 'cycle' : 'cycles'} of at least ${MIN_CYCLE_DAYS} days, has ${eligibleIdx.length}${shortCount > 0 ? ` (${shortCount} short ${shortCount === 1 ? 'cycle' : 'cycles'} deferred to the next disbursement)` : ''}`,
                 });
                 continue;
             }
 
-            // example
-            // cycles = 3;
+            // Take rows from the start up to and including the last needed eligible cycle.
+            // Short rows before it are carried into this item; short rows after it wait.
+            const lastChosenIdx = eligibleIdx[cycles - 1];
+            const chosenRows = rows.slice(0, lastChosenIdx + 1);
 
-            // rows = [
-            //     { id: '1', profitAmount: 1000 },
-            //     { id: '2', profitAmount: 1200 },
-            //     { id: '3', profitAmount: 1500 },
-            //     { id: '4', profitAmount: 1800 },
-            // ];
-
-
-            const chosenRows = rows.slice(0, 3);
-            // [
-            //     { id: '1', profitAmount: 1000 },
-            //     { id: '2', profitAmount: 1200 },
-            //     { id: '3', profitAmount: 1500 },
-            // ]
             const amount = chosenRows.reduce(
-                (sum, row) => sum.add(row.profitAmount), //callback function
-                new Prisma.Decimal(0), // intial value
+                (sum, row) => sum.add(row.profitAmount),
+                new Prisma.Decimal(0),
             );
 
             if (amount.lte(0)) {
@@ -291,7 +289,7 @@ export class DisbursementItemService {
 
             const reason = buildReason(
                 chosenRows[0].cycleStart,
-                chosenRows[cycles - 1].cycleEnd,
+                chosenRows[chosenRows.length - 1].cycleEnd,
             );
 
             // এই লাইনের কাজ হলো যে MonthlyProfitLedger row-গুলো Disbursement-এর জন্য select করা হয়েছে, সেগুলোর ID আলাদা array-তে রাখা।
@@ -353,7 +351,7 @@ export class DisbursementItemService {
     }
 
     // --------------------------------------------------------
-    // -------- Update Disbursement Item (notes + batch) -------
+    // --------------- updateDisbursementItem -----------------
     //---------------------------------------------------------
     async updateDisbursementItem(
         id: string,
@@ -405,6 +403,9 @@ export class DisbursementItemService {
                 },
             });
 
+            // --------------------------------------------------------
+            // ---------------------- AuditLog -------------------------
+            //-----------------------------------------------------------
             await tx.auditLog.create({
                 data: {
                     adminName: admin?.name ?? 'Admin',
@@ -443,12 +444,12 @@ export class DisbursementItemService {
     }
 
     // --------------------------------------------------------
-    // -------- Add Disbursement Items To A Batch -------------
+    // -------------- addDisbursementItemsToBatch -------------
     //---------------------------------------------------------
     // PATCH /admin/disbursement-batch/items
     // Attaches the selected items to a draft batch. The items are only marked
     // disbursed later, when the batch is confirmed.
-    async addDisbursementItemToBatch(
+    async addDisbursementItemsToBatch(
         dto: AddItemsToBatchDto,
         userId?: string,
         context?: RequestAuditContext,
@@ -547,6 +548,9 @@ export class DisbursementItemService {
                 );
             }
 
+            // --------------------------------------------------------
+            // ---------------------- AuditLog -------------------------
+            //-----------------------------------------------------------
             await tx.auditLog.create({
                 data: {
                     adminName: admin?.name ?? 'Admin',
@@ -594,6 +598,9 @@ export class DisbursementItemService {
 
 }
 
+// --------------------------------------------------------
+// ---------------------- buildReason ---------------------
+//---------------------------------------------------------
 function buildReason(firstCycleStart: Date, lastCycleEnd: Date): string {
     const firstYear = firstCycleStart.getUTCFullYear();
     const lastYear = lastCycleEnd.getUTCFullYear();
@@ -606,6 +613,9 @@ function buildReason(firstCycleStart: Date, lastCycleEnd: Date): string {
     return `ROI Disbursement - ${from} to ${formatDayAndMonth(lastCycleEnd)} ${lastYear}`;
 }
 
+// --------------------------------------------------------
+// ------------------- formatDayAndMonth ------------------
+//---------------------------------------------------------
 function formatDayAndMonth(date: Date): string {
     return `${date.getUTCDate()} ${MONTH_ABBREVIATIONS[date.getUTCMonth()]}`;
 }

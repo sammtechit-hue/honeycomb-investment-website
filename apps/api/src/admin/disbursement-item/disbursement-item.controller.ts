@@ -39,7 +39,7 @@ export class DisbursementItemController {
     // GET /api/admin/disbursement-item?search=ROI&batchId=&investmentId=&investorId=
     //   &exportFormat=cbl&minAmount=&maxAmount=&page=1&limit=10&sortBy=amount&sortOrder=desc
     @Get()
-    findAll(@Query() query: DisbursementItemQueryDto) {
+    findAllDisbursementItem(@Query() query: DisbursementItemQueryDto) {
         // Search, filters, amount range, sort and pagination are validated by
         // DisbursementItemQueryDto.
         return this.disbursementItemService.findAllDisbursementItem(query);
@@ -47,14 +47,14 @@ export class DisbursementItemController {
 
     // POST /api/admin/disbursement-item
     @Post()
-    create() {
+    createDisbursementItem() {
         // Create a new disbursement item (line item for CBL/BEFTN export)
         return this.disbursementItemService.createDisbursementItem();
     }
 
     // PATCH /api/admin/disbursement-item/:id
     @Patch(':id')
-    update(
+    updateDisbursementItem(
         @Param('id', ParseUUIDPipe) id: string,
         @Body() updateDisbursementItemDto: UpdateDisbursementItemDto,
         @CurrentUser() user: AuthenticatedUser,

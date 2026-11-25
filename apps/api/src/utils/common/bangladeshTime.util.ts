@@ -71,11 +71,20 @@ export function toOrd(d: Date): number {
         d.getUTCFullYear() * 360 +
         d.getUTCMonth() * 30 +
         d.getUTCDate()
+        // Math.min(d.getUTCDate(), 30)
     );
 }
 
 /** Format Date as YYYY-MM-DD for logs/messages. */
 export function fmt(d: Date): string {
     return d.toISOString().slice(0, 10);
+}
+
+/** Add calendar months in UTC; clamps day (e.g. Nov 31 -> Nov 30). */
+export function addMonths(d: Date, months: number): Date {
+    const y = d.getUTCFullYear();
+    const m = d.getUTCMonth() + months;
+    const lastDay = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+    return new Date(Date.UTC(y, m, Math.min(d.getUTCDate(), lastDay)));
 }
 
