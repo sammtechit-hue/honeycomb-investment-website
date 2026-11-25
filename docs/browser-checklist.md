@@ -34,6 +34,7 @@ Tick items as you go. Note anything odd next to the item.
 
 | Who | Sign in at | Login |
 |---|---|---|
+| Super admin | `/staff/login` | `superadmin@honeycomb.test` (`Demo@1234`) |
 | Admin | `/staff/login` | `admin@honeycomb.test` (`Demo@1234`) |
 | Moderator | `/staff/login` | `moderator@honeycomb.test` (`Demo@1234`) |
 | Approved investor, no profit | `/login` | `01700000002` (`Demo@1234`) |
@@ -258,6 +259,32 @@ link, a missing payment and unsafe stored links.
 - [ ] Filter by type, search the message text (try `qa-edge`), switch to
       oldest first, and page through. Clear resets everything.
 - [ ] There's no "unread" or "mark read" anywhere (the API can't do it yet).
+
+## 7c. Super admin: staff invites
+
+Sign in as **Super admin** (`superadmin@honeycomb.test`, `Demo@1234`) at
+`/staff/login`. Use `@honeycomb.test` addresses for people you invite: the
+test API writes their invite email to its log instead of sending it. Any
+other address shows "Email not sent", because the test stack's mail key
+isn't valid.
+
+- [ ] The sidebar has **Staff invites**. Admin and moderator sidebars don't,
+      and opening `/admin/staff` as either shows "Only super admins can invite
+      staff".
+- [ ] The form refuses: an empty name, a bad email, an email that already
+      has an account ("Someone already has an account with this email"), and
+      an IP list like `10.0.0.0/33`.
+- [ ] Switching Moderator/Admin changes the description under it. Typing an
+      IP list shows the "Check these addresses carefully" warning.
+- [ ] Send an invite: "Invite sent to …" appears, the form clears, and the
+      person shows in "People invited" as "Invite sent".
+- [ ] Invite an `example.test` address: the red "didn't send" message
+      appears, and the row says "Email not sent".
+- [ ] **Resend invite** on a waiting row says "Sent. The earlier link no
+      longer works." and the row shows "resent once".
+- [ ] Ask Claude for the invite link from the test API log, open it, and set
+      a password. The row changes to "Joined" with no Resend button, and the
+      new person can sign in with their role's sidebar.
 
 ## 8. Moderator
 

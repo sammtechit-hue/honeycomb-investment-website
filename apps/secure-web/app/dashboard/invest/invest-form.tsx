@@ -24,7 +24,7 @@ const PERIODS = [
 
 const TYPES = [
   { value: 'fixed', label: 'Fixed rate' },
-  { value: 'unfixed', label: 'Variable rate' },
+  { value: 'unfixed', label: 'Islamic profit sharing' },
 ] as const;
 
 const TYPE_HINT = {
@@ -80,7 +80,7 @@ export function InvestForm({ projects, initialProjectId }: { projects: OpenProje
     defaultValues: {
       projectId: initialProjectId ?? (projects.length === 1 ? projects[0].id : ''),
       amount: '',
-      investmentType: 'fixed',
+      investmentType: 'unfixed',
       disbursementPeriod: 'monthly',
       investmentPeriodMonths: '12',
     },
@@ -222,7 +222,8 @@ export function InvestForm({ projects, initialProjectId }: { projects: OpenProje
       </div>
 
       <div className="rounded-md border border-hairline bg-surface p-4 text-xs leading-5 text-secondary">
-        Profit starts 10 days after your investment date, and the first month is prorated. Your request is
+        {/* No number: the delay is an admin setting investors can't read yet (docs/backend-requests.md). */}
+        Profit starts a set number of days after your investment date, and the first month is prorated. Your request is
         reviewed by HoneyComb. After submitting, pay HoneyComb directly (usually by bank transfer) and record the
         payment with your receipt from <span className="font-semibold text-ink">My investments</span>.
       </div>

@@ -8,6 +8,8 @@ export type NavItem = {
   icon: string;
   // Admins and super admins only (the API refuses moderators).
   adminOnly?: boolean;
+  // Super admins only (staff invites).
+  superAdminOnly?: boolean;
 };
 
 export const INVESTOR_NAV: NavItem[] = [
@@ -57,9 +59,18 @@ export const ADMIN_NAV: NavItem[] = [
     icon: 'M9 4h6v3H9zM6 5.5H5v15h14v-15h-1M8.5 12h7M8.5 16h5',
     adminOnly: true,
   },
+  {
+    href: '/admin/staff',
+    label: 'Staff invites',
+    icon: 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 10a7 7 0 0 1 12.5-4.3M19 14v6M16 17h6',
+    superAdminOnly: true,
+  },
 ];
 
-// The admin nav for one staff role: moderators don't get admin-only pages.
+// The admin nav for one staff role: moderators don't get admin-only pages,
+// and only super admins get super-admin pages.
 export function adminNavFor(role: 'MODERATOR' | 'ADMIN' | 'SUPER_ADMIN') {
-  return role === 'MODERATOR' ? ADMIN_NAV.filter((n) => !n.adminOnly) : ADMIN_NAV;
+  return ADMIN_NAV.filter(
+    (n) => (!n.adminOnly || role !== 'MODERATOR') && (!n.superAdminOnly || role === 'SUPER_ADMIN'),
+  );
 }

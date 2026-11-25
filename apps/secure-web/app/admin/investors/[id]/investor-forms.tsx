@@ -11,6 +11,7 @@ import {
   nidNumberSchema,
   type InvestorApplicationRejectInput,
 } from '@investment-platform/contracts/investor';
+import { useConfirmStep } from '@/components/dashboard/confirm-step';
 import { Alert, Field, FormActions, describedBy, inputClass } from '@/components/dashboard/form';
 import type { InvestorCategory } from '@/lib/investor';
 import { submitJson } from '@/lib/submit';
@@ -55,6 +56,10 @@ export function ApproveForm({
     setError,
     formState: { errors, isSubmitting },
   } = useForm<ApproveValues>({ resolver: zodResolver(approveSchema), defaultValues: initial });
+  const { submit, confirm } = useConfirmStep(
+    'Approve this investor? Their account becomes active and their documents are marked verified.',
+    onSubmit,
+  );
 
   async function onSubmit(values: ApproveValues) {
     setSubmitError(null);
@@ -78,7 +83,7 @@ export function ApproveForm({
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
+    <form onSubmit={handleSubmit(submit)} noValidate className="flex flex-col gap-5">
       {submitError && (
         <Alert>
           <p>{submitError}</p>
@@ -116,7 +121,7 @@ export function ApproveForm({
       <Field id="category" label="Category" error={errors.category?.message}>
         <CategorySelect registration={register('category')} />
       </Field>
-      <FormActions busy={isSubmitting} label="Approve investor" busyLabel="Approving…" />
+      <FormActions busy={isSubmitting} label="Approve investor" busyLabel="Approving…" confirm={confirm} />
     </form>
   );
 }
@@ -138,6 +143,10 @@ export function RejectForm({ investorId }: { investorId: string }) {
     resolver: zodResolver(investorApplicationRejectInputSchema),
     defaultValues: { reason: '' },
   });
+  const { submit, confirm } = useConfirmStep(
+    'Send the application back? The investor sees this note and their application unlocks for editing.',
+    onSubmit,
+  );
 
   if (!open) {
     return (
@@ -163,7 +172,7 @@ export function RejectForm({ investorId }: { investorId: string }) {
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4">
+    <form onSubmit={handleSubmit(submit)} noValidate className="flex flex-col gap-4">
       {submitError && (
         <Alert>
           <p>{submitError}</p>
@@ -184,17 +193,18 @@ export function RejectForm({ investorId }: { investorId: string }) {
           className={`${inputClass} h-auto resize-y py-2.5 leading-5`}
         />
       </Field>
+      {confirm.active && <p className="text-sm leading-5 text-ink">{confirm.message}</p>}
       <div className="flex flex-wrap gap-3">
         <button
           type="submit"
           disabled={isSubmitting}
           className="flex h-10 items-center justify-center rounded-md bg-emphasis px-5 text-sm leading-5 text-white hover:bg-black/85 disabled:opacity-60"
         >
-          {isSubmitting ? 'Sending back…' : 'Send back'}
+          {isSubmitting ? 'Sending back…' : confirm.active ? 'Yes, send back' : 'Send back'}
         </button>
         <button
           type="button"
-          onClick={() => setOpen(false)}
+          onClick={() => (confirm.active ? confirm.cancel() : setOpen(false))}
           disabled={isSubmitting}
           className="flex h-10 items-center justify-center rounded-md border border-hairline px-4 text-sm leading-5 text-ink hover:bg-surface"
         >
@@ -213,6 +223,7 @@ export function CategoryForm({ investorId, category }: { investorId: string; cat
   const {
     register,
     handleSubmit,
+    reset,
     formState: { isSubmitting, isDirty },
   } = useForm<{ category: InvestorCategory }>({ resolver: zodResolver(categorySchema), defaultValues: { category } });
 
@@ -220,6 +231,8 @@ export function CategoryForm({ investorId, category }: { investorId: string; cat
     setSubmitError(null);
     const result = await submitJson(`/api/admin/investor/${investorId}`, { category: values.category }, 'PATCH');
     if (result.ok) {
+      // The saved value becomes the new baseline, so the button disables again.
+      reset(values);
       router.refresh();
       return;
     }
