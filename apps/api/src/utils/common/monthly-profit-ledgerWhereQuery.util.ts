@@ -1,7 +1,8 @@
 import type { PayoutStatus, Prisma } from '@investment-platform/db';
 
 interface BuildMonthlyProfitLedgerWhereParams {
-    investorId: string;
+    // Omitted on admin routes, which see every investor's ledgers.
+    investorId?: string;
     investmentId?: string;
     search?: string;
     payoutStatus?: PayoutStatus;
@@ -23,7 +24,7 @@ export function buildMonthlyProfitLedgerWhere({
 }: BuildMonthlyProfitLedgerWhereParams): Prisma.MonthlyProfitLedgerWhereInput {
     return {
         investment: {
-            investorId,
+            ...(investorId && { investorId }),
             ...(investmentId && { id: investmentId }),
             ...(search && {
                 project: {

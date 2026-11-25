@@ -1,15 +1,15 @@
 import { createZodDto } from 'nestjs-zod';
-import { withdrawalRequestUpdateInputSchema } from '@investment-platform/contracts/withdrawal-request';
+import { withdrawalRequestCancelInputSchema } from '@investment-platform/contracts/withdrawal-request';
 
-// PATCH /api/withdrawal-request/:id — all fields optional
+// PATCH /api/withdrawal-request/:id — an investor may only cancel an open
+// request. Any other field or status is rejected with a 400.
 // (see packages/contracts/src/withdrawal-request.ts).
 //
-// Example (move a request through its lifecycle):
+// Example:
 // PATCH /api/withdrawal-request/:id
 // {
-//   "status": "ready",
-//   "disbursementDate": "2026-10-21"
+//   "status": "cancelled"
 // }
 export class UpdateWithdrawalRequestDto extends createZodDto(
-  withdrawalRequestUpdateInputSchema,
+  withdrawalRequestCancelInputSchema,
 ) {}

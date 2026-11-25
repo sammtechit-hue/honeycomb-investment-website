@@ -49,6 +49,7 @@ export const bulkInvestmentRowSchema = investmentCreateFieldsSchema
 
     // --- References (required) ---
     investorId: uuidSchema,
+    projectId: uuidSchema,
 
     // --- Dates ---
     investmentDate: dateSchema,
@@ -89,7 +90,7 @@ export const bulkInvestmentRowSchema = investmentCreateFieldsSchema
     ),
 
     // Same as the single admin-create contract: the row carries its status.
-    status: investmentStatusSchema.optional().default('active'),
+    status: investmentStatusSchema.default('active'),
   })
   // Reject spreadsheet columns that are not defined above.
   .strict()

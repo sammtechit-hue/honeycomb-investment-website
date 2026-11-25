@@ -1,9 +1,8 @@
 
-import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type {
     MonthlyProfitLedgerQuery,
-    MonthlyProfitLedgerUpdateInput,
 } from '@investment-platform/contracts/monthlyProfitLedger';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { Env } from '../../config/env';
@@ -13,15 +12,56 @@ import {
     Prisma,
     AdminNotificationType,
 } from '@investment-platform/db';
-import { findInvestorId } from '../../utils/common/investor.utils'
-import { MonthlyProfitLedgerQueryDto } from './dto/query-monthly-profit-ledger.dto';
 import { buildOrderBy } from '../../utils/common/build-order-by.util';
 import { fetchData } from '../../utils/common/fetchData.util';
 import { buildMonthlyProfitLedgerWhere } from '../../utils/common/monthly-profit-ledgerWhereQuery.util';
-import { addDays, fmt, getDhakaDateOnly, toDateOnly, toOrd } from '../../utils/common/bangladeshTime.util';
+import { addDays, addMonths, fmt, getDhakaDateOnly, toDateOnly, toOrd } from '../../utils/common/bangladeshTime.util';
 
 
 const ROUND_HALF_UP = 4; //তৃতীয় ঘরের সংখ্যা ৫ বা তার বেশি হলে দ্বিতীয় ঘর বাড়াবে।
+
+// Fields returned by both admin monthly-profit-ledger endpoints (list + detail),
+// so the two views can never drift apart.
+const MONTHLY_PROFIT_LEDGER_ADMIN_SELECT = {
+    id: true,
+    cycleStart: true,
+    cycleEnd: true,
+    daysCounted: true,
+    rateApplied: true,
+    profitAmount: true,
+    payoutStatus: true,
+    principalAmount: true,
+    investmentId: true,
+    disbursementItemId: true,
+    createdAt: true,
+    // The investment (and its investor / project) the profit accrued on.
+    investment: {
+        select: {
+            id: true,
+            amount: true,
+            status: true,
+            investmentDate: true,
+            investorId: true,
+            investor: {
+                select: {
+                    fullname: true,
+                    user: { select: { email: true, phone: true } },
+                },
+            },
+            project: { select: { id: true, name: true } },
+        },
+    },
+    // The disbursement item that paid this profit out, if any.
+    disbursementItem: {
+        select: {
+            id: true,
+            reason: true,
+            amount: true,
+            isDisbursed: true,
+            batchId: true,
+        },
+    },
+} satisfies Prisma.MonthlyProfitLedgerSelect;
 
 function computeProfit(
     amount: Prisma.Decimal,
@@ -70,31 +110,17 @@ export class MonthlyProfitLedgerService {
     >;
 
 
+    //-----------------------------------------------------------------
+    // For Getting All MonthlyProfitLedger's Data (admin, every investor)
+    //-----------------------------------------------------------------
+    // Example: GET /api/admin/monthly-profit-ledger?search=&investmentId=
+    //   &investorId=&payoutStatus=accrued&min=&max=&periodFrom=&periodTo=
+    //   &page=1&limit=10&sortBy=periodMonth&sortOrder=desc
     async findAllMonthlyLedger(query: MonthlyProfitLedgerQuery) {
-        return {
-            message: "HelloWorld Return all MonthlyProfitLedger's data",
-            query,
-        };
-    }
-
-    // ------------------------------------------------------------
-    // ---------------------- FindOneMonthlyLedger ----------------
-    //-------------------------------------------------------------
-    async findOneMonthlyLedger(
-        id: string,
-        userId: string | undefined,
-        query: MonthlyProfitLedgerQueryDto,
-    ) {
-        if (!userId) {
-            throw new UnauthorizedException('Session is no longer valid');
-        }
-
-        // Investor-facing routes are always scoped to the logged-in investor.
-        const investorId = await findInvestorId(this.prisma, id);
-
         const {
             search,
             investmentId,
+            investorId,
             payoutStatus,
             min,
             max,
@@ -131,6 +157,7 @@ export class MonthlyProfitLedgerService {
             orderBy,
             page,
             limit,
+            { select: MONTHLY_PROFIT_LEDGER_ADMIN_SELECT },
         );
 
         return {
@@ -144,7 +171,29 @@ export class MonthlyProfitLedgerService {
                 totalPages: Math.ceil(total / limit),
             },
         };
+    }
 
+    // ------------------------------------------------------------
+    // ---------------------- FindOneMonthlyLedger ----------------
+    //-------------------------------------------------------------
+    // GET /api/admin/monthly-profit-ledger/:id
+    async findOneMonthlyLedger(id: string) {
+        const ledger = await this.prisma.monthlyProfitLedger.findUnique({
+            where: { id },
+            select: MONTHLY_PROFIT_LEDGER_ADMIN_SELECT,
+        });
+
+        if (!ledger) {
+            throw new NotFoundException(
+                `Monthly profit ledger with id ${id} not found`,
+            );
+        }
+
+        return {
+            message: 'Monthly profit ledger fetched successfully',
+            success: true,
+            data: ledger,
+        };
     }
 
 
@@ -153,8 +202,13 @@ export class MonthlyProfitLedgerService {
     //-----------------------------------------------------------------
     async createMonthlyLedger() {
         const today = getDhakaDateOnly();
+        // const today = new Date('2026-10-11T20:30:00Z')
+        // const today = new Date('2026-11-11T20:30:00Z')
+        // const today = new Date('2026-12-11T20:30:00Z')
+        // const today = new Date('2027-01-11T20:30:00Z')
 
-        // Must run on the 11th (Bangladesh date).
+
+        // Expected to run on the configured cycle day (Bangladesh date); a mismatch only logs a warning.
         // Fetch setcycleday from the active BusinessSettings row.
         const settings = await this.prisma.businessSettings.findFirst({
             where: { isActive: true },
@@ -172,8 +226,8 @@ export class MonthlyProfitLedgerService {
 
 
         if (today.getUTCDate() !== setcycleday) {
-            throw new BadRequestException(
-                `Profit cycle job must run on the ${setcycleday}th (got ${today.getUTCDate()}th)`,
+            this.logger.warn(
+                `Profit cycle job should run on the ${setcycleday}th (got ${today.getUTCDate()}th) — continuing anyway`,
             );
         }
 
@@ -199,6 +253,7 @@ export class MonthlyProfitLedgerService {
                 amount: true,
                 investmentType: true,
                 investmentDate: true,
+                investmentPeriodMonths: true,
                 rate: true,
                 projectId: true,
             },
@@ -232,7 +287,7 @@ export class MonthlyProfitLedgerService {
             },
         });
 
-        
+
         const rateMonthKey = previousMonth.toISOString().slice(0, 10);
         const rateMonthLabel = previousMonth.toISOString().slice(0, 7);
 
@@ -245,16 +300,14 @@ export class MonthlyProfitLedgerService {
         }
 
         const candidates: Prisma.MonthlyProfitLedgerCreateManyInput[] = [];
-        // Projects whose unfixed investments were skipped because no active
-        // rate exists for this cycle's month.
         const projectsMissingRate = new Set<string>();
 
         let skipped = 0;
-        // Prefer the active settings row; fall back to the validated env default
-        // when the column is NULL (settings are optional at the contract level).
+    
         const countingDelayDays =
             settings.countingStartAfterDays ??
             this.config.get('COUNTING_START_AFTER_DAYS', { infer: true }) ?? 10;
+
 
         for (const inv of investments) {
             if (!inv.investmentDate) {
@@ -262,6 +315,7 @@ export class MonthlyProfitLedgerService {
                 continue;
             }
 
+            // 2024-03-15T00:00:00.000Z
             const invDate = toDateOnly(inv.investmentDate);
 
             // Counting starts countingDelayDays after the investment date.
@@ -274,6 +328,30 @@ export class MonthlyProfitLedgerService {
                 continue;
             }
 
+            // default 3 month
+            if (!inv.investmentPeriodMonths) {
+                skipped++;
+                continue;
+            }
+
+
+            // NEW: investment's last counting day.
+            // countingStart 15 Sep + 3 months = 15 Dec, minus 1 day = 14 Dec.
+            const investmentEnd = addDays(
+                addMonths(countingStart, inv.investmentPeriodMonths),
+                -1,
+            );
+
+            // NEW: period already finished before this cycle began.
+            if (investmentEnd.getTime() < standardCycleStart.getTime()) {
+                skipped++;
+                continue;
+            }
+
+            // NEW: last cycle is clamped to the investment end date.
+            const effectiveCycleEnd =
+                investmentEnd.getTime() < cycleEnd.getTime() ? investmentEnd : cycleEnd;
+
             // Determine whether this is the investment's first cycle.
             const isFirstCycle =
                 countingStart.getTime() > standardCycleStart.getTime();
@@ -285,11 +363,17 @@ export class MonthlyProfitLedgerService {
                 ? countingStart
                 : standardCycleStart;
 
-            // First cycle: Count actualCycleStart through cycleEnd.
-            // Subsequent cycles: Always count 30 days.
-            const daysCounted = isFirstCycle
-                ? toOrd(cycleEnd) - toOrd(actualCycleStart) + 1
-                : 30;
+            // 30-day convention for every cycle (26, 30, 30, 4 ...)
+            let daysCounted =
+                toOrd(effectiveCycleEnd) - toOrd(actualCycleStart) + 1;
+            // console.log(daysCounted);
+
+
+            //  NEW: if cycle end is investment End date and daycount is less than 10, that investment will be skipped.
+            if ((investmentEnd.getTime() < cycleEnd.getTime()) && (daysCounted < 10)){
+                skipped++;
+                continue;
+            }
 
             if (daysCounted <= 0) {
                 skipped++;
@@ -328,7 +412,7 @@ export class MonthlyProfitLedgerService {
                 investmentId: inv.id,
                 principalAmount: inv.amount,
                 cycleStart: actualCycleStart,
-                cycleEnd,
+                cycleEnd: effectiveCycleEnd,
                 profitAmount,
                 daysCounted,
                 rateApplied: ratePercent,
