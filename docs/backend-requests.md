@@ -84,6 +84,16 @@ The viewer is at `/admin/audit` in secure-web (admins only, like the API),
 with a "History" link on investor, investment, project, payout window and
 batch pages. It works around these for now.
 
+- **Batch steps are logged under the wrong action.** `AuditAction` has
+  `disbursement_batch_exported` and `disbursement_batch_confirmed`, but
+  marking a batch as sent to bank and confirming it as paid are both logged
+  as `disbursement_batch_updated` (`disbursement-batch.service.ts:253`). So
+  filtering the audit log by "Batch sent to bank" or "Batch confirmed as
+  paid" finds nothing. In the browser test, removing an item from a batch
+  also showed up as "Payout item notes changed"
+  (`disbursement_item_remark_updated`); please check which action that
+  path logs. Please use the dedicated actions for these steps.
+
 - **The audit log can be written through the API.** `POST
   /admin/audit-log` and `PATCH /admin/audit-log/:id` exist. Both are stubs
   today (they echo the body and save nothing), but if they're ever filled
@@ -255,6 +265,11 @@ The screen is at `/admin/notifications`. It's read-only for now.
   no notifications yet, so the investor portal has no notifications screen.
 - **No date range filter.** Filtering by "from/to" would help on a busy feed,
   like the audit log has.
+- **Messages show raw values.** A payment notification reads "New incoming
+  payment: 100000.00 via bank_transfer (Status: pending)…". Staff should see
+  "৳ 1,00,000 via Bank transfer". Either format the amount and method when the
+  message is written, or store them as fields (`amount`, `paymentMethod`) so
+  the screen can format them itself.
 
 ### Staff accounts (found while building the staff invites screen)
 The screen is at `/admin/staff` (super admins only). It invites people and
@@ -397,6 +412,16 @@ The admin screens work around these for now; each workaround is noted.
 - **Counting delay: 0 is allowed on create, refused on update.**
   `countingStartAfterDays` is `min(0)` on create but reuses the 1–28 day rule
   on update. The form asks for 1–28.
+- **Investors can't read the counting delay.** The invest form and
+  verification step 4 told investors "Profit starts 10 days after your
+  investment date", hard-coded, while `/admin/settings` was set to 12.
+  `GET /admin/business-settings` is ADMIN/MODERATOR only, so the investor
+  screens can't fetch `countingStartAfterDays`. They now say "a set number of
+  days" with no number. Please expose the active `countingStartAfterDays`
+  (falling back to `COUNTING_START_AFTER_DAYS`, as the ledger job does) on an
+  endpoint any signed-in user can call, including an investor still in
+  verification, e.g. `GET /business-settings/public`. The forms will show the
+  number again once it exists.
 
 ### Withdrawal endpoints
 The investor and admin `withdrawal-request` controllers are placeholders that

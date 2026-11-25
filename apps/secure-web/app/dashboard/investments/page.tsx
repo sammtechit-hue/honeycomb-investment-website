@@ -109,7 +109,11 @@ export default async function InvestmentsPage(props: PageProps<'/dashboard/inves
                     <span className="block text-xs leading-4 text-muted">{i.investmentPeriodMonths}-month term</span>
                   )}
                 </td>
-                <td className={`${td} whitespace-nowrap`}>{formatDate(i.investmentDate)}</td>
+                <td className={`${td} whitespace-nowrap`}>
+                  {/* The API stores the request date as a placeholder and re-stamps it on activation,
+                      so it only means "started" once active (same rule as the admin page). */}
+                  {i.status === 'active' || i.status === 'closed' ? formatDate(i.investmentDate) : '—'}
+                </td>
                 <td className={`${td} whitespace-nowrap`}>
                   {formatDate(i.agreementEndDate)}
                   {i.status === 'active' && daysLeftLabel(i.agreementEndDate) && (
